@@ -67,5 +67,6 @@
   },
   "dependencies": {
     "electron-updater": "^6.3.0"
-  }
+  },
+  "author": "Nathan Miller"
 }
