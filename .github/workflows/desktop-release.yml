@@ -1,9 +1,12 @@
-# Builds the Windows installer on GitHub and publishes it as a release, which the desktop app's
-# "Check for updates" reads. Triggered by pushing a tag like v1.0.1 (see desktop/README.md).
+# Builds the Windows installer and publishes it to the PUBLIC repo <owner>/household_finances-releases,
+# which the desktop app's "Check for updates" reads.
+# Runs automatically when desktop/package.json changes on main, but only publishes if that version
+# hasn't been released yet, so bumping "version" is all it takes. Can also be run by hand (Actions → Run workflow).
 name: Desktop release
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['desktop/package.json']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,19 +18,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Match app version to the tag
+      - name: Is this version new?
+        id: ver
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
-          V="${GITHUB_REF_NAME#v}"
-          if [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then cd desktop && npm version "$V" --no-git-tag-version --allow-same-version; fi
-      # Installers go to the PUBLIC repo <owner>/household_finances-releases, so the app can check without a password.
+          V=$(node -p "require('./desktop/package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" >/dev/null 2>&1; then
+            echo "v$V is already released; nothing to do."; echo "new=false" >> "$GITHUB_OUTPUT"
+          else echo "new=true" >> "$GITHUB_OUTPUT"; fi
       - name: Set the release repo owner
+        if: steps.ver.outputs.new == 'true'
         shell: bash
         run: sed -i "s/GITHUB_OWNER/${GITHUB_REPOSITORY_OWNER}/" desktop/package.json
+      - run: npm test
+        if: steps.ver.outputs.new == 'true'
       - run: npm install
+        if: steps.ver.outputs.new == 'true'
         working-directory: desktop
       - run: npm run release
+        if: steps.ver.outputs.new == 'true'
         working-directory: desktop
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }} # fine-grained token: Contents read/write on household_finances-releases only
-      - run: npm test
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
