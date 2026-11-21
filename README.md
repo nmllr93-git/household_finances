@@ -293,6 +293,7 @@ All of these are per dashboard, saved on the server, and follow you to every dev
 | **Reset all chart colors** | Undo all chart color changes |
 | **Data sources (API keys)** | Add optional market and economy keys ([details](#optional-data-sources-api-keys)) |
 | **Backup & restore** | Download or restore this dashboard's data |
+| **Weekly email** | A short weekly summary by email for each of your dashboards: last week's spending and top categories, the month's budget, bills due in the next 7 days, cash on hand, and anything needing a category. Pick the day and time; **Send me one now** to test. The server owner sets the sending account once (Gmail: `smtp.gmail.com`, port 465, with an app password; Outlook: `smtp-mail.outlook.com`, port 587). Server and desktop host only. |
 
 Click **⚙ Settings** again to go back to the tab you were on.
 
@@ -523,6 +524,7 @@ Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`,
 | `server.js` | Web server, logins, SQLite database (`node:sqlite`), API, backups, market/economy data. Node built-ins only. |
 | `public/local.js` | Phone-only mode: answers the dashboard's `/api` requests on the device (IndexedDB) using the shared core. Does nothing unless the phone app turned it on. |
 | `core/market.js` | Shared market, economy, price and vehicle data with its pacing and caching rules, used by the server and phone-only mode. Data services and storage are passed in. |
+| `digest.js` | Weekly email: builds each summary with the dashboard's own calculations (`public/calcs.js`) and sends it with a small built-in SMTP client (TLS on 465, STARTTLS on 587). |
 | `core/books.js` | Shared dashboard data rules (validation, load, save, export, restore) used by the server and the phone's on-device mode. No Node or browser APIs; storage is passed in. |
 | `public/` | The web app: `page.js` (all views), `calcs.js` (data calculations), `charts.js`, `import.js` (CSV/OFX), `pdfstatement.js`, `runtime.js` (data loading and drawing), `store.js` (single data connector), `app.js`, `login.js`, `sw.js` (offline cache). |
 | `seed/` | *Optional*, git-ignored. `books.json` plus spreadsheet exports, loaded the first time a new database is created. Without it, you get two empty dashboards. |

@@ -2360,6 +2360,37 @@
     el.append(phMsg('Spending is grouped by matching category, vendor and description words (medical, charity, tuition…) plus anything you tag “tax”. Tag a transaction “tax” to include it. Mortgage interest and property tax usually come from your lender’s Form 1098, not from payments. This is a starting point for you or your tax preparer, not tax advice.'));
   });
 
+  // ⚙ Settings → Weekly email (server and desktop host only)
+  let DIG = null;
+  const emailBox = async (host) => {
+    if (window.FD_LOCAL) return; const tok = {}; host.__email = tok;
+    if (!DIG) { try { const r = await FDStore.fetch('/api/digest', {}); if (!r.ok) return; DIG = await r.json(); } catch (e) { return; } }
+    if (host.__email !== tok || host.querySelector('.fd-emailbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-emailbox'; box.append(rhead('Weekly email')); host.append(box);
+    box.append(phMsg('A short email once a week: last week’s spending and top categories, this month’s budget, bills due in the next 7 days and anything that needs attention, for each of your dashboards.'));
+    const me = DIG.me, r1 = document.createElement('div'); r1.className = 'fd-rb-row';
+    const em = document.createElement('input'); em.type = 'email'; em.className = 'fd-in'; em.placeholder = 'you@example.com'; em.value = me.email || '';
+    const on = document.createElement('label'); on.className = 'fd-check'; const oc = document.createElement('input'); oc.type = 'checkbox'; oc.checked = !!me.on; on.append(oc, ' Send it');
+    const day = document.createElement('select'); day.className = 'dash-select'; ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'].forEach((d, i) => day.append(new Option(d, i))); day.value = me.day;
+    const hr = document.createElement('select'); hr.className = 'dash-select'; for (let h = 5; h <= 21; h++) hr.append(new Option(`at ${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`, h)); hr.value = me.hour;
+    r1.append(em, on, day, hr); box.append(r1);
+    const msg = phMsg('');
+    const saveMe = async () => { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ me: { email: em.value.trim(), on: oc.checked, day: Number(day.value), hour: Number(hr.value) } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Not saved'); DIG = null; };
+    const btns = document.createElement('div'); btns.className = 'fd-rb-row'; box.append(btns);
+    btns.append(rbtn('Save', async () => { try { await saveMe(); msg.className = 'fd-note fd-good'; msg.textContent = oc.checked ? 'Saved. Your weekly email is on.' : 'Saved.'; } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
+      rbtn('Send me one now', async () => { msg.className = 'fd-note'; msg.textContent = 'Sending…'; try { await saveMe(); const r = await FDStore.fetch('/api/digest/test', { method: 'POST' }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error); msg.className = 'fd-note fd-good'; msg.textContent = `Sent to ${em.value.trim()}. Check your inbox (and spam folder).`; } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } })); box.append(msg);
+    // the server's mail account (owner only)
+    const sm = DIG.smtp;
+    if (!DIG.canEditSmtp) { box.append(phMsg(sm.host ? `Email is sent through the account ${DIG.owner} set up.` : `${DIG.owner} (who set up this server) needs to add an email account here before weekly emails can be sent.`)); return; }
+    box.append(rhead('Sending account (only you can change this)'));
+    const r2 = document.createElement('div'); r2.className = 'fd-rb-row';
+    const fld = (ph, v, type = 'text', w) => { const i = document.createElement('input'); i.type = type; i.className = 'fd-in'; i.placeholder = ph; i.value = v || ''; if (w) i.style.maxWidth = w; r2.append(i); return i; };
+    const h = fld('Mail server, e.g. smtp.gmail.com', sm.host), pt = fld('Port', sm.port, 'number', '6em'), u = fld('Username (usually your email)', sm.user), pw = fld(sm.passSet ? 'Password saved (leave blank to keep)' : 'Password or app password', '', 'password'), fr = fld('From address (optional)', sm.from, 'email');
+    box.append(r2, phMsg('Gmail: smtp.gmail.com, port 465, and an "app password" (Google Account → Security → 2-Step Verification → App passwords), not your normal password. Outlook/Hotmail: smtp-mail.outlook.com, port 587. The password is stored only in this server’s data folder.'));
+    const m2 = phMsg('');
+    box.append(rbtn('Save sending account', async () => { try { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp: { host: h.value, port: Number(pt.value), user: u.value, pass: pw.value, from: fr.value } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error); DIG = null; m2.className = 'fd-note fd-good'; m2.textContent = 'Saved. Use "Send me one now" to test it.'; } catch (e) { m2.className = 'fd-note fd-bad'; m2.textContent = e.message || 'Not saved'; } }), m2);
+  };
+
   // ================= Phone-only mode: settings, backup reminder, bill notifications, first-run walkthrough =================
   const PH = () => window.FD_LOCAL && window.FDLocal;
   const phMsg = (t, cls) => { const p = document.createElement('p'); p.className = 'fd-note' + (cls ? ' ' + cls : ''); p.textContent = t; return p; };
@@ -2393,8 +2424,8 @@
 
   // ⚙ Settings → On this phone
   const phoneBox = async (host) => {
-    if (!PH()) return; const L = window.FDLocal;
-    const box = document.createElement('div'); box.className = 'fd-rb fd-apis'; box.append(rhead('On this phone')); host.append(box);
+    if (!PH() || host.querySelector('.fd-phonebox')) return; const L = window.FDLocal;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-phonebox'; box.append(rhead('On this phone')); host.append(box);
     box.append(phMsg('Everything is stored privately on this phone. Nothing is sent anywhere except requests to the market services whose keys you add.'));
     // dashboards
     box.append(rhead('Dashboards'));
@@ -2636,6 +2667,7 @@
     const bar = document.createElement('div'); bar.className = 'fd-rb-row'; bar.append(save, resetC); box.append(bar, msg);
     apiBox(el);
     phoneBox(el).catch(() => {});
+    emailBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {
       const bk = document.createElement('div'); bk.className = 'fd-rb fd-backup'; bk.append(rhead('Backup & restore'));
       const bn = document.createElement('p'); bn.className = 'fd-note'; bn.textContent = `Download a copy of everything saved in the ${book()} dashboard (statements, edits, rules, accounts, budgets, goals, holdings, settings). The server also keeps a full daily backup of all dashboards for 30 days.`; bk.append(bn);

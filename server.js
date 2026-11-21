@@ -218,6 +218,39 @@ const MARKET = require('./core/market.js').createMarketData({
   save: (name, obj) => { try { fs.writeFileSync(cacheFile(name), JSON.stringify(obj)); } catch {} },
 });
 
+// ---------- weekly email digest (settings in <data>/digest.json; mail sent with the server owner's SMTP account) ----------
+const DIGEST = require('./digest.js');
+const DIGEST_FILE = () => path.join(DATA_DIR, 'digest.json');
+const digestCfg = () => { try { return JSON.parse(fs.readFileSync(DIGEST_FILE(), 'utf8')) || {}; } catch { return {}; } };
+const digestSave = (c) => fs.writeFileSync(DIGEST_FILE(), JSON.stringify(c, null, 2));
+const ownerName = () => (db.prepare('SELECT username FROM users ORDER BY rowid LIMIT 1').get() || {}).username;
+async function digestFor(username) {
+  const parts = []; let total = '';
+  for (const b of userBooks(username)) { const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(b.id); const d = DIGEST.buildDigest(book, await BOOKS.data(book.id)); if (!d.empty) parts.push(d); }
+  if (!parts.length) return null;
+  total = parts.map((p) => p.subject).join(' | ');
+  return { subject: parts.length === 1 ? parts[0].subject : `Your week: ${total}`.slice(0, 180), text: parts.map((p) => p.text).join('\n\n'), html: parts.map((p) => p.html).join('<hr style="border:0;border-top:1px solid #e3e7eb;margin:22px 0">') + '<p style="font:12px sans-serif;color:#8a939d;margin-top:22px">Sent by your Household Finances server. Turn it off under ⚙ Settings → Weekly email.</p>' };
+}
+async function sendDigest(username) {
+  const c = digestCfg(), u = (c.users || {})[username];
+  if (!c.smtp || !c.smtp.host) throw new Error('The server owner hasn’t set up email sending yet.');
+  if (!u || !u.email) throw new Error('Add your email address first.');
+  const d = await digestFor(username); if (!d) throw new Error('Nothing to report yet: import some transactions first.');
+  await DIGEST.sendMail(c.smtp, { to: u.email, ...d });
+  const c2 = digestCfg(); ((c2.users = c2.users || {})[username] = { ...(c2.users[username] || {}), lastSent: Date.now() }); digestSave(c2);
+}
+let digestBusy = false;
+async function checkDigests() {
+  if (digestBusy) return; digestBusy = true;
+  try { const c = digestCfg(), now = new Date();
+    for (const [name, u] of Object.entries(c.users || {})) {
+      if (!u.on || !u.email || Number(u.day) !== now.getDay() || Number(u.hour) !== now.getHours()) continue;
+      if (u.lastSent && Date.now() - u.lastSent < 6 * 864e5) continue;
+      try { await sendDigest(name); } catch (e) { console.error(`Weekly email to ${name} failed: ${e.message}`); }
+    } } finally { digestBusy = false; }
+}
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
+
 async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', ...]
   const ip = req.socket.remoteAddress;
@@ -276,6 +309,19 @@ async function api(req, res, url) {
     const m = await MARKET.markets(url.searchParams.get('refresh') === '1'), open = MARKET.marketOpen();
     return send(res, 200, { ...m, hist: undefined, open, nextRefresh: open ? m.at + 3600e3 : null });
   }
+  if (parts[1] === 'digest') {
+    const owner = ownerName(), c = digestCfg(); c.users = c.users || {};
+    if (req.method === 'GET' && !parts[2]) { const sm = c.smtp || {}; return send(res, 200, { canEditSmtp: user === owner, owner, smtp: { host: sm.host || '', port: sm.port || 587, user: sm.user || '', from: sm.from || '', passSet: !!sm.pass }, me: { email: '', on: false, day: 1, hour: 7, ...(c.users[user] || {}) } }); }
+    if (req.method === 'POST' && parts[2] === 'test') { try { await sendDigest(user); return send(res, 200, { ok: true }); } catch (e) { return send(res, 400, { error: e.message }); } }
+    if (req.method === 'POST' && !parts[2]) {
+      const b = await readJson(req);
+      if (b.smtp) { if (user !== owner) return send(res, 403, { error: `Only ${owner} (who set up this server) can change the email account.` });
+        const old = c.smtp || {}, sm = b.smtp; c.smtp = { host: String(sm.host || '').trim().slice(0, 120), port: Math.max(1, Math.min(65535, Number(sm.port) || 587)), user: String(sm.user || '').trim().slice(0, 120), from: String(sm.from || '').trim().slice(0, 120), pass: typeof sm.pass === 'string' && sm.pass ? sm.pass.slice(0, 200) : old.pass || '' }; }
+      if (b.me) { const m = b.me, email = String(m.email || '').trim(); if (email && !EMAIL_RE.test(email)) return send(res, 400, { error: 'That email address doesn’t look right.' });
+        c.users[user] = { ...(c.users[user] || {}), email, on: !!m.on && !!email, day: Math.max(0, Math.min(6, Number(m.day) || 0)), hour: Math.max(0, Math.min(23, Number(m.hour) || 0)) }; }
+      digestSave(c); return send(res, 200, { ok: true });
+    }
+  }
   if (parts[1] === 'me' && req.method === 'GET') return send(res, 200, { username: user, books: userBooks(user) });
 
   if (parts[1] === 'books' && parts[2]) {
@@ -301,7 +347,7 @@ function backup() {
   return file;
 }
 
-let SERVER = null, BTIMER = null, RUN = null;
+let SERVER = null, BTIMER = null, DTIMER = null, RUN = null;
 const lanAddrs = () => Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => n.address);
 // start({ mode, port, quiet }) → Promise<info>. Used by `node server.js` and by the desktop app (require('./server.js')).
 function start(opts = {}) {
@@ -339,13 +385,14 @@ function start(opts = {}) {
   try { const last = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort().pop();
     if (!last || Date.now() - fs.statSync(path.join(BACKUP_DIR, last)).mtimeMs > 864e5) backup(); } catch (e) { console.error('Backup skipped:', e.code || e.message); }
   if (!BTIMER) BTIMER = setInterval(() => { try { backup(); } catch (e) { console.error('Backup failed', e); } }, 864e5);
+  if (!DTIMER) { DTIMER = setInterval(() => { checkDigests().catch(() => {}); }, 15 * 60e3); if (DTIMER.unref) DTIMER.unref(); }
   return ready;
 }
 
 // stop() → Promise. Closes open connections so the port frees right away (tray "Stop hosting").
 function stop() {
   if (!SERVER) return Promise.resolve();
-  const s = SERVER; SERVER = null; RUN = null; if (BTIMER) { clearInterval(BTIMER); BTIMER = null; }
+  const s = SERVER; SERVER = null; RUN = null; if (BTIMER) { clearInterval(BTIMER); BTIMER = null; } if (DTIMER) { clearInterval(DTIMER); DTIMER = null; }
   return new Promise((r) => { s.close(() => r()); if (s.closeAllConnections) s.closeAllConnections(); });
 }
 // info(): what the tray/settings screen shows.

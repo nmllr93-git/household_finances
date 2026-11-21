@@ -84,3 +84,20 @@ test('shares are listed for the target book', async () => {
   assert.equal(a.status, 201);
   const l = await req('GET', `/api/books/${b}/shares-list`); assert.ok(l.json.some((x) => x.id === a.json.id));
 });
+
+test('weekly email: only the owner sets the mail account; a user can send themselves a test', async () => {
+  const net = await import('node:net'); const got = [];
+  const smtp = net.createServer((s) => { let data = false, buf = ''; s.write('220 x\r\n'); s.on('data', (d) => { buf += d.toString(); if (data) { if (buf.includes('\r\n.\r\n')) { got.push(buf); data = false; buf = ''; s.write('250 ok\r\n'); } return; }
+    let k; while ((k = buf.indexOf('\r\n')) >= 0) { const l = buf.slice(0, k); buf = buf.slice(k + 2); if (/^EHLO/.test(l)) s.write('250 x\r\n'); else if (/^DATA/.test(l)) { data = true; s.write('354 go\r\n'); } else if (/^QUIT/.test(l)) { s.end(); } else s.write('250 ok\r\n'); } }); });
+  await new Promise((r) => smtp.listen(0, '127.0.0.1', r));
+  const b = books()[0];
+  await req('POST', `/api/books/${b}/imports`, { accountKind: 'credit', accountName: 'Visa', txns: [{ date: new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10), description: 'GROCERY', amount: 40 }] });
+  assert.equal((await req('POST', '/api/digest', { smtp: { host: '127.0.0.1', port: smtp.address().port } }, cookieB)).status, 403);
+  assert.equal((await req('POST', '/api/digest', { smtp: { host: '127.0.0.1', port: smtp.address().port, from: 'hf@example.com' } })).status, 200);
+  assert.equal((await req('POST', '/api/digest', { me: { email: 'not-an-email' } })).status, 400);
+  assert.equal((await req('POST', '/api/digest', { me: { email: 'alice@example.com', on: true, day: 1, hour: 7 } })).status, 200);
+  const g = await req('GET', '/api/digest'); assert.equal(g.json.me.email, 'alice@example.com'); assert.equal(g.json.canEditSmtp, true); assert.equal(g.json.smtp.passSet, false);
+  const t = await req('POST', '/api/digest/test'); assert.equal(t.status, 200, JSON.stringify(t.json));
+  assert.equal(got.length, 1); assert.match(got[0], /To: alice@example.com/);
+  smtp.close();
+});
