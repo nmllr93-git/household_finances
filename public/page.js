@@ -277,7 +277,7 @@
 
   // ---- navigation groups and collapsible sections ----
   const GROUPS = { overview: ['health', 'split', 'unusual', 'top-vendors', 'cashflow', 'big', 'bills'], accounts: ['networth', 'accounts', 'sharedin', 'assets', 'goals', 'holdings', 'deposits', 'investments', 'mortgage'],
-    expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], import: ['import'], review: ['review'], planning: ['forecast', 'planner'], markets: ['markets', 'economy'], settings: ['settings'] };
+    expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], import: ['import'], review: ['review'], planning: ['forecast', 'planner', 'projection', 'taxes'], markets: ['markets', 'economy'], settings: ['settings'] };
   const ALL = [...new Set(Object.values(GROUPS).flat())];
   let HIDESEC = new Set(), HIDEPART = new Set(); const PART = (k) => HIDEPART.has(k);
   const NP = (() => { try { return JSON.parse(localStorage.getItem('fd-nav') || '{}') || {}; } catch { return {}; } })();
@@ -1359,11 +1359,11 @@
     const esc = (v) => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const lines = [['Date', 'Vendor', 'Description', 'Category', 'Counts as', 'Amount', 'Account', 'Tags'].join(',')]
       .concat(txMatches().map((t) => [t.date || t.month, t.vendor, t.description, t.category, TYPE[t.type] || t.type, Number(t.amount).toFixed(2), t.source, (t.tags || []).join('; ')].map(esc).join(',')));
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' }));
-    a.download = `transactions-${String(book()).toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    saveFile(`transactions-${String(book()).toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`, lines.join('\r\n'), 'text/csv');
   }));
+  // download a file (or, in phone-only mode, open the phone's share sheet)
+  const saveFile = (name, text, mime) => { if (window.FD_LOCAL && window.FDLocal) return window.FDLocal.saveText(name, text, mime, 'Save or send').catch((e) => alert(e.message));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); };
 
   // ---- quick add (phones): jump straight to the manual entry form ----
   q('fd-fab').forEach((b) => b.addEventListener('click', () => {
@@ -2287,6 +2287,72 @@
       }
     } else w.append(rbtn('Cancel', () => { posImp = null; dash.draw('posImport'); }));
     el.append(w);
+  });
+
+  // ================= Planning: net worth projection & retirement estimate =================
+  const numIn = (label, val, onChange, attrs = {}) => { const l = document.createElement('label'); l.className = 'fd-field fd-narrow'; l.textContent = label; const i = document.createElement('input'); i.type = 'number'; i.value = val; Object.assign(i, attrs); i.style.width = '7em'; i.addEventListener('change', () => onChange(Number(i.value))); l.append(i); return l; };
+  dash.draw('projection', (el) => {
+    el.replaceChildren(); if (st('balance_totals', 'monthly') !== 'ok') return;
+    const inv = (latestTotal(['investment'])[0] || {}).total || 0, cash = (latestTotal(['deposit'])[0] || {}).total || 0;
+    const m = rows('monthly').filter((r) => r.book === book() && !isCurrent(r.month)).slice(-6), avg = (f) => (m.length ? m.reduce((s, r) => s + r[f], 0) / m.length : 0);
+    const P = { age: 35, retire: 65, ret: 6, infl: 2.5, save: Math.max(0, Math.round(avg('income') - avg('spend'))), spend: Math.round(avg('spend') * 12), wd: 4, cashIn: false, ...(prefGet('projection', {}) || {}) };
+    const set = (k) => (v) => { P[k] = v; prefSet('projection', P); dash.draw('projection'); };
+    const f = document.createElement('div'); f.className = 'fd-rb-row';
+    f.append(numIn('Your age', P.age, set('age'), { min: 16, max: 90 }), numIn('Retire at', P.retire, set('retire'), { min: 30, max: 90 }), numIn('Saved each month $', P.save, set('save'), { min: 0, step: 50 }),
+      numIn('Yearly spending in retirement $', P.spend, set('spend'), { min: 0, step: 1000 }), numIn('Return % / yr', P.ret, set('ret'), { step: 0.5 }), numIn('Inflation %', P.infl, set('infl'), { step: 0.5 }), numIn('Withdrawal %', P.wd, set('wd'), { step: 0.25, min: 2, max: 8 }));
+    const cl = document.createElement('label'); cl.className = 'fd-check'; const cc = document.createElement('input'); cc.type = 'checkbox'; cc.checked = !!P.cashIn; cc.addEventListener('change', () => set('cashIn')(cc.checked)); cl.append(cc, ' Count checking & savings too'); f.append(cl);
+    el.append(f);
+    const start = inv + (P.cashIn ? cash : 0), r = P.ret / 100, i = P.infl / 100, pts = [], real = [];
+    let bal = start, fiAge = null, runsOut = null; const need = P.wd > 0 ? P.spend / (P.wd / 100) : Infinity;
+    for (let age = P.age, y = 0; age <= 95; age++, y++) {
+      const defl = Math.pow(1 + i, y); pts.push({ label: String(age), v: Math.round(bal) }); real.push({ label: String(age), v: Math.round(bal / defl) });
+      if (fiAge == null && bal / defl >= need) fiAge = age;
+      if (age < P.retire) bal = bal * (1 + r) + P.save * 12; else { bal = bal * (1 + r) - P.spend * defl; if (bal <= 0 && runsOut == null) { runsOut = age + 1; bal = 0; } }
+    }
+    const at = real.find((p) => Number(p.label) === P.retire), atN = pts.find((p) => Number(p.label) === P.retire);
+    const sum = document.createElement('div'); sum.className = 'fd-grid3';
+    const tile = (h, big, sub, cls) => { const c = document.createElement('div'); c.className = 'fd-rb'; const a = document.createElement('div'); a.className = 'fd-rsub'; a.textContent = h; const b = document.createElement('div'); b.className = 'fd-big fd-mid' + (cls ? ' ' + cls : ''); b.textContent = big; const s2 = document.createElement('div'); s2.className = 'fd-rsub'; s2.textContent = sub; c.append(a, b, s2); return c; };
+    sum.append(tile(`At ${P.retire}`, at ? money0(at.v) : '—', `in today's dollars (${atN ? money0(atN.v) : '—'} in future dollars)`),
+      tile('Enough to retire on', money0(need), `${money0(P.spend)}/yr at a ${P.wd}% withdrawal rate · ${fiAge != null ? `reached around age ${fiAge}` : 'not reached by 95'}`, fiAge != null && fiAge <= P.retire ? 'fd-good' : ''),
+      tile('Money lasts', runsOut ? `to age ${runsOut}` : 'past 95', runsOut ? 'spending outpaces savings and growth — save more, retire later or spend less' : 'with this plan', runsOut ? 'fd-bad' : 'fd-good'));
+    el.append(sum);
+    const box = document.createElement('div'); box.className = 'fd-box'; el.append(box);
+    window.FD.lineChart(box, { labels: pts.map((p) => p.label), zero: true, aria: 'Projected investments by age', series: [{ name: "Today's dollars", points: real }, { name: 'Future dollars', points: pts }] });
+    el.append(phMsg(`Starts from ${money0(start)} (investments${P.cashIn ? ' + checking & savings' : ''}). Saved-each-month defaults to your average income minus spending over the last ${m.length} months; retirement spending defaults to your current yearly spending. A rough estimate with a steady return — real markets go up and down, and taxes, Social Security and pensions aren't included.`));
+  });
+
+  // ================= Taxes: yearly summary of tax-relevant spending and income =================
+  const TAX_GROUPS = [['Charitable giving', /charit|donat|church|tithe|nonprofit|goodwill|red cross|united way/i], ['Medical & dental', /medical|health|doctor|dental|dentist|vision|optom|pharm|hospital|clinic|copay|prescription|therapy|chiropract/i],
+    ['HSA / FSA', /\bhsa\b|\bfsa\b|health savings|flexible spending/i], ['Mortgage & property tax', /mortgage|property tax|real estate tax|escrow/i], ['Education', /tuition|education|school|college|student|529|book store|textbook/i],
+    ['Childcare', /child ?care|daycare|day care|preschool|babysit|nanny/i], ['Business & work expenses', /business|office supply|work expense|professional dues|union dues/i], ['Energy-efficient home', /solar|heat pump|insulation|ev charger/i]];
+  let taxYear = null;
+  dash.draw('taxReport', (el) => {
+    el.replaceChildren(); if (st('txns') !== 'ok') return;
+    const all = rows('txns').filter((t) => t.book === book()), years = [...new Set(all.map((t) => String(t.date || t.month || '').slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort().reverse();
+    if (!years.length) { el.append(phMsg('Import some transactions to see a tax summary.')); return; }
+    if (!taxYear || !years.includes(taxYear)) taxYear = years.find((y) => Number(y) < new Date().getFullYear()) || years[0];
+    const row = document.createElement('div'); row.className = 'fd-rb-row'; const ys = document.createElement('select'); ys.className = 'dash-select'; years.forEach((y) => ys.append(new Option(y, y))); ys.value = taxYear; ys.addEventListener('change', () => { taxYear = ys.value; dash.draw('taxReport'); });
+    const lab = document.createElement('label'); lab.className = 'fd-field fd-narrow'; lab.textContent = 'Tax year '; lab.append(ys); row.append(lab); el.append(row);
+    const yr = all.filter((t) => String(t.date || t.month || '').startsWith(taxYear) && t.type !== 'transfer');
+    const groupOf = (t) => { if ((t.tags || []).some((g) => /^tax/i.test(g))) return 'Tagged “tax”'; const txt = `${t.category} ${t.vendor} ${t.description || ''}`; const g = TAX_GROUPS.find(([, re]) => re.test(txt)); return g ? g[0] : null; };
+    const exp = yr.filter((t) => t.type === 'expense'), inc = yr.filter((t) => t.type === 'income'), by = {};
+    exp.forEach((t) => { const g = groupOf(t); if (!g) return; (by[g] = by[g] || []).push(t); });
+    const sumOf = (l) => l.reduce((s, t) => s + Number(t.amount || 0), 0);
+    const incBy = {}; inc.forEach((t) => { const k = t.vendor || t.category || 'Other income'; incBy[k] = (incBy[k] || 0) + Number(t.amount || 0); });
+    const g = document.createElement('div'); g.className = 'fd-grid2';
+    const tbl = (title, entries, total) => { const w = document.createElement('div'); w.append(rhead(title)); if (!entries.length) w.append(phMsg('Nothing found.'));
+      entries.forEach(([k, v, n]) => { const r = document.createElement('div'); r.className = 'fd-alloc'; const a = document.createElement('span'); a.textContent = k + (n ? ` (${n})` : ''); const b = document.createElement('span'); b.textContent = money2(v); r.append(a, b); w.append(r); });
+      if (entries.length) { const r = document.createElement('div'); r.className = 'fd-alloc fd-total'; const a = document.createElement('b'); a.textContent = 'Total'; const b = document.createElement('b'); b.textContent = money2(total); r.append(a, b); w.append(r); } return w; };
+    const ge = Object.entries(by).map(([k, l]) => [k, sumOf(l), l.length]).sort((a, b) => b[1] - a[1]);
+    g.append(tbl('Possibly deductible or tax-relevant spending', ge, ge.reduce((s, x) => s + x[1], 0)), tbl('Income received', Object.entries(incBy).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => [k, v]), sumOf(inc)));
+    el.append(g);
+    el.append(rbtn(`Download ${taxYear} tax transactions (CSV)`, () => {
+      const esc = (v) => { const s2 = String(v ?? ''); return /[",\r\n]/.test(s2) ? '"' + s2.replace(/"/g, '""') + '"' : s2; };
+      const list = [...exp.filter(groupOf).map((t) => [groupOf(t), t]), ...inc.map((t) => ['Income', t])].sort((a, b) => a[0].localeCompare(b[0]) || String(a[1].date).localeCompare(String(b[1].date)));
+      const lines = [['Group', 'Date', 'Vendor', 'Category', 'Description', 'Amount', 'Account'].join(',')].concat(list.map(([k, t]) => [k, t.date || t.month, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.source].map(esc).join(',')));
+      saveFile(`tax-${taxYear}-${String(book()).toLowerCase()}.csv`, lines.join('\r\n'), 'text/csv');
+    }, false));
+    el.append(phMsg('Spending is grouped by matching category, vendor and description words (medical, charity, tuition…) plus anything you tag “tax”. Tag a transaction “tax” to include it. Mortgage interest and property tax usually come from your lender’s Form 1098, not from payments. This is a starting point for you or your tax preparer, not tax advice.'));
   });
 
   // ================= Phone-only mode: settings, backup reminder, bill notifications, first-run walkthrough =================

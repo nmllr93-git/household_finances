@@ -125,12 +125,16 @@
   async function exportFile(bookId) {
     const core = await coreReady, b = (await books()).find((x) => x.id === bookId) || (await books())[0];
     const data = JSON.stringify(await core.createBookApi(store).exportBook(b), null, 1), name = `${b.id}-${new Date().toISOString().slice(0, 10)}.json`;
+    return saveText(name, data, 'application/json', 'Save or send your backup');
+  }
+  // save a file the phone way (share sheet) or the browser way (download)
+  async function saveText(name, data, mime, title) {
     const P = window.Capacitor && window.Capacitor.Plugins;
     if (P && P.Filesystem && P.Share) { // phone app: write to the app's cache folder, then open the share sheet (Drive, email, Files…)
       const w = await P.Filesystem.writeFile({ path: name, data, directory: 'CACHE', encoding: 'utf8' });
-      await P.Share.share({ title: 'Household Finances backup', url: w.uri, dialogTitle: 'Save or send your backup' }); return;
+      await P.Share.share({ title: name, url: w.uri, dialogTitle: title || 'Save or send' }); return;
     }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: mime || 'text/plain' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
   // ---------- dashboards on this phone ----------
   const slug = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'dashboard';
@@ -165,7 +169,7 @@
   }
   const markExported = () => kvSet('lastExport', Date.now()).catch(() => {});
   window.FDLocal = { exportFile: async (id) => { await exportFile(id); await markExported(); }, snapshot, backups: async () => (await all('backups')).sort((a, b) => b.at - a.at).map(({ id, at, why }) => ({ id, at, why })),
-    books, saveBook, deleteBook, getKV: kvGet, setKV: kvSet, scheduleBills, notifyPermission, notificationsSupported: () => !!NOTIF() };
+    saveText, books, saveBook, deleteBook, getKV: kvGet, setKV: kvSet, scheduleBills, notifyPermission, notificationsSupported: () => !!NOTIF() };
   // "Download backup" links point at /api/.../export, which a phone can't open directly: handle them here.
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('a[href*="/api/books/"][href$="/export"]'); if (!a) return;

@@ -388,6 +388,9 @@ On a **personal** dashboard, edit an account or asset and tick the shared dashbo
 - **90-day cash forecast:** checking and savings projected day by day: expected paychecks in (any income that arrived at least twice in the last 4 months, at its real monthly total), recurring bills out (from *Subscriptions & recurring*) and your typical other spending. It shows the lowest point and warns if it falls below your cushion (**Warn me below**, $500 by default). Lists the upcoming paychecks and bills.
 - **Debt payoff planner:** every credit card and loan with a balance (tick **Include mortgage** to add it). Compare **minimum payments only**, **avalanche** (highest rate first, least interest) and **snowball** (smallest balance first), and drag **Extra each month** to see the debt-free date and the interest saved. When a debt is paid off, its payment rolls into the next one. Uses each account's rate and payment from Accounts → Edit; cards with no payment set use a typical minimum (marked *est.*).
 
+- **Net worth projection & retirement:** enter your age, retirement age, monthly savings, the yearly spending you plan in retirement, expected return, inflation and withdrawal rate (sensible defaults come from your own history). It charts your investments to age 95 in today's and future dollars, the amount you'd need to retire (spending ÷ withdrawal rate), the age you'd reach it, and how long the money lasts.
+- **Tax summary:** pick a year to see spending that often matters at tax time (charity, medical and dental, HSA/FSA, mortgage and property tax, education, childcare, work expenses, energy-efficient home), anything you tag "tax", and income received, with a CSV for you or your tax preparer. It's a starting point, not tax advice.
+
 ### Year in review
 Pick a year to see income, spending, what you kept, the biggest and lightest months, the top category and vendor, and an **after inflation** comparison. Click a month for its snapshot and calendar.
 
