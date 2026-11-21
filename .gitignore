@@ -1,0 +1,11 @@
+api-keys.json
+config.json
+data/
+desktop/app-server/
+desktop/dist/
+desktop/icons/
+desktop/node_modules/
+desktop/runtime/
+desktop/ui/connect.html
+node_modules/
+seed/

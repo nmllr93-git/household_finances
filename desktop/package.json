@@ -1,0 +1,71 @@
+{
+  "name": "household-finances-desktop",
+  "productName": "Household Finances",
+  "version": "1.0.0",
+  "description": "Household Finances for Windows: runs your finance server and dashboard in one app.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "prepare-app": "node scripts/prepare.js",
+    "start": "node scripts/prepare.js && electron .",
+    "dist": "node scripts/prepare.js && electron-builder --win",
+    "release": "node scripts/prepare.js && electron-builder --win --publish always"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.householdfinances.desktop",
+    "productName": "Household Finances",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "ui/**",
+      "icons/**",
+      "package.json",
+      "node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "app-server",
+        "to": "app-server"
+      },
+      {
+        "from": "runtime",
+        "to": "runtime"
+      },
+      {
+        "from": "runner.js",
+        "to": "runner.js"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icons/app.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Household Finances",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GITHUB_OWNER",
+        "repo": "household-finances-releases",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  }
+}

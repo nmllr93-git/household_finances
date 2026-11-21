@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a37">
+<title>Household Finances</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main id="dash-root">
+<div class="fd">
+  <header id="overview">
+    <div class="fd-top">
+      <h1 id="fd-title">Household finances</h1>
+      <div class="fd-account"><span id="fd-user"></span> · <a id="fd-export" href="#" download>Download backup</a> · <button type="button" class="fd-link" id="fd-logout">Sign out</button></div>
+    </div>
+    <p class="fd-lede" id="lede"><b data-draw="ledeRange">—</b>: <span data-draw="ledeBook">—</span> spending was <b data-draw="ledeSpend">—</b> (<span data-draw="ledeAvg">—</span> a month)<span data-draw="ledeCmp"></span>. Cash on hand is <b data-draw="ledeCash">—</b>.</p>
+    <nav class="fd-tabs" role="tablist" aria-label="Budget" id="fd-books" hidden></nav>
+    <div class="fd-range" id="range">
+      <label class="fd-field fd-narrow">Show
+        <select class="dash-select" id="fd-range" aria-label="Date range">
+          <option value="3m">Last 3 months</option>
+          <option value="6m">Last 6 months</option>
+          <option value="12m">Last 12 months</option>
+          <option value="24m">Last 24 months</option>
+          <option value="ytd">This year so far</option>
+          <option value="lastyear">Last year</option>
+          <option value="all">All time</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </label>
+      <label class="fd-field fd-narrow" id="fd-from-wrap" hidden>From<input type="month" id="fd-from" min="2000-01" max="2099-12"></label>
+      <label class="fd-field fd-narrow" id="fd-to-wrap" hidden>To<input type="month" id="fd-to" min="2000-01" max="2099-12"></label>
+      <label class="fd-check"><input type="checkbox" id="fd-compare"> Compare with the previous period</label>
+    </div>
+  </header>
+
+  <nav class="fd-nav" id="fd-nav" aria-label="Page sections">
+    <button type="button" class="fd-navb" data-group="all">Everything</button>
+    <button type="button" class="fd-navb" data-group="overview">Overview</button>
+    <button type="button" class="fd-navb" data-group="accounts">Accounts</button>
+    <button type="button" class="fd-navb" data-group="expenses">Expenses</button>
+    <button type="button" class="fd-navb" data-group="budget">Budget</button>
+    <button type="button" class="fd-navb" data-group="tx">Transactions</button>
+    <button type="button" class="fd-navb" data-group="markets">Markets</button>
+    <button type="button" class="fd-navb" data-group="review">Year in review</button>
+    <button type="button" class="fd-navb" data-group="import">Import</button>
+    <button type="button" class="fd-navb fd-navset" data-group="settings" title="Dashboard settings">⚙ Settings</button>
+  </nav>
+
+  <button type="button" class="fd-fab" id="fd-fab" aria-label="Add income or an expense by hand">+</button>
+
+  <div hidden data-draw="prefSync" data-source="prefs"></div>
+  <div hidden data-draw="sharePub" data-source="accounts balances prefs"></div>
+  <section id="kpis" class="fd-kpis" aria-label="Key figures">
+    <div class="fd-card" id="kpi-flow"><h3>Cash flow · <span data-draw="kRange">—</span></h3>
+      <div class="fd-num"><div class="fd-half"><span class="fd-hl">Income</span><p class="fd-big fd-mid" data-draw="kIncome">—</p><p class="fd-sub" data-draw="kIncomeSub">—</p></div>
+      <div class="fd-half"><span class="fd-hl">Spending</span><p class="fd-big fd-mid" data-draw="kSpend">—</p><p class="fd-sub" data-draw="kSpendSub">—</p></div></div>
+      <div data-draw="kFlowViz" data-source="summary"></div></div>
+    <div class="fd-card" id="kpi-budget"><h3>Budget · <span data-draw="kBudgetMonth">—</span></h3><p class="fd-big" data-draw="kBudget">—</p><p class="fd-sub" data-draw="kBudgetSub">—</p><div data-draw="kBudgetRing" data-source="budget_totals"></div></div>
+    <div class="fd-card" id="kpi-subs"><h3>Where the income went</h3><div data-draw="kWhere" data-source="txns period subs"></div><p class="fd-more">Subscriptions list ›</p></div>
+    <div class="fd-card" id="kpi-assets"><h3>Cash &amp; investments</h3>
+      <div class="fd-num"><div class="fd-half" id="kpi-cash" title="Show deposit accounts"><span class="fd-hl">Checking &amp; savings ›</span><p class="fd-big fd-mid" data-draw="kCash">—</p><p class="fd-sub" data-draw="kCashChg">—</p><p class="fd-sub" data-draw="kCashNet"></p></div>
+      <div class="fd-half" id="kpi-invest" title="Show investment accounts"><span class="fd-hl">Investments ›</span><p class="fd-big fd-mid" data-draw="kInvest">—</p><p class="fd-sub" data-draw="kInvestChg">—</p></div></div>
+      <div data-draw="kAssetViz" data-source="balance_totals shares"></div></div>
+    <div class="fd-card" id="kpi-debt"><h3>Mortgage &amp; loans</h3><p class="fd-big" data-draw="kDebt">—</p><p class="fd-sub" data-draw="kDebtChg">—</p></div>
+  </section>
+
+  <section id="fd-detail" class="fd-card fd-detail" hidden>
+    <div class="fd-row"><h2 data-draw="detailTitle"></h2><button class="fd-btn fd-quiet fd-sm" type="button" id="fd-detail-close">Close</button></div>
+    <div class="fd-scroll"><table class="fd-table" data-source="balances subs"><tbody data-draw="detailRows"></tbody></table></div>
+    <p class="fd-note" data-draw="detailNote"></p>
+  </section>
+
+  <section id="health">
+    <h2>Needs attention</h2>
+    <div data-draw="healthRows" data-source="txns imports accounts balances subs"></div>
+  </section>
+
+  <div class="fd-grid2">
+  <section id="top-vendors">
+    <h2>Top 5 vendors</h2>
+    <p class="fd-note">The five vendors with the most spending in the range, month by month. Mortgage, rent, loan payments, transfers and one-time items are left out.</p>
+    <div class="fd-box" data-draw="vendorChart" data-source="vendors period"></div>
+  </section>
+
+  <section id="cashflow">
+    <h2>Income vs spending</h2>
+    <p class="fd-note">Monthly income and everyday spending. One-time items (like the home purchase) are in the tooltip, not the bars.</p>
+    <div class="fd-box" data-draw="flowChart" data-source="monthly"></div>
+  </section>
+  </div>
+
+  <div class="fd-grid2">
+  <section id="split" hidden>
+    <h2>Who paid what</h2>
+    <p class="fd-note">Shared spending in the selected range, credited to whoever owns the account it was paid from, compared with each person's agreed share.</p>
+    <div data-draw="splitView" data-source="txns period prefs accounts"></div>
+  </section>
+
+  <section id="unusual">
+    <h2>Unusual this month</h2>
+    <p class="fd-note">Categories at least 30% (and $50) above their average for the previous 6 months. Click one to see what's behind it.</p>
+    <div class="fd-scroll"><table class="fd-table" data-source="txns"><tbody data-draw="unusualRows"></tbody></table></div>
+  </section>
+
+  <section id="big">
+    <h2>Biggest purchases</h2>
+    <p class="fd-note">The 10 largest expenses in the selected range. Click one to list that vendor's transactions.</p>
+    <div data-draw="bigHide" data-source="subs"></div>
+    <div class="fd-scroll"><table class="fd-table" data-source="txns"><tbody data-draw="bigRows"></tbody></table></div>
+  </section>
+  </div>
+
+  <section id="bills">
+    <h2>Upcoming bills &amp; 30-day cash forecast</h2>
+    <p class="fd-note" data-draw="fcast"></p>
+    <div class="fd-scroll"><table class="fd-table" data-source="subs"><tbody data-draw="billRows"></tbody></table></div>
+  </section>
+
+  <section id="categories">
+    <h2>Spending by category</h2>
+    <p class="fd-note">Click a category (in the chart, its legend or the table) to narrow the vendor list and transactions below to it.</p>
+    <div data-draw="catViz" data-source="cat_trend"></div>
+    <div class="fd-box" data-draw="catChart" data-source="cat_trend period"></div>
+    <p class="fd-chip" id="fd-cat-chip" hidden>Showing only <b data-draw="catChip"></b> below <button type="button" class="fd-link" id="fd-cat-clear">Show all categories</button></p>
+    <div class="fd-scroll">
+      <table class="fd-table" data-source="cat_trend" data-row-key="key">
+        <thead><tr>
+          <th data-field="category">Category</th>
+          <th data-field="total">Total</th>
+          <th data-field="avg">Avg / mo</th>
+          <th data-field="share">Share</th>
+          <th data-field="prevTotal" class="fd-cmp" hidden>Previous</th>
+          <th data-field="change" class="fd-cmp" hidden>Change</th>
+          <th>Trend</th>
+        </tr></thead>
+        <tbody data-draw="catRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="budget">
+    <h2>Budget vs actual</h2>
+    <div class="fd-row">
+      <label class="fd-field fd-narrow">Month
+        <select class="dash-select" data-draw="budgetMonth" aria-label="Month" data-source="period"></select>
+      </label>
+    </div>
+    <p class="fd-note">Bars are spending; the dark tick is the budget (plus anything rolled over). For the current month, the faint bar shows where spending is headed at the pace so far. Red bars are over budget.</p>
+    <div class="fd-box" data-draw="budgetChart" data-source="categories"></div>
+    <div class="fd-split">
+      <div>
+        <h3 class="fd-h3">Budgets for <span data-draw="kBudgetMonth">—</span></h3>
+        <div data-draw="budgetBars" data-source="categories budget_totals"></div>
+        <div class="fd-scroll">
+          <table class="fd-table" data-source="categories" data-row-key="key">
+            <thead><tr>
+              <th data-field="category">Category</th>
+              <th data-field="planned">Budget</th>
+              <th data-field="carry">Rolled over</th>
+              <th data-field="actual">Spent</th>
+              <th class="fd-l">Set in</th>
+              <th></th>
+            </tr></thead>
+            <tbody data-draw="budgetRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <form class="fd-card" id="fd-budget-form" autocomplete="off">
+        <h3>Set a monthly budget</h3>
+        <p class="fd-note">Applies from the starting month onward and replaces the sheet’s plan for that category.</p>
+        <div class="fd-row">
+          <label class="fd-field">Category<input type="text" name="category" list="fd-cats" placeholder="e.g. Groceries"></label>
+          <label class="fd-field">Per month<input type="number" step="1" min="0" name="amount" placeholder="0"></label>
+          <label class="fd-field">Starting<input type="month" name="from" min="2000-01" max="2099-12"></label>
+        </div>
+        <label class="fd-check"><input type="checkbox" name="rollover"> Roll unspent money into the next month (and overspending out of it)</label>
+        <div class="fd-row"><button class="fd-btn" type="submit">Save budget</button></div>
+        <p class="fd-msg ok" id="fd-bud-ok" hidden>Saved.</p>
+        <p class="fd-msg err" id="fd-bud-err" hidden>That wasn’t saved. Only editors can change budgets.</p>
+        <p class="fd-msg err" id="fd-bud-miss" hidden>Fill in a category, an amount and a starting month.</p>
+      </form>
+    </div>
+  </section>
+
+  <div class="fd-grid2">
+    <section id="goals">
+      <h2>Savings goals</h2>
+      <p class="fd-note">Track progress toward a target. Link a goal to an account to follow its balance automatically, or enter the amount saved yourself.</p>
+      <div data-draw="goalEditor"></div>
+      <div data-draw="goalRows" data-source="goals balances"></div>
+    </section>
+
+    <section id="networth">
+      <h2>Net worth over time</h2>
+      <p class="fd-note">Cash + investments − credit cards − loans − mortgage at each month-end. A kind of account with no balance that month uses its last known one. Home and vehicle values aren't included in this history; they're in the ring above.</p>
+      <div data-draw="nwRing" data-source="balance_totals prefs shares"></div>
+      <div class="fd-box" data-draw="nwChart" data-source="balances period shares"></div>
+    </section>
+
+    <section id="sharedin" class="fd-none">
+      <h2>From personal dashboards</h2>
+      <p class="fd-note">Balances shared into this dashboard. Read-only: they're updated from the owner's dashboard. Use ⚙ to choose where each one counts.</p>
+      <div data-draw="sharedView" data-source="shares prefs accounts"></div>
+    </section>
+    <section id="assets">
+      <h2>Home, vehicles &amp; other assets</h2>
+      <p class="fd-note">Things you own that aren't in a bank or brokerage account. They count toward net worth.</p>
+      <div data-draw="assetView" data-source="prefs accounts balances"></div>
+    </section>
+    <section id="accounts">
+      <h2>Your accounts</h2>
+      <p class="fd-note">Every account with its latest balance, grouped by type. Rates are what you enter; interest per month is an estimate (balance × rate ÷ 12). Click <b>Edit</b> to set an account's type, rate, owner or notes.</p>
+      <div data-draw="cardGauges" data-source="accounts balances"></div>
+      <div data-draw="acctEditor"></div>
+      <div class="fd-scroll"><table class="fd-table" data-source="balances accounts"><tbody data-draw="acctRows"></tbody></table></div>
+      <datalist id="fd-accts" data-draw="acctNames"></datalist>
+    </section>
+
+    <section id="investments">
+      <h2>Investment accounts</h2>
+      <p class="fd-note">Month-end balance of each account. Hollow dots are figures marked as estimates.</p>
+      <div class="fd-box" data-draw="investChart" data-source="balances period shares"></div>
+    </section>
+    <section id="deposits">
+      <h2>Checking &amp; savings balance</h2>
+      <p class="fd-note">Combined deposit balance at month end (the latest month may be month to date).</p>
+      <div class="fd-box" data-draw="depositChart" data-source="balance_totals period"></div>
+    </section>
+  </div>
+
+  <section id="holdings">
+    <h2>Holdings</h2>
+    <p class="fd-note">Stocks, ETFs and funds you own. Add each purchase as a lot; sales use the oldest shares first. Click a row to buy more, sell or edit.</p>
+    <div data-draw="holdTotals" data-source="holdings accounts"></div>
+    <div data-draw="holdEditor" data-source="accounts"></div>
+    <div class="fd-scroll" data-draw="holdRows" data-source="holdings"></div>
+    <div data-draw="holdAlloc" data-source="holdings"></div>
+    <div data-draw="divCal" data-source="holdings"></div>
+    <div data-draw="watchView" data-source="prefs holdings"></div>
+  </section>
+
+  <section id="mortgage">
+    <h2>Mortgage &amp; loans</h2>
+    <p class="fd-note">Balance owed at month end.</p>
+    <div class="fd-box" data-draw="loanChart" data-source="balances period"></div>
+    <div data-draw="loanRings" data-source="accounts balances"></div>
+    <div data-draw="amortView" data-source="accounts balances"></div>
+  </section>
+
+
+  <section id="subscriptions">
+    <h2>Subscriptions &amp; recurring bills</h2>
+    <div data-draw="subsRing" data-source="subs"></div>
+    <div data-draw="priceRows" data-source="subs txns"></div>
+    <div class="fd-scroll">
+      <table class="fd-table" data-source="subs" data-row-key="key">
+        <thead><tr>
+          <th data-field="vendor">Service</th>
+          <th data-field="lastCharge">Last charge</th>
+          <th data-field="months">Months charged</th>
+          <th data-field="avg">Avg / mo</th>
+          <th data-field="yearly">Per year</th>
+          <th>Trend</th>
+        </tr></thead>
+        <tbody data-draw="subsRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="vendors">
+    <h2>Spending by vendor</h2>
+    <p class="fd-note">Every vendor in the range, with names cleaned up from the raw card descriptions. Click one to see its transactions.</p>
+    <div class="fd-row">
+      <label class="fd-field fd-narrow">Search vendors
+        <input type="search" id="fd-vsearch" placeholder="e.g. Hy-Vee, Amazon" autocomplete="off">
+      </label>
+    </div>
+    <div class="fd-scroll">
+      <table class="fd-table" data-source="vendors" data-row-key="key">
+        <thead><tr>
+          <th data-field="vendor">Vendor</th>
+          <th class="fd-cmpcat" hidden>In <span data-draw="catChip"></span></th>
+          <th data-field="total">Total</th>
+          <th data-field="avg">Avg / mo</th>
+          <th data-field="share">Share</th>
+          <th>Trend</th>
+        </tr></thead>
+        <tbody data-draw="vendorRows"></tbody>
+      </table>
+    </div>
+    <p class="fd-note" data-draw="vendorMore"></p>
+  </section>
+
+  <section id="tags">
+    <h2>Tags: trips &amp; events</h2>
+    <p class="fd-note">Totals for everything you've tagged, across all time and categories. Click a tag to list its transactions.</p>
+    <div class="fd-scroll"><table class="fd-table" data-source="txns"><tbody data-draw="tagRows"></tbody></table></div>
+    <datalist id="fd-tags" data-draw="tagList"></datalist>
+  </section>
+
+  <section id="markets">
+    <h2>Markets</h2>
+    <div data-draw="mktView" data-source="holdings"></div>
+  </section>
+
+  <section id="economy">
+    <h2>Rates &amp; economy</h2>
+    <p class="fd-note">Interest rates, inflation, energy prices and Iowa City home prices from FRED, the Bureau of Labor Statistics and the EIA. Updated daily.</p>
+    <div data-draw="econView" data-source="prefs"></div>
+  </section>
+
+  <section id="review">
+    <h2>Year in review</h2>
+    <div data-draw="reviewHead" data-source="txns subs"></div>
+    <div data-draw="reviewMonths" data-source="txns"></div>
+    <div data-draw="reviewSnap" data-source="txns balance_totals"></div>
+    <div class="fd-scroll" data-draw="reviewCats" data-source="txns"></div>
+  </section>
+
+  <section id="dow">
+    <h2>Spending calendar &amp; day of week</h2>
+    <p class="fd-note">Everyday spending in the selected range by the day it happened (one-time items left out).</p>
+    <div data-draw="spendCal" data-source="txns period"></div>
+    <div class="fd-scroll"><table class="fd-table" data-source="txns"><tbody data-draw="dowRows"></tbody></table></div>
+  </section>
+
+  <section id="transactions">
+    <h2>Transactions</h2>
+    <p class="fd-note">Everything in the range. Use Edit to fix a vendor or category, mark something one-time or a transfer, split a purchase, or make a rule for future imports.</p>
+    <div class="fd-row">
+      <label class="fd-field fd-tsearch">Search<input type="search" id="fd-tq" placeholder="Vendor, description, category or account" autocomplete="off"></label>
+      <label class="fd-field fd-narrow">Show
+        <select class="dash-select" id="fd-ttype"><option value="">Everything</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select>
+      </label>
+      <label class="fd-check"><input type="checkbox" id="fd-tneeds"> Needs a category (<span data-draw="txNeeds">0</span>)</label>
+      <label class="fd-check"><input type="checkbox" id="fd-tedit"> Allow editing</label>
+      <button type="button" class="fd-btn fd-quiet fd-sm" id="fd-colbtn" aria-haspopup="dialog" aria-expanded="false">⚙ Columns</button>
+      <button type="button" class="fd-btn fd-quiet fd-sm" id="fd-rulesbtn">Rules ›</button>
+      <div class="fd-colpanel" id="fd-colpanel" role="dialog" aria-label="Choose columns" hidden><div class="fd-goal-top"><strong>Columns</strong><button type="button" class="fd-btn fd-sm" id="fd-colclose">Done</button></div><p class="fd-note">Tick the columns to show; use the arrows to reorder.</p><div data-draw="colPicker"></div></div>
+    </div>
+
+    <form class="fd-card fd-editor" id="fd-tx-form" autocomplete="off" hidden>
+      <h3>Edit transaction</h3>
+      <p class="fd-note" data-draw="txEditTitle"></p>
+      <p class="fd-note" data-draw="txEditDesc"></p>
+      <div class="fd-row">
+        <label class="fd-field">Vendor<input type="text" name="vendor"></label>
+        <label class="fd-field">Category<input type="text" name="category" list="fd-cats"></label>
+        <label class="fd-field fd-narrow">Counts as
+          <select class="dash-select" name="type"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer (not counted)</option></select>
+        </label>
+      </div>
+      <label class="fd-check"><input type="checkbox" name="oneTime"> One-time (leave out of everyday spending and vendor rankings)</label>
+      <label class="fd-field">Tags<input type="text" name="tags" list="fd-tags" placeholder="e.g. Colorado trip, Home projects"></label>
+      <label class="fd-check"><input type="checkbox" name="split"> Split across categories</label>
+      <div id="fd-splits" hidden>
+        <div class="fd-row"><label class="fd-field">Category<input type="text" name="sc1" list="fd-cats"></label><label class="fd-field fd-narrow">Amount<input type="number" step="0.01" name="sa1"></label></div>
+        <div class="fd-row"><label class="fd-field">Category<input type="text" name="sc2" list="fd-cats"></label><label class="fd-field fd-narrow">Amount<input type="number" step="0.01" name="sa2"></label></div>
+        <div class="fd-row"><label class="fd-field">Category<input type="text" name="sc3" list="fd-cats"></label><label class="fd-field fd-narrow">Amount<input type="number" step="0.01" name="sa3"></label></div>
+        <div class="fd-row"><label class="fd-field">Category<input type="text" name="sc4" list="fd-cats"></label><label class="fd-field fd-narrow">Amount<input type="number" step="0.01" name="sa4"></label></div>
+        <p class="fd-note" data-draw="splitLeft"></p>
+      </div>
+      <div class="fd-row">
+        <label class="fd-check"><input type="checkbox" name="makeRule"> Do this for every transaction whose description contains</label>
+        <label class="fd-field"><span class="fd-sr">Text to match</span><input type="text" name="match"></label>
+      </div>
+      <div class="fd-row">
+        <button class="fd-btn" type="submit">Save</button>
+        <button class="fd-btn fd-quiet" type="button" id="fd-tx-reset" hidden>Undo my edits</button>
+        <button class="fd-btn fd-quiet fd-danger" type="button" id="fd-tx-ignore">Ignore transaction</button>
+        <button class="fd-btn fd-quiet" type="button" id="fd-tx-cancel">Cancel</button>
+      </div>
+      <p class="fd-note">Ignore leaves it out of every total and chart, like deleting it, but you can restore it from “Ignored transactions”. With the box above ticked, it ignores every transaction whose description contains that text. A manual entry is deleted instead.</p>
+      <p class="fd-msg ok" id="fd-tx-ok" hidden>Saved.</p>
+      <p class="fd-msg err" id="fd-tx-err" hidden>That wasn’t saved. Only editors can change transactions.</p>
+      <p class="fd-msg err" id="fd-tx-miss" hidden>A split needs at least two lines that add up to the full amount.</p>
+    </form>
+
+    <div class="fd-scroll">
+      <table class="fd-table" data-source="txns" data-row-key="key">
+        <thead><tr data-draw="txHead"></tr></thead>
+        <tbody data-draw="txRows"></tbody>
+      </table>
+    </div>
+    <div class="fd-row"><p class="fd-note" data-draw="txCount"></p><button class="fd-btn fd-quiet" type="button" id="fd-tmore" hidden>Show more</button><button class="fd-btn fd-quiet" type="button" id="fd-tx-csv" title="Download the transactions currently listed">Export CSV</button></div>
+
+    <details class="fd-ignored">
+      <summary><h3 class="fd-h3">Ignored transactions <span class="fd-zero" data-draw="ignCount"></span></h3></summary>
+      <div class="fd-scroll">
+        <table class="fd-table" data-source="ignored_txns" data-row-key="key">
+          <thead><tr>
+            <th data-field="date">Date</th>
+            <th data-field="vendor" class="fd-l">Vendor</th>
+            <th data-field="amount">Amount</th>
+            <th data-field="source" class="fd-l">Account</th>
+            <th class="fd-l">Why</th>
+            <th></th>
+          </tr></thead>
+          <tbody data-draw="ignRows"></tbody>
+        </table>
+      </div>
+    </details>
+
+    <h3 class="fd-h3" id="rules">Rules</h3>
+    <p class="fd-note">A rule changes every transaction where all of its conditions match, including future imports. Rules run top to bottom; if two set the same field, the lower one wins. Use ↑/↓ to reorder.</p>
+    <div data-draw="ruleBuilder"></div>
+    <div class="fd-note" data-draw="rulePreview" data-source="all_txns"></div>
+    <div data-draw="ruleList" data-source="rules"></div>
+  </section>
+
+  <section id="settings">
+    <h2>Settings</h2>
+    <div data-draw="settingsView" data-source="prefs"></div>
+  </section>
+
+  <section id="import" class="fd-import">
+    <h2>Add statements</h2>
+    <p class="fd-note">Import statements here, or add entries by hand. Once a month has imported transactions for a budget, they replace that month’s sheet rows; a recorded statement balance replaces the sheet balance for that kind of account.</p>
+    <div class="fd-split">
+      <form class="fd-card" id="fd-import-form" autocomplete="off">
+        <input type="hidden" name="book" value="">
+        <h3>Import a transactions CSV</h3>
+        <p class="fd-note">Checking, savings or credit card. Download the CSV from your bank’s website.</p>
+        <div class="fd-row fd-pickrow">
+          <div class="fd-field"><span>Account</span><div data-draw="impAcctPick" data-source="accounts balances"></div></div>
+          <button class="fd-btn fd-quiet" type="button" id="fd-imp-new" title="Add a new account" aria-label="Add a new account">+</button>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Account name<input type="text" name="account" list="fd-accts" placeholder="e.g. Main checking"></label>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Account type<select class="dash-select" name="kind"><optgroup label="Cash"><option value="deposit:checking">Checking</option><option value="deposit:savings">Savings</option><option value="deposit:hysa">High-yield savings</option><option value="deposit:money_market">Money market</option><option value="deposit:cd">CD (certificate of deposit)</option><option value="deposit:cash_mgmt">Cash management</option></optgroup><optgroup label="Credit"><option value="credit:card">Credit card</option><option value="credit:loc">Line of credit</option></optgroup><optgroup label="Loans"><option value="mortgage:mortgage">Mortgage</option><option value="loan:heloc">Home equity (HELOC)</option><option value="loan:auto">Auto loan</option><option value="loan:student">Student loan</option><option value="loan:personal">Personal loan</option><option value="loan:other">Other loan</option></optgroup><optgroup label="Investments"><option value="investment:brokerage">Brokerage</option><option value="investment:401k">401(k)</option><option value="investment:403b">403(b)</option><option value="investment:457b">457(b)</option><option value="investment:roth_ira">Roth IRA</option><option value="investment:trad_ira">Traditional IRA</option><option value="investment:rollover_ira">Rollover IRA</option><option value="investment:sep_ira">SEP / SIMPLE IRA</option><option value="investment:hsa">HSA</option><option value="investment:529">529 college savings</option><option value="investment:pension">Pension</option><option value="investment:crypto">Crypto</option><option value="investment:other">Other investment</option></optgroup></select></label>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Statement file (CSV, PDF, OFX or QFX)<input type="file" name="file" accept=".csv,.txt,text/csv,.pdf,application/pdf,.ofx,.qfx,application/x-ofx"></label>
+        </div>
+        <div data-draw="importPreview"></div>
+        <div data-draw="pdfPick"></div>
+        <div class="fd-row">
+          <label class="fd-field">Ending balance (optional)<input type="number" step="0.01" name="balance" placeholder="Statement ending balance"></label>
+          <label class="fd-field">Balance month<input type="month" name="bmonth"></label>
+        </div>
+        <button class="fd-btn" type="button" id="fd-import-save" disabled>Save import</button>
+        <p class="fd-note fd-bad" data-draw="impDebug"></p>
+        <p class="fd-msg ok" id="fd-imp-ok" hidden>Saved. The dashboard now includes this statement.</p>
+        <p class="fd-msg err" id="fd-imp-err" hidden>That wasn’t saved. Only editors of this dashboard can import statements.</p>
+        <p class="fd-msg err" id="fd-imp-big" hidden>That file is too large to save in one go. Split it into smaller date ranges.</p>
+        <p class="fd-msg err" id="fd-imp-none" hidden>No transactions could be read from that file. Check the column choices above.</p>
+      </form>
+
+      <form class="fd-card" id="fd-balance-form" autocomplete="off">
+        <input type="hidden" name="book" value="">
+        <h3>Record a statement balance</h3>
+        <p class="fd-note">For investment, retirement and mortgage statements that come as PDFs: type the ending balance.</p>
+        <div class="fd-row fd-pickrow">
+          <div class="fd-field"><span>Account</span><div data-draw="balAcctPick" data-source="accounts balances"></div></div>
+          <button class="fd-btn fd-quiet" type="button" id="fd-bal-new" title="Add a new account" aria-label="Add a new account">+</button>
+        </div>
+        <style>.fd-field[hidden] { display: none !important; } .fd-pickrow { align-items: flex-end; }</style>
+        <div class="fd-row">
+          <label class="fd-field">Account name<input type="text" name="account" list="fd-accts" placeholder="e.g. Empower (CSI) Roth IRA"></label>
+          <label class="fd-field">Owner<input type="text" name="owner" placeholder="e.g. Nate"></label>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Account type<select class="dash-select" name="kind"><optgroup label="Cash"><option value="deposit:checking">Checking</option><option value="deposit:savings">Savings</option><option value="deposit:hysa">High-yield savings</option><option value="deposit:money_market">Money market</option><option value="deposit:cd">CD (certificate of deposit)</option><option value="deposit:cash_mgmt">Cash management</option></optgroup><optgroup label="Credit"><option value="credit:card">Credit card</option><option value="credit:loc">Line of credit</option></optgroup><optgroup label="Loans"><option value="mortgage:mortgage">Mortgage</option><option value="loan:heloc">Home equity (HELOC)</option><option value="loan:auto">Auto loan</option><option value="loan:student">Student loan</option><option value="loan:personal">Personal loan</option><option value="loan:other">Other loan</option></optgroup><optgroup label="Investments"><option value="investment:brokerage" selected>Brokerage</option><option value="investment:401k">401(k)</option><option value="investment:403b">403(b)</option><option value="investment:457b">457(b)</option><option value="investment:roth_ira">Roth IRA</option><option value="investment:trad_ira">Traditional IRA</option><option value="investment:rollover_ira">Rollover IRA</option><option value="investment:sep_ira">SEP / SIMPLE IRA</option><option value="investment:hsa">HSA</option><option value="investment:529">529 college savings</option><option value="investment:pension">Pension</option><option value="investment:crypto">Crypto</option><option value="investment:other">Other investment</option></optgroup></select></label>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Balance as of<input type="date" name="asof"></label>
+          <label class="fd-field">Balance<input type="number" step="0.01" name="balance"></label>
+        </div>
+        <button class="fd-btn" type="submit">Save balance</button>
+        <p class="fd-msg ok" id="fd-bal-ok" hidden>Saved.</p>
+        <p class="fd-msg err" id="fd-bal-err" hidden>That wasn’t saved. Only editors of this dashboard can record balances.</p>
+        <p class="fd-msg err" id="fd-bal-miss" hidden>Choose an account (or add a new one with +), then fill in the date and balance.</p>
+      </form>
+
+      <form class="fd-card" id="fd-manual-form" autocomplete="off">
+        <input type="hidden" name="book" value="">
+        <h3>Add income or an expense by hand</h3>
+        <p class="fd-note">For money that never shows up on a statement, like a family member paying you back for a phone line.</p>
+        <div class="fd-row">
+          <label class="fd-field">Type<select class="dash-select" name="type"><option value="expense">Expense</option><option value="income">Income</option></select></label>
+          <label class="fd-field">Date<input type="date" name="date"></label>
+          <label class="fd-field">Amount<input type="number" step="0.01" min="0" name="amount" placeholder="0.00"></label>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Vendor or source<input type="text" name="vendor" placeholder="e.g. David (phone bill)"></label>
+          <label class="fd-field">Category<input type="text" name="category" list="fd-cats" placeholder="e.g. Other"></label>
+        </div>
+        <div class="fd-row">
+          <label class="fd-field">Note (optional)<input type="text" name="note"></label>
+        </div>
+        <button class="fd-btn" type="submit">Save entry</button>
+        <p class="fd-msg ok" id="fd-man-ok" hidden>Saved.</p>
+        <p class="fd-msg err" id="fd-man-err" hidden>That wasn’t saved. Only editors of this dashboard can add entries.</p>
+        <p class="fd-msg err" id="fd-man-miss" hidden>Fill in the date, an amount above zero, and the vendor or source.</p>
+      </form>
+    </div>
+
+    <h2 style="margin-top:var(--cds-gap-lg)" id="manual-list">Manual entries</h2>
+    <div class="fd-scroll">
+      <table class="fd-table" data-source="manual" data-row-key="id">
+        <thead><tr>
+          <th data-field="date">Date</th>
+          <th data-field="type" class="fd-l">Type</th>
+          <th data-field="vendor" class="fd-l">Vendor or source</th>
+          <th data-field="category" class="fd-l">Category</th>
+          <th data-field="amount">Amount</th>
+          <th></th>
+        </tr></thead>
+        <tbody data-draw="manualRows"></tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top:var(--cds-gap-lg)" id="imports-list">Saved imports</h2>
+    <div class="fd-scroll">
+      <table class="fd-table" data-source="imports" data-row-key="id">
+        <thead><tr>
+          <th data-field="importedAt">Saved</th>
+          <th data-field="book" class="fd-l">Budget</th>
+          <th data-field="accountName" class="fd-l">Account</th>
+          <th data-field="fileName" class="fd-l">File</th>
+          <th data-field="rowCount">Rows</th>
+          <th data-field="balance">Balance</th>
+          <th data-field="balanceMonth">Month</th>
+          <th></th>
+        </tr></thead>
+        <tbody data-draw="importRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <datalist id="fd-cats" data-draw="catList" data-source="txns"></datalist>
+
+  <details id="method">
+    <summary>How the numbers are worked out</summary>
+    <ul>
+      <li>June–November 2026 history for Nate’s and the shared budget comes from the monthly Google Sheets. Rows keep the month of the sheet they were entered in, even where the date typed was another month. November investment and mortgage figures from the sheets are left out (those sheets still held an earlier month’s numbers); McKenna’s accounts appear once (August), as marked estimates.</li>
+      <li>The range picker counts back from the latest month that has any transaction. “Compare with the previous period” uses the same number of months right before the range.</li>
+      <li>Vendor names are cleaned from the raw descriptions: store numbers, city and state, and card-processor prefixes (SQ *, TST*, PAYPAL *) are dropped, and common merchants are matched by name (all Hy-Vee stores become “Hy-Vee”, AMZN/Amazon Marketplace become “Amazon”).</li>
+      <li>Your rules apply to every transaction whose description contains the text, including history; a later rule wins over an earlier one. An edit to a single transaction wins over any rule.</li>
+      <li>Imported statements: card payments and transfers between accounts are set aside so they aren’t counted twice; refunds reduce spending. Once a month has imported transactions, they replace that month’s spreadsheet rows. Manual entries are counted as typed.</li>
+      <li>Budgets set on this page apply from their starting month onward and replace the sheet’s plan for that category. With rollover on, each month’s leftover (or overspend) since the starting month is added to the next month’s budget. “On pace for” divides this month’s spending by how much of the month has passed.</li>
+      <li>Subscriptions are your Subscriptions category plus known streaming/software services. Recurring bills are other vendors charged at least 3 of the last 12 months at about the same amount. “Per year” is the latest charge × 12 for monthly charges.</li>
+    </ul>
+  </details>
+</div>
+
+<script src="vendor/d3.min.js"></script>
+<script src="store.js"></script>
+<script src="runtime.js"></script>
+<script src="charts.js"></script>
+<script src="calcs.js"></script>
+<script src="page.js"></script>
+<script src="pdfstatement.js"></script>
+<script src="import.js"></script>
+<script src="app.js"></script>
+</main>
+</body>
+</html>

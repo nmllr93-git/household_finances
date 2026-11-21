@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f2a37">
+<title>Sign in · Household Finances</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main id="dash-root" class="fd">
+  <form class="fd-card hf-login" id="hf-login" autocomplete="on">
+    <h1>Household finances</h1>
+    <label class="fd-field">Username<input type="text" name="username" autocomplete="username" autocapitalize="none" required></label>
+    <label class="fd-field">Password<input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="fd-btn" type="submit">Sign in</button>
+    <p class="fd-msg err" id="hf-err" hidden></p>
+  </form>
+</main>
+<script src="store.js"></script>
+<script src="login.js"></script>
+</body>
+</html>

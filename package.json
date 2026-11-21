@@ -1,0 +1,17 @@
+{
+  "name": "household-finances",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted household budget dashboard (personal + shared budgets, statement import, subscriptions).",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "users": "node --disable-warning=ExperimentalWarning server.js users",
+    "backup": "node --disable-warning=ExperimentalWarning server.js backup",
+    "test": "node --test test/calcs.test.mjs"
+  },
+  "license": "UNLICENSED"
+}
