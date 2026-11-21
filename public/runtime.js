@@ -2,7 +2,7 @@
 // page.js and import.js run here unchanged. It provides window.dash and
 // window.claude.use('db'), backed by this app's own server.
 (function () {
-  const RAW = ['sheet_history', 'sheet_balances', 'sheet_budgets', 'imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares'];
+  const RAW = ['sheet_history', 'sheet_balances', 'sheet_budgets', 'imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares', 'receipts'];
   const S = {
     bookId: null, raw: {}, status: {}, error: {}, params: {}, version: 0,
     calcs: {}, cache: {}, draws: [], drawFns: {}, onData: [], pending: false,

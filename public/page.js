@@ -684,7 +684,7 @@
     el.replaceChildren();
     for (const t of txMatches().slice(0, tLimit)) {
       const tr = document.createElement('tr'); tr.dataset.key = enc(t.key);
-      const v = td(t.vendor); if (t.edited || t.rule) { const b = document.createElement('span'); b.className = 'fd-pill'; b.textContent = t.edited ? 'edited' : 'rule'; v.append(' ', b); }
+      const v = td(t.vendor); if (rcptKeys().has(t.splitOf || t.key)) { const r = document.createElement('span'); r.textContent = '📎 '; r.title = 'Has a receipt photo'; v.prepend(r); } if (t.edited || t.rule) { const b = document.createElement('span'); b.className = 'fd-pill'; b.textContent = t.edited ? 'edited' : 'rule'; v.append(' ', b); }
       const amt = td((t.type === 'income' ? '+' : '') + money2(t.amount), t.type === 'income' ? 'fd-good' : t.type === 'transfer' ? 'fd-zero' : '');
       const cat = td(t.category + (t.oneTime ? ' · one-time' : '') + (t.type === 'transfer' ? '' : t.type === 'income' ? ' · income' : ''), 'fd-l' + (t.category === 'Uncategorized' ? ' fd-warn' : ''));
       const descCell = () => { const c = td(t.description || '', 'fd-l fd-zero'); c.title = t.description || ''; return c; };
@@ -760,9 +760,36 @@
     q('fd-tx-reset').forEach((b) => { b.hidden = !t.edited; });
     q('fd-tx-ignore').forEach((b) => { b.textContent = t.source === 'Manual entry' ? 'Delete entry' : 'Ignore transaction'; });
     show(['fd-tx-ok', 'fd-tx-err', 'fd-tx-miss'], null);
-    dash.draw('txEditTitle'); dash.draw('txEditDesc'); dash.draw('splitLeft');
+    dash.draw('txEditTitle'); dash.draw('txEditDesc'); dash.draw('splitLeft'); dash.draw('txReceipt');
     f.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
+  // ---- receipt photos on a transaction ----
+  const rcptKeys = () => new Set(rows('receipts').map((r) => r.txKey));
+  const fileUrls = {};
+  const fileUrl = async (id) => { if (fileUrls[id]) return fileUrls[id]; const r = await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files/${encodeURIComponent(id)}`, {}); if (!r.ok) throw new Error('Not found'); return (fileUrls[id] = URL.createObjectURL(await r.blob())); };
+  // shrink phone photos before saving: longest side 1600px, JPEG
+  const shrink = (file) => new Promise((res, rej) => { const img = new Image(), u = URL.createObjectURL(file); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); res(c.toDataURL('image/jpeg', 0.82)); }; img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('That file isn\u2019t a photo this device can read.')); }; img.src = u; });
+  dash.draw('txReceipt', (el) => {
+    el.replaceChildren(); if (!editing) return;
+    const mine = rows('receipts').filter((r) => r.txKey === editing.key), ro = document.body.classList.contains('fd-readonly');
+    const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Receipt photos'; el.append(h);
+    const wrap = document.createElement('div'); wrap.className = 'fd-rcpts'; el.append(wrap);
+    mine.forEach((r) => { const f = document.createElement('figure'); const img = document.createElement('img'); img.alt = r.name || 'Receipt'; img.loading = 'lazy'; fileUrl(r.fileId).then((u) => { img.src = u; }).catch(() => { img.alt = 'Photo not found'; });
+      img.addEventListener('click', () => fileUrl(r.fileId).then((u) => window.open(u, '_blank')).catch(() => {}));
+      f.append(img); if (!ro) f.append(rbtn('Remove', async () => { if (!confirm('Remove this receipt photo?')) return; try { const d = await db(); await d.doc('data/household/receipts/' + r.id).delete(); await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files/${encodeURIComponent(r.fileId)}`, { method: 'DELETE' }); } catch (e) { alert('Not removed: ' + e.message); } }));
+      wrap.append(f); });
+    if (ro) { if (!mine.length) el.append(phMsg('No receipt photos.')); return; }
+    const lab = document.createElement('label'); lab.className = 'fd-btn fd-sm fd-quiet'; lab.textContent = mine.length ? '+ Add another photo' : '+ Add a receipt photo';
+    const fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.setAttribute('capture', 'environment'); fi.hidden = true; lab.append(fi);
+    const msg = phMsg('');
+    fi.addEventListener('change', async () => { const file = fi.files[0]; if (!file) return; msg.className = 'fd-note'; msg.textContent = 'Saving photo…';
+      try { const url = await shrink(file), r = await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mime: 'image/jpeg', data: url.split(',')[1] }) });
+        const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Not saved');
+        const d = await db(); await d.collection('data/household/receipts').add({ book: book(), txKey: editing.key, fileId: j.id, name: file.name || 'Receipt', mime: 'image/jpeg', size: Math.round(url.length * 0.75) }); msg.textContent = ''; }
+      catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = 'Not saved: ' + e.message; } });
+    el.append(lab, msg);
+  });
   dash.draw('txEditTitle', (el) => {
     if (!editing) { el.textContent = ''; return; }
     const t = editing.t;

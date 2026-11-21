@@ -77,6 +77,7 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS docs (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     coll TEXT NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL, created_by TEXT);
   CREATE INDEX IF NOT EXISTS docs_book ON docs (book_id, coll);
+  CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE, mime TEXT NOT NULL, data BLOB NOT NULL, created TEXT NOT NULL, created_by TEXT);
   CREATE TABLE IF NOT EXISTS activity (at TEXT NOT NULL, username TEXT, book_id TEXT NOT NULL, action TEXT NOT NULL, coll TEXT, summary TEXT);
   CREATE INDEX IF NOT EXISTS activity_book ON activity (book_id, at);
 `;
@@ -194,6 +195,12 @@ const BOOKS = CORE.createBookApi({
   },
   newId: () => crypto.randomBytes(10).toString('base64url'),
   backup: () => backup(),
+  putFile: (f) => db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(f.id, f.bookId, f.mime, Buffer.from(f.data, 'base64'), f.created, f.createdBy),
+  getFile: (bookId, id) => { const r = db.prepare('SELECT mime, data FROM files WHERE id = ? AND book_id = ?').get(id, bookId); return r ? { mime: r.mime, data: Buffer.from(r.data).toString('base64') } : null; },
+  deleteFile: (bookId, id) => db.prepare('DELETE FROM files WHERE id = ? AND book_id = ?').run(id, bookId),
+  listFiles: (bookId) => db.prepare('SELECT id, mime, data FROM files WHERE book_id = ?').all(bookId).map((r) => ({ id: r.id, mime: r.mime, data: Buffer.from(r.data).toString('base64') })),
+  replaceBookFiles: (bookId, files) => { db.exec('BEGIN'); try { db.prepare('DELETE FROM files WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
+    for (const f of files) ins.run(f.id, bookId, f.mime, Buffer.from(f.data, 'base64'), new Date().toISOString(), ''); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } },
 });
 
 // ---------- API ----------
@@ -224,8 +231,8 @@ const MARKET = require('./core/market.js').createMarketData({
 });
 
 // ---------- activity log: who changed what on each dashboard (settings, colors and shared balances aren't logged) ----------
-const ACT_SKIP = new Set(['prefs', 'shares']);
-const NOUN = { imports: 'statement', manual: 'manual entry', edits: 'transaction edit', rules: 'rule', budgets: 'budget', accounts: 'account', goals: 'savings goal', holdings: 'holding' };
+const ACT_SKIP = new Set(['prefs', 'shares', 'files']);
+const NOUN = { imports: 'statement', manual: 'manual entry', edits: 'transaction edit', rules: 'rule', budgets: 'budget', accounts: 'account', goals: 'savings goal', holdings: 'holding', receipts: 'receipt photo' };
 function describeDoc(coll, d) {
   if (!d) return '';
   const m = (v) => (v == null || v === '' ? '' : '$' + Math.round(Number(v)).toLocaleString('en-US'));
@@ -237,6 +244,7 @@ function describeDoc(coll, d) {
     case 'budgets': return `${d.category} ${d.amount ? m(d.amount) + '/mo' : 'removed'} from ${d.from}`;
     case 'accounts': return d.name || '';
     case 'goals': return `${d.name || ''} ${m(d.target)}`.trim();
+    case 'receipts': return d.name || '';
     case 'holdings': return `${d.symbol || ''}${d.lots && d.lots.length ? ` · ${d.lots.reduce((t, l) => t + l.qty, 0)} shares` : ''}`;
     default: return '';
   }
@@ -369,6 +377,7 @@ async function api(req, res, url) {
     const before = req.method === 'DELETE' && parts[4] ? db.prepare('SELECT json FROM docs WHERE id = ? AND book_id = ?').get(parts[4], bookId) : null;
     let r; try { r = await BOOKS.handle(req.method, parts.slice(3), book, getBody, user); } catch (e) { if (e.code >= 400 && e.code < 500) return send(res, e.code, { error: e.message }); throw e; }
     if (writing && r.status < 300) { try { logActivity(user, bookId, req.method, parts[3], r, before); } catch {} }
+    if (r.headers && r.headers.file) return send(res, 200, Buffer.from(r.body.data, 'base64'), { 'Content-Type': r.body.mime, 'Cache-Control': 'private, max-age=86400' });
     if (r.headers && r.headers.download) return send(res, r.status, JSON.stringify(r.body, null, 1), { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${r.headers.download}"` });
     return send(res, r.status, r.body);
   }

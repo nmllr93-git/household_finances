@@ -18,7 +18,9 @@
   else root.FDCore = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const COLLECTIONS = ['imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares'];
+  const COLLECTIONS = ['imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares', 'receipts'];
+  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_FILE = 3 * 1024 * 1024; // bytes after decoding
   const SEED_SETS = ['sheet_history', 'sheet_balances', 'sheet_budgets'];
   const str = (v, n) => String(v ?? '').slice(0, n);
   const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
@@ -56,6 +58,9 @@
         kind: ['stock', 'etf', 'fund', 'crypto', 'bond', 'other'].includes(d.kind) ? d.kind : 'stock', sector: str(d.sector, 40),
         lots: lots(d.lots), sales: lots(d.sales), divs: Array.isArray(d.divs) ? d.divs.slice(0, 400).map((x) => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(x && x.date || '') ? x.date : '', amount: Math.max(0, num(x && x.amount) || 0) })).filter((x) => x.amount > 0) : [], manualPrice: num(d.manualPrice), manualAsOf: str(d.manualAsOf, 10), createdAt: now };
     }
+    if (coll === 'receipts') {
+      return { book: label, txKey: str(d.txKey, 80), fileId: str(d.fileId, 40), name: str(d.name, 80), mime: IMAGE_TYPES.includes(d.mime) ? d.mime : 'image/jpeg', size: Math.max(0, num(d.size) || 0), createdAt: now };
+    }
     if (coll === 'goals') {
       return { book: label, name: str(d.name, 60), target: num(d.target), by: str(d.by, 10), account: str(d.account, 60), saved: num(d.saved), createdAt: now };
     }
@@ -88,6 +93,7 @@
       const out = { book, exportedAt: new Date().toISOString(), seed: {}, docs: {} };
       for (const r of await store.seedRows(book.id)) { try { out.seed[r.dataset] = JSON.parse(r.json); } catch (e) {} }
       for (const c of COLLECTIONS) out.docs[c] = (await store.listDocs(book.id, c)).map((r) => ({ id: r.id, created: r.created, createdBy: r.created_by, ...parse(r) }));
+      if (store.listFiles) out.files = await store.listFiles(book.id); // receipt photos: [{ id, mime, data (base64) }]
       return out;
     }
     async function restore(book, body, user) {
@@ -99,7 +105,8 @@
         for (const d of list) { const { id, created, createdBy, ...rest } = d || {}; const doc = cleanDoc(c, rest, book.label); if (rest.createdAt) doc.createdAt = String(rest.createdAt).slice(0, 40);
           rows.push({ id: store.newId(), bookId: book.id, coll: c, json: JSON.stringify(doc), created: created || now, createdBy: createdBy || user }); }
       }
-      try { await store.replaceBookDocs(book.id, rows); } catch (e) { return reply(500, { error: 'Restore failed; nothing was changed. ' + e.message }); }
+      const files = Array.isArray(body.files) ? body.files.filter((f) => f && typeof f.id === 'string' && IMAGE_TYPES.includes(f.mime) && typeof f.data === 'string').map((f) => ({ id: f.id.slice(0, 40), mime: f.mime, data: f.data })) : null;
+      try { await store.replaceBookDocs(book.id, rows); if (files && store.replaceBookFiles) await store.replaceBookFiles(book.id, files); } catch (e) { return reply(500, { error: 'Restore failed; nothing was changed. ' + e.message }); }
       return reply(200, { ok: true, restored: rows.length, safetyBackup: safety ? String(safety).split(/[\\/]/).pop() : '' });
     }
     async function addDoc(book, coll, body, user) {
@@ -117,6 +124,14 @@
       if (a === 'data' && method === 'GET') return reply(200, await data(book.id));
       if (a === 'export' && method === 'GET') return reply(200, await exportBook(book), { download: `${book.id}-${new Date().toISOString().slice(0, 10)}.json` });
       if (a === 'restore' && method === 'POST') return restore(book, await getBody(60 * 1024 * 1024), user);
+      if (a === 'files' && store.putFile) {
+        if (method === 'POST' && !b) { const f = await getBody(5 * 1024 * 1024); const mime = String(f && f.mime || ''), data = String(f && f.data || '').replace(/^data:[^,]*,/, '');
+          if (!IMAGE_TYPES.includes(mime)) return reply(400, { error: 'Receipts must be a JPEG, PNG or WebP photo.' });
+          if (!/^[A-Za-z0-9+/=]+$/.test(data) || data.length * 0.75 > MAX_FILE) return reply(413, { error: 'That photo is too large (3 MB max).' });
+          const id = store.newId(); await store.putFile({ id, bookId: book.id, mime, data, created: new Date().toISOString(), createdBy: user }); return reply(201, { id }); }
+        if (method === 'GET' && b) { const f = await store.getFile(book.id, b); return f ? reply(200, f, { file: true }) : reply(404, { error: 'Not found' }); }
+        if (method === 'DELETE' && b) { await store.deleteFile(book.id, b); return reply(200, { ok: true }); }
+      }
       if (COLLECTIONS.includes(a) && method === 'POST' && !b) return addDoc(book, a, await getBody(), user);
       if (COLLECTIONS.includes(a) && method === 'DELETE' && b) { await store.deleteDoc(book.id, a, b); return reply(200, { ok: true }); }
       return reply(404, { error: 'Not found' });

@@ -9,7 +9,7 @@
   window.FD_LOCAL = true;
 
   // ---------- IndexedDB storage ----------
-  const DBNAME = 'household-finances', VER = 1;
+  const DBNAME = 'household-finances', VER = 2;
   let dbp = null;
   const open = () => dbp || (dbp = new Promise((res, rej) => {
     const r = indexedDB.open(DBNAME, VER);
@@ -18,7 +18,8 @@
       if (!d.objectStoreNames.contains('docs')) d.createObjectStore('docs', { keyPath: 'id' }).createIndex('bookColl', ['bookId', 'coll']);
       if (!d.objectStoreNames.contains('seed')) d.createObjectStore('seed', { keyPath: ['bookId', 'dataset'] });
       if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv');
-      if (!d.objectStoreNames.contains('backups')) d.createObjectStore('backups', { keyPath: 'id' }); };
+      if (!d.objectStoreNames.contains('backups')) d.createObjectStore('backups', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', { keyPath: 'id' }); };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   }));
   const tx = async (stores, mode, fn) => { const d = await open(); return new Promise((res, rej) => { const t = d.transaction(stores, mode); let out; Promise.resolve(fn(t)).then((v) => { out = v; }); t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); }); };
@@ -36,6 +37,11 @@
     replaceBookDocs: (bookId, rows) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const keys = (await req2p(s.getAll())).filter((d) => d.bookId === bookId).map((d) => d.id); keys.forEach((k) => s.delete(k)); rows.forEach((r) => s.put({ ...r, bookId })); }),
     newId,
     backup: () => snapshot('before-restore'),
+    putFile: (f) => tx(['files'], 'readwrite', (t) => { t.objectStore('files').put(f); }),
+    getFile: async (bookId, id) => { const f = await tx(['files'], 'readonly', (t) => req2p(t.objectStore('files').get(id))); return f && f.bookId === bookId ? { mime: f.mime, data: f.data } : null; },
+    deleteFile: (bookId, id) => tx(['files'], 'readwrite', async (t) => { const s2 = t.objectStore('files'); const f = await req2p(s2.get(id)); if (f && f.bookId === bookId) s2.delete(id); }),
+    listFiles: async (bookId) => (await all('files')).filter((f) => f.bookId === bookId).map(({ id, mime, data }) => ({ id, mime, data })),
+    replaceBookFiles: (bookId, files) => tx(['files'], 'readwrite', async (t) => { const s2 = t.objectStore('files'); (await req2p(s2.getAll())).filter((f) => f.bookId === bookId).forEach((f) => s2.delete(f.id)); files.forEach((f) => s2.put({ ...f, bookId, created: new Date().toISOString() })); }),
   };
 
   // ---------- dashboards on this phone ----------
@@ -44,7 +50,7 @@
   // ---------- automatic backups: one snapshot a day, keep the last 14 (inside the app) ----------
   async function snapshot(why) {
     const core = await coreReady, api = core.createBookApi(store), list = [];
-    for (const b of await books()) list.push(await api.exportBook(b));
+    for (const b of await books()) { const x = await api.exportBook(b); delete x.files; list.push(x); } // photos stay out of the in-app snapshots (backup files include them)
     const id = new Date().toISOString().replace(/[:.]/g, '-') + (why ? '-' + why : '');
     await tx(['backups'], 'readwrite', (t) => { t.objectStore('backups').put({ id, at: Date.now(), why: why || 'daily', books: list }); });
     const old = (await all('backups')).sort((a, b) => b.at - a.at).slice(14);
@@ -113,6 +119,7 @@
         const core = await coreReady, api = core.createBookApi(store);
         const r = await api.handle(method, parts.slice(3), book, body, 'me');
         if (parts[3] === 'data' && r.status === 200) dailyBackup().catch(() => {});
+        if (r.headers && r.headers.file) { const bin = atob(r.body.data), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Response(new Blob([u8], { type: r.body.mime }), { status: 200, headers: { 'Content-Type': r.body.mime } }); }
         return json(r.status, r.body);
       }
     }
@@ -148,7 +155,7 @@
   async function deleteBook(id) {
     const list = await books(); if (list.length < 2) throw new Error('Keep at least one dashboard.');
     await snapshot('before-delete');
-    await tx(['books', 'docs'], 'readwrite', async (t) => { t.objectStore('books').delete(id); const s2 = t.objectStore('docs'); (await req2p(s2.getAll())).filter((d) => d.bookId === id).forEach((d) => s2.delete(d.id)); });
+    await tx(['books', 'docs', 'files'], 'readwrite', async (t) => { t.objectStore('books').delete(id); for (const n of ['docs', 'files']) { const s2 = t.objectStore(n); (await req2p(s2.getAll())).filter((d) => d.bookId === id).forEach((d) => s2.delete(d.id)); } });
   }
 
   // ---------- bill reminders: local notifications on this phone (nothing leaves the device) ----------
