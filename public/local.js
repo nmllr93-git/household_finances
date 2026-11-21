@@ -132,11 +132,44 @@
     }
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
-  window.FDLocal = { exportFile, snapshot, backups: async () => (await all('backups')).sort((a, b) => b.at - a.at).map(({ id, at, why }) => ({ id, at, why })) };
+  // ---------- dashboards on this phone ----------
+  const slug = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'dashboard';
+  async function saveBook({ id, name, shared }) {
+    name = String(name || '').trim().slice(0, 40); if (!name) throw new Error('Give the dashboard a name.');
+    const list = await books();
+    if (id) { const b = list.find((x) => x.id === id); if (!b) throw new Error('Not found'); b.name = name; await tx(['books'], 'readwrite', (t) => { t.objectStore('books').put(b); }); return b; }
+    let nid = slug(name), i = 2; while (list.some((x) => x.id === nid)) nid = slug(name) + '-' + i++;
+    const b = { id: nid, name, label: shared ? 'Shared' : 'Personal', sort: list.length }; await tx(['books'], 'readwrite', (t) => { t.objectStore('books').put(b); }); return b;
+  }
+  async function deleteBook(id) {
+    const list = await books(); if (list.length < 2) throw new Error('Keep at least one dashboard.');
+    await snapshot('before-delete');
+    await tx(['books', 'docs'], 'readwrite', async (t) => { t.objectStore('books').delete(id); const s2 = t.objectStore('docs'); (await req2p(s2.getAll())).filter((d) => d.bookId === id).forEach((d) => s2.delete(d.id)); });
+  }
+
+  // ---------- bill reminders: local notifications on this phone (nothing leaves the device) ----------
+  const NOTIF = () => window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+  async function notifyPermission() { const N = NOTIF(); if (!N) return 'unsupported'; let p = await N.checkPermissions(); if (p.display === 'prompt' || p.display === 'prompt-with-rationale') p = await N.requestPermissions(); return p.display; }
+  // bills: [{ name, amount, due (Date) }]; opts: { on, daysBefore, hour }
+  async function scheduleBills(bills, opts) {
+    const N = NOTIF(); if (!N) return { scheduled: 0, supported: false };
+    const pend = await N.getPending(); const mine = (pend.notifications || []).filter((n) => n.id >= 7000 && n.id < 7100);
+    if (mine.length) await N.cancel({ notifications: mine.map((n) => ({ id: n.id })) });
+    if (!opts || !opts.on) return { scheduled: 0, supported: true };
+    if ((await notifyPermission()) !== 'granted') return { scheduled: 0, supported: true, denied: true };
+    const now = Date.now(), out = [];
+    bills.forEach((b) => { const at = new Date(b.due); at.setDate(at.getDate() - (Number(opts.daysBefore) || 0)); at.setHours(Number(opts.hour) || 9, 0, 0, 0);
+      if (at.getTime() > now + 60e3 && out.length < 60) out.push({ id: 7000 + out.length, title: `${b.name} is due ${opts.daysBefore > 0 ? (opts.daysBefore === 1 ? 'tomorrow' : `in ${opts.daysBefore} days`) : 'today'}`, body: `About ${b.amount} · Household Finances`, schedule: { at, allowWhileIdle: true } }); });
+    if (out.length) await N.schedule({ notifications: out });
+    return { scheduled: out.length, supported: true };
+  }
+  const markExported = () => kvSet('lastExport', Date.now()).catch(() => {});
+  window.FDLocal = { exportFile: async (id) => { await exportFile(id); await markExported(); }, snapshot, backups: async () => (await all('backups')).sort((a, b) => b.at - a.at).map(({ id, at, why }) => ({ id, at, why })),
+    books, saveBook, deleteBook, getKV: kvGet, setKV: kvSet, scheduleBills, notifyPermission, notificationsSupported: () => !!NOTIF() };
   // "Download backup" links point at /api/.../export, which a phone can't open directly: handle them here.
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('a[href*="/api/books/"][href$="/export"]'); if (!a) return;
     e.preventDefault(); const id = decodeURIComponent(a.getAttribute('href').split('/api/books/')[1].split('/')[0]);
-    exportFile(id).catch((err) => alert('Backup failed: ' + err.message));
+    window.FDLocal.exportFile(id).catch((err) => alert('Backup failed: ' + err.message));
   }, true);
 })();

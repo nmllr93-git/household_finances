@@ -17,6 +17,10 @@ Away from home: turn on the Tailscale app on the phone first.
 **Updates:** install the newer APK the same way; it installs over the old one and you stay signed in.
 
 ## Phone-only mode
+- **First run:** a short walkthrough. Name your dashboard (and optionally add a shared one), turn on bill reminders, learn about backups, then import a statement or look around. *Skip setup* is always there.
+- **Dashboards:** ⚙ Settings → *On this phone* → rename, add (personal or shared) or delete dashboards. A snapshot is saved inside the app before a delete.
+- **Bill reminders:** phone notifications before recurring bills are due (on the day, 1, 2, 3 or 7 days before, at a time you pick), for the next 60 days, from *Subscriptions & recurring bills* in every dashboard. Set on the phone only; nothing is sent anywhere.
+- **Backup reminder:** until you've saved a backup file in the last 30 days, a banner explains that the data only lives on this phone, with **Make a backup now** and **Remind me in a week**. Settings shows when you last saved one.
 - **Your data** lives in the app's private storage on the phone, kept until the app is uninstalled or its data is cleared in Android settings.
 - **Same rules as the PC:** it runs the same shared core (`core/books.js`) as the server, so imports, budgets, rules, accounts, goals, holdings and settings all work the same.
 - **Backups:** the app keeps a snapshot every day (last 14) and one before any restore. **Download backup** opens the share sheet so you can save the file to Drive or Files, or email it. That file also restores on a PC (⚙ Settings → Backup & restore), and a PC backup restores here, which is how you move between phone-only and a server.
@@ -27,7 +31,7 @@ Away from home: turn on the Tailscale app on the phone first.
 
 ## How it's built
 - [Capacitor](https://capacitorjs.com) ships the dashboard (`public/`), the start screen (`apps/connect.html` → `start.html`) and the shared core. In server mode the app opens your server's own pages; in phone-only mode `public/local.js` answers the dashboard's requests on the device (IndexedDB storage) using the shared core.
-- Plugins: Filesystem + Share (saving backup files).
+- Plugins: Filesystem + Share (saving backup files), Local Notifications (bill reminders).
 - GitHub Actions (`.github/workflows/android-release.yml`) builds and signs the APK when `main` is pushed to the `release` branch and `version` in `mobile/package.json` is new, and publishes it as `android-v<version>` in the releases repo. No Android Studio needed.
 - Plain `http://` home servers are allowed (`usesCleartextTraffic`), since most home servers don't have HTTPS.
 

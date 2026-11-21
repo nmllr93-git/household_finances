@@ -2289,6 +2289,110 @@
     el.append(w);
   });
 
+  // ================= Phone-only mode: settings, backup reminder, bill notifications, first-run walkthrough =================
+  const PH = () => window.FD_LOCAL && window.FDLocal;
+  const phMsg = (t, cls) => { const p = document.createElement('p'); p.className = 'fd-note' + (cls ? ' ' + cls : ''); p.textContent = t; return p; };
+  const billsAhead = (days) => { const end = Date.now() + days * 864e5, out = [];
+    rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 6 && d.getTime() <= end; g++) { out.push({ name: x.vendor, amount: money0(x.lastCharge), due: new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).toISOString() }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
+    return out; };
+  // keep each dashboard's upcoming bills on the phone, then schedule reminders for all of them together
+  const rescheduleBills = async () => {
+    if (!PH()) return null; const L = window.FDLocal, opts = (await L.getKV('billNotify')) || { on: false, daysBefore: 1, hour: 9 };
+    let curId = ''; try { curId = localStorage.getItem('hf-book') || ''; } catch (e) {}
+    const list = await L.books(); if (!curId || !list.some((b) => b.id === curId)) curId = list[0].id;
+    await L.setKV('bills-' + curId, billsAhead(60));
+    let all = []; for (const b of list) all = all.concat((await L.getKV('bills-' + b.id)) || []);
+    return L.scheduleBills(all.sort((a, b) => a.due.localeCompare(b.due)), opts);
+  };
+  dash.draw('billNotify', () => { if (PH() && st('subs') === 'ok') rescheduleBills().catch(() => {}); });
+
+  // banner: data only lives on this phone
+  let bannerHide = false;
+  dash.draw('phoneBanner', async (el) => {
+    el.replaceChildren(); if (!PH() || bannerHide) return; const L = window.FDLocal;
+    const last = await L.getKV('lastExport'), snooze = await L.getKV('backupSnooze'); el.replaceChildren();
+    if ((last && Date.now() - last < 30 * 864e5) || (snooze && Date.now() < snooze)) return;
+    const w = document.createElement('div'); w.className = 'fd-phonebanner';
+    const t = document.createElement('div'); t.innerHTML = '<b>Your data is only on this phone.</b> Uninstalling the app or clearing its storage deletes it. Save a backup file somewhere safe (Drive, Files or email).';
+    const bar = document.createElement('div'); bar.className = 'fd-rb-row';
+    bar.append(rbtn('Make a backup now', async () => { try { let id = ''; try { id = localStorage.getItem('hf-book') || ''; } catch (e) {} await L.exportFile(id); bannerHide = true; dash.draw('phoneBanner'); } catch (e) { alert('Backup failed: ' + e.message); } }, false),
+      rbtn('Remind me in a week', async () => { await L.setKV('backupSnooze', Date.now() + 7 * 864e5); bannerHide = true; dash.draw('phoneBanner'); }));
+    w.append(t, bar); el.append(w);
+  });
+
+  // ⚙ Settings → On this phone
+  const phoneBox = async (host) => {
+    if (!PH()) return; const L = window.FDLocal;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis'; box.append(rhead('On this phone')); host.append(box);
+    box.append(phMsg('Everything is stored privately on this phone. Nothing is sent anywhere except requests to the market services whose keys you add.'));
+    // dashboards
+    box.append(rhead('Dashboards'));
+    const list = await L.books();
+    list.forEach((b) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const i = document.createElement('input'); i.type = 'text'; i.value = b.name; i.maxLength = 40; i.className = 'fd-in';
+      const sv = rbtn('Rename', async () => { try { await L.saveBook({ id: b.id, name: i.value }); location.reload(); } catch (e) { alert(e.message); } });
+      const del = rbtn('Delete', async () => { if (!confirm(`Delete the "${b.name}" dashboard and everything in it? A backup is saved inside the app first.`)) return; try { await L.deleteBook(b.id); try { localStorage.removeItem('hf-book'); } catch (e) {} location.reload(); } catch (e) { alert(e.message); } });
+      if (list.length < 2) del.disabled = true; r.append(i, sv, del); box.append(r); });
+    const nr = document.createElement('div'); nr.className = 'fd-rb-row'; const ni = document.createElement('input'); ni.type = 'text'; ni.placeholder = 'New dashboard name, e.g. Shared household'; ni.className = 'fd-in'; ni.maxLength = 40;
+    const ns = document.createElement('select'); ns.className = 'dash-select'; ns.append(new Option('Personal', 'p'), new Option('Shared', 's'));
+    nr.append(ni, ns, rbtn('+ Add dashboard', async () => { try { const b = await L.saveBook({ name: ni.value, shared: ns.value === 's' }); try { localStorage.setItem('hf-book', b.id); } catch (e) {} location.reload(); } catch (e) { alert(e.message); } }, false)); box.append(nr);
+    // bill reminders
+    box.append(rhead('Bill reminders'));
+    if (!L.notificationsSupported()) box.append(phMsg('Reminders are available in the Android and iPhone apps.'));
+    else {
+      const o = (await L.getKV('billNotify')) || { on: false, daysBefore: 1, hour: 9 };
+      const r = document.createElement('div'); r.className = 'fd-rb-row';
+      const lab = document.createElement('label'); lab.className = 'fd-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!o.on; lab.append(cb, ' Remind me about upcoming bills');
+      const db2 = document.createElement('select'); db2.className = 'dash-select'; [[0, 'on the day'], [1, '1 day before'], [2, '2 days before'], [3, '3 days before'], [7, 'a week before']].forEach(([v, l]) => db2.append(new Option(l, v))); db2.value = o.daysBefore;
+      const hr = document.createElement('select'); hr.className = 'dash-select'; for (let h = 6; h <= 21; h++) hr.append(new Option(`at ${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`, h)); hr.value = o.hour;
+      const msg = phMsg('');
+      const save = async () => { const n = { on: cb.checked, daysBefore: Number(db2.value), hour: Number(hr.value) }; await L.setKV('billNotify', n); const r2 = await rescheduleBills();
+        msg.className = 'fd-note' + (r2 && r2.denied ? ' fd-bad' : ''); msg.textContent = !n.on ? 'Reminders are off.' : r2 && r2.denied ? 'Notifications are blocked for this app. Allow them in your phone’s settings.' : `${r2 ? r2.scheduled : 0} reminders scheduled for the next 60 days.`; };
+      [cb, db2, hr].forEach((x) => x.addEventListener('change', save));
+      r.append(lab, db2, hr); box.append(r, msg, phMsg('Bills come from Subscriptions & recurring bills in each dashboard. Reminders are set on this phone only.'));
+    }
+    // backups
+    box.append(rhead('Backups'));
+    const last = await L.getKV('lastExport'), snaps = await L.backups();
+    box.append(phMsg(`Last backup file saved: ${last ? new Date(last).toLocaleDateString() : 'never'}. The app also keeps ${snaps.length} automatic snapshot${snaps.length === 1 ? '' : 's'} inside it (daily, last 14), but those are deleted with the app.`, !last ? 'fd-bad' : ''));
+    box.append(rbtn('Save a backup file now', async () => { let id = ''; try { id = localStorage.getItem('hf-book') || ''; } catch (e) {} try { await L.exportFile(id); dash.draw('settingsView'); } catch (e) { alert('Backup failed: ' + e.message); } }, false));
+  };
+
+  // first-run walkthrough (phone-only mode)
+  let walkShown = false;
+  const walkthrough = async () => {
+    if (!PH() || walkShown) return; walkShown = true; const L = window.FDLocal; if (await L.getKV('onboarded')) return;
+    const ov = document.createElement('div'); ov.className = 'fd-walk'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+    const card = document.createElement('div'); card.className = 'fd-walk-card'; ov.append(card); document.body.append(ov);
+    const st0 = { name: 'Personal', shared: false, sharedName: 'Shared household', remind: true };
+    const done = async (goImport) => { await L.setKV('onboarded', Date.now()); ov.remove(); if (goImport) { const b = document.querySelector('.fd-navb[data-group=import]'); if (b) b.click(); } };
+    const steps = [
+      () => ['Welcome 👋', '<p>Household Finances keeps your budget, accounts and spending <b>only on this phone</b>. No account to create, no server, and nothing is sent to us.</p><p>Let’s set up a few things. It takes about a minute.</p>'],
+      () => ['Name your dashboard', '<p>A dashboard holds one set of accounts and budgets.</p><label class="fd-field">Your dashboard<input id="w-name" maxlength="40"></label><label class="fd-check"><input type="checkbox" id="w-sh"> Also add a shared household dashboard</label><label class="fd-field" id="w-shw" hidden>Shared dashboard name<input id="w-shn" maxlength="40"></label><p class="fd-note">You can rename or add dashboards later under ⚙ Settings.</p>'],
+      () => ['Bill reminders', `<p>The app spots recurring bills (rent, phone, streaming…) in your statements. It can remind you before each one is due.</p><label class="fd-check"><input type="checkbox" id="w-rem"> Remind me the day before bills are due</label>${L.notificationsSupported() ? '' : '<p class="fd-note">Reminders work in the Android and iPhone apps.</p>'}`],
+      () => ['Keep a backup', '<p><b>Your data only lives on this phone.</b> If you uninstall the app or clear its storage, it’s gone.</p><p>Every so often, use <b>Download backup</b> (top of the page) to save a backup file to Google Drive, Files or email. You can restore it on any phone, or on a PC running Household Finances.</p>'],
+      () => ['You’re set', '<p>Start by importing a statement from your bank (CSV, PDF, OFX or QFX). Or record account balances by hand.</p>'],
+    ];
+    let i = 0;
+    const show = () => {
+      const [h, html] = steps[i](); card.innerHTML = `<div class="fd-walk-dots">${steps.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div><h2>${h}</h2>${html}`;
+      const bar = document.createElement('div'); bar.className = 'fd-rb-row fd-walk-bar';
+      if (i === 1) { const n = card.querySelector('#w-name'), sh = card.querySelector('#w-sh'), shw = card.querySelector('#w-shw'), shn = card.querySelector('#w-shn'); n.value = st0.name; sh.checked = st0.shared; shn.value = st0.sharedName; shw.hidden = !st0.shared;
+        sh.addEventListener('change', () => { shw.hidden = !sh.checked; }); card._save = () => { st0.name = n.value.trim() || 'Personal'; st0.shared = sh.checked; st0.sharedName = shn.value.trim() || 'Shared household'; }; }
+      if (i === 2) { const r = card.querySelector('#w-rem'); r.checked = st0.remind; card._save = () => { st0.remind = r.checked; }; }
+      if (i > 0) bar.append(rbtn('Back', () => { card._save && card._save(); card._save = null; i--; show(); }));
+      if (i < steps.length - 1) bar.append(rbtn(i === 0 ? 'Get started' : 'Next', async () => {
+        card._save && card._save(); card._save = null;
+        if (i === 1) { try { const list = await L.books(); await L.saveBook({ id: list[0].id, name: st0.name }); if (st0.shared && !list.some((b) => b.label === 'Shared')) await L.saveBook({ name: st0.sharedName, shared: true }); } catch (e) { alert(e.message); return; } }
+        if (i === 2) { await L.setKV('billNotify', { on: st0.remind && L.notificationsSupported(), daysBefore: 1, hour: 9 }); if (st0.remind && L.notificationsSupported()) { try { await L.notifyPermission(); } catch (e) {} } }
+        i++; show(); }, false));
+      else { bar.append(rbtn('Look around first', async () => { await done(false); location.reload(); }), rbtn('Import a statement', async () => { await done(true); location.reload(); }, false)); }
+      if (i === 0) bar.append(rbtn('Skip setup', async () => { await done(false); }));
+      card.append(bar); const f = card.querySelector('input,button'); if (f) f.focus();
+    };
+    show();
+  };
+  dash.draw('phoneWalk', () => { if (PH()) walkthrough().catch(() => {}); });
+
   // ---- markets: indexes, commodities, sectors and top movers (self-hosted app; refreshed at most hourly) ----
   let MK = null, mkState = 'idle', mkMov = 'gainers';
   let mkMine = false;
@@ -2460,6 +2564,7 @@
     const resetC = rbtn('Reset all chart colors', async () => { COLORS = {}; await prefSet('colors', {}); redrawAll(); msg.className = 'fd-note'; msg.textContent = 'Chart colors reset.'; });
     const bar = document.createElement('div'); bar.className = 'fd-rb-row'; bar.append(save, resetC); box.append(bar, msg);
     apiBox(el);
+    phoneBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {
       const bk = document.createElement('div'); bk.className = 'fd-rb fd-backup'; bk.append(rhead('Backup & restore'));
       const bn = document.createElement('p'); bn.className = 'fd-note'; bn.textContent = `Download a copy of everything saved in the ${book()} dashboard (statements, edits, rules, accounts, budgets, goals, holdings, settings). The server also keeps a full daily backup of all dashboards for 30 days.`; bk.append(bn);
