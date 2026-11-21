@@ -277,7 +277,7 @@
 
   // ---- navigation groups and collapsible sections ----
   const GROUPS = { overview: ['health', 'split', 'unusual', 'top-vendors', 'cashflow', 'big', 'bills'], accounts: ['networth', 'accounts', 'sharedin', 'assets', 'goals', 'holdings', 'deposits', 'investments', 'mortgage'],
-    expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], import: ['import'], review: ['review'], markets: ['markets', 'economy'], settings: ['settings'] };
+    expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], import: ['import'], review: ['review'], planning: ['forecast', 'planner'], markets: ['markets', 'economy'], settings: ['settings'] };
   const ALL = [...new Set(Object.values(GROUPS).flat())];
   let HIDESEC = new Set(), HIDEPART = new Set(); const PART = (k) => HIDEPART.has(k);
   const NP = (() => { try { return JSON.parse(localStorage.getItem('fd-nav') || '{}') || {}; } catch { return {}; } })();
@@ -2132,7 +2132,8 @@
   });
   dash.draw('holdAlloc', (el) => {
     if (st('holdings') !== 'ok') return; if (PART('h-alloc')) { el.replaceChildren(); return; }
-    el.replaceChildren(); const items = hRows().map((h) => [h, hCalc(h)]).filter(([, c]) => c.value > 0); if (!items.length) return;
+    el.replaceChildren(); let atCost = false; const items = hRows().map((h) => { const c = hCalc(h); if (!(c.value > 0) && c.cost > 0) { atCost = true; return [h, { ...c, value: c.cost }]; } return [h, c]; }).filter(([, c]) => c.value > 0); if (!items.length) return;
+    if (atCost) { const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Holdings without a current price are counted at what you paid.'; el.append(n); }
     const total = items.reduce((t, [, c]) => t + c.value, 0);
     const KN = { stock: 'Stocks', etf: 'ETFs', fund: 'Mutual funds', bond: 'Bonds', crypto: 'Crypto', other: 'Other' };
     const group = (f) => { const m = {}; items.forEach(([h, c]) => { const k = f(h) || 'Unknown'; m[k] = (m[k] || 0) + c.value; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
@@ -2142,10 +2143,150 @@
       return w;
     };
     const big = items.filter(([, c]) => c.value / total > 0.2 && items.length > 2).map(([h, c]) => `${h.symbol} is ${Math.round((c.value / total) * 100)}% of your holdings`);
+    if (!PART('h-rings')) {
+      const rings = document.createElement('div'); rings.className = 'fd-grid3';
+      const mkRing = (title, entries, chart) => { const top = entries.slice(0, 5), rest = entries.slice(5).reduce((t, [, v]) => t + v, 0); const sl = [...top, ...(rest > 0 ? [['Other', rest]] : [])].map(([k, v], i) => ({ label: k, value: v, color: colorFor(chart, k, PAL[i % PAL.length]) }));
+        const svg = ring(sl, [money0(total), title.toLowerCase()], { size: 150, width: 24, chart, title: `${title}: ${money0(total)}` }); return ringBox(svg, legend(sl, total), [title, sl]); };
+      const cls = (h) => (h.kind === 'bond' ? 'Bonds' : h.kind === 'crypto' ? 'Crypto' : h.kind === 'other' ? 'Other' : 'Stocks & funds');
+      rings.append(mkRing('By type', group((h) => KN[h.kind] || 'Other'), 'ring-alloc-type'), mkRing('By asset class', group(cls), 'ring-alloc-class'), mkRing('By account', group((h) => h.account || 'No account'), 'ring-alloc-acct'));
+      el.append(rings);
+    }
     const g = document.createElement('div'); g.className = 'fd-grid2';
     g.append(block('By holding', items.map(([h, c]) => [h.symbol, c.value]).sort((a, b) => b[1] - a[1])), block('By type', group((h) => KN[h.kind] || 'Other')), block('By sector', sectorSplit(items, total)), block('By account', group((h) => h.account || 'No account')));
     if (big.length) { const w = document.createElement('p'); w.className = 'fd-note fd-bad'; w.textContent = 'Concentration: ' + big.join('; ') + '.'; el.append(w); }
     el.append(g);
+  });
+
+  // ================= Planning: debt payoff planner + 90-day cash forecast =================
+  const PAL = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)'];
+  const debtList = (withMortgage) => acctList().filter((a) => a.active !== false && a.bal && a.bal.balance > 0.5 && (a.kind === 'credit' || a.kind === 'loan' || (withMortgage && a.kind === 'mortgage')))
+    .map((a) => { const bal = a.bal.balance, apr = Number(a.rate) || 0, set = Number(a.payment) - (Number(a.escrow) || 0);
+      const est = a.kind === 'credit' ? Math.max(25, bal * 0.01 + (bal * apr) / 1200) : 0;
+      return { name: a.name, kind: a.kind, bal, apr, min: set > 0 ? set : Math.round(est), estimated: !(set > 0), noRate: a.rate == null || a.rate === '' }; });
+  // month-by-month: interest, minimums, then extra (plus freed-up minimums) to the target debt
+  const simulate = (debts, extra, order) => {
+    const d = debts.map((x) => ({ ...x, b: x.bal, paidMonth: null, interest: 0 })), n0 = d.length; let month = 0, total = 0;
+    const pick = () => d.filter((x) => x.b > 0.005).sort(order === 'snowball' ? (a, b) => a.b - b.b : order === 'avalanche' ? (a, b) => b.apr - a.apr || a.b - b.b : () => 0)[0];
+    while (d.some((x) => x.b > 0.005) && month < 600) {
+      month++; let pool = order === 'minimum' ? 0 : extra;
+      for (const x of d) { if (x.b <= 0.005) { if (order !== 'minimum') pool += x.min; continue; } const it = (x.b * x.apr) / 1200; x.interest += it; total += it; x.b += it; const pay = Math.min(x.b, x.min); x.b -= pay; if (pay < x.min && order !== 'minimum') pool += x.min - pay; }
+      while (pool > 0.005) { const t = pick(); if (!t) break; const pay = Math.min(t.b, pool); t.b -= pay; pool -= pay; }
+      for (const x of d) if (x.b <= 0.005 && x.paidMonth == null) x.paidMonth = month;
+    }
+    return { months: d.every((x) => x.paidMonth != null) ? Math.max(0, ...d.map((x) => x.paidMonth)) : null, interest: total, debts: d, n: n0 };
+  };
+  let planX = null, planOrder = 'avalanche', planMort = false;
+  dash.draw('planner', (el) => {
+    el.replaceChildren(); if (st('balances', 'accounts') !== 'ok') return;
+    const debts = debtList(planMort);
+    if (!debts.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'No credit cards or loans with a balance. Record their balances (Import → Record a statement balance) and set each one’s rate and payment under Accounts → Edit.'; el.append(p); return; }
+    if (planX == null) planX = prefGet('planExtra', 200) || 0;
+    const ctl = document.createElement('div'); ctl.className = 'fd-rb-row';
+    [['avalanche', 'Avalanche (highest rate first)'], ['snowball', 'Snowball (smallest balance first)']].forEach(([k, l]) => ctl.append(rbtn(l, () => { planOrder = k; dash.draw('planner'); }, planOrder !== k)));
+    const mk = document.createElement('label'); mk.className = 'fd-check'; const mc = document.createElement('input'); mc.type = 'checkbox'; mc.checked = planMort; mc.addEventListener('change', () => { planMort = mc.checked; dash.draw('planner'); }); mk.append(mc, ' Include mortgage'); ctl.append(mk);
+    const sl = document.createElement('label'); sl.className = 'fd-field fd-narrow'; sl.textContent = 'Extra each month ';
+    const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 3000; r.step = 25; r.value = planX; const rv = document.createElement('b'); rv.textContent = money0(planX);
+    r.addEventListener('input', () => { rv.textContent = money0(Number(r.value)); }); r.addEventListener('change', () => { planX = Number(r.value); prefSet('planExtra', planX); dash.draw('planner'); });
+    sl.append(r, ' ', rv); el.append(ctl, sl);
+    const res = { avalanche: simulate(debts, planX, 'avalanche'), snowball: simulate(debts, planX, 'snowball'), minimum: simulate(debts, 0, 'minimum') }, cur = res[planOrder];
+    const sum = document.createElement('div'); sum.className = 'fd-grid3';
+    [['minimum', 'Minimum payments only'], ['avalanche', 'Avalanche'], ['snowball', 'Snowball']].forEach(([k, l]) => { const x = res[k], c = document.createElement('div'); c.className = 'fd-rb' + (k === planOrder ? ' fd-on' : '');
+      const h = document.createElement('div'); h.className = 'fd-rsub'; h.textContent = l + (k !== 'minimum' && planX ? ` + ${money0(planX)}/mo` : '');
+      const b = document.createElement('div'); b.className = 'fd-big fd-mid'; b.textContent = x.months == null ? '50+ years' : addM(x.months);
+      const s2 = document.createElement('div'); s2.className = 'fd-rsub'; s2.textContent = x.months == null ? 'Payments don’t cover the interest' : `Debt-free in ${dur(x.months)} · ${money0(x.interest)} interest`;
+      if (k !== 'minimum' && res.minimum.months != null && x.months != null) { const sv = document.createElement('div'); sv.className = 'fd-rsub fd-good'; sv.textContent = `Saves ${money0(res.minimum.interest - x.interest)} and ${dur(Math.max(0, res.minimum.months - x.months)) || '0 mo'}`; c.append(h, b, s2, sv); } else c.append(h, b, s2);
+      sum.append(c); });
+    el.append(sum);
+    const tb = document.createElement('table'); tb.className = 'fd-table'; const th = document.createElement('tr'); ['Debt', 'Balance', 'Rate', 'Payment', 'Order', 'Paid off', 'Interest'].forEach((t, i) => { const c = document.createElement('th'); c.textContent = t; if (!i) c.className = 'fd-l'; th.append(c); }); tb.append(th);
+    const ordered = cur.debts.slice().sort((a, b) => (a.paidMonth ?? 1e9) - (b.paidMonth ?? 1e9));
+    ordered.forEach((x, i) => { const tr = document.createElement('tr'); tr.append(td(x.name, 'fd-l'), td(money0(x.bal)), td(x.noRate ? 'set rate' : x.apr + '%', x.noRate ? 'fd-zero' : ''), td(money0(x.min) + (x.estimated ? ' (est.)' : '')), td(String(i + 1)), td(x.paidMonth == null ? '—' : addM(x.paidMonth)), td(money0(x.interest))); tb.append(tr); });
+    const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
+    const notes = []; if (debts.some((x) => x.estimated)) notes.push('“est.” = no payment set on the account, so a typical card minimum is assumed; set the real one under Accounts → Edit.'); if (debts.some((x) => x.noRate)) notes.push('Debts with no rate are treated as 0% interest.');
+    notes.push('Avalanche saves the most interest; snowball clears individual debts sooner. When a debt is paid off, its payment rolls into the next one.');
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = notes.join(' '); el.append(p);
+  });
+
+  // 90-day cash forecast: bills from Subscriptions & recurring, paychecks detected from income, plus typical other spending
+  const recurringIncome = () => {
+    const since = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10), by = {};
+    rows('txns').filter((t) => t.book === book() && t.type === 'income' && !t.oneTime && t.date >= since).forEach((t) => { (by[t.vendor] = by[t.vendor] || []).push(t); });
+    return Object.entries(by).filter(([, l]) => l.length >= 2).map(([vendor, l]) => { l.sort((a, b) => a.date.localeCompare(b.date));
+      const gaps = l.slice(1).map((t, i) => (Date.parse(t.date) - Date.parse(l[i].date)) / 864e5).sort((a, b) => a - b), gap = gaps[Math.floor(gaps.length / 2)];
+      // the amount per payment comes from the source's real monthly total (last 3 full months), so odd dates in imported history can't inflate it
+      const every = Math.max(7, Math.round(gap)), start = new Date(); start.setUTCDate(1); start.setUTCMonth(start.getUTCMonth() - 3); const from = start.toISOString().slice(0, 10), to = new Date(new Date().setUTCDate(1)).toISOString().slice(0, 10);
+      const monthly = l.filter((t) => t.date >= from && t.date < to).reduce((s, t) => s + t.amount, 0) / 3;
+      return { vendor, amount: (monthly * every) / 30.44, monthly, every, last: l[l.length - 1].date }; }).filter((x) => x.every <= 45 && x.monthly > 0);
+  };
+  dash.draw('forecast90', (el) => {
+    el.replaceChildren(); if (st('subs', 'monthly', 'balance_totals', 'txns') !== 'ok') return;
+    const cash = latestTotal(['deposit'])[0];
+    if (!cash) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Record your checking and savings balances to see the forecast.'; el.append(p); return; }
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0); const DAYS = 90, ev = [];
+    rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 12 && d - today < DAYS * 864e5; g++) { ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: -x.lastCharge }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
+    const inc = recurringIncome(); inc.forEach((x) => { let d = Date.parse(x.last + 'T00:00:00Z'); while ((d += x.every * 864e5) - today < DAYS * 864e5) if (d >= today) ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: x.amount }); });
+    const m = rows('monthly').filter((r) => r.book === book() && !isCurrent(r.month)).slice(-3), avg = (f) => (m.length ? m.reduce((s, r) => s + r[f], 0) / m.length : 0);
+    const recurringMonthly = rows('subs').filter((x) => x.book === book() && Math.abs(x.yearly - x.lastCharge * 12) < 1).reduce((s, x) => s + x.lastCharge, 0);
+    const daily = Math.max(0, avg('spend') - recurringMonthly) / 30.4;
+    const low = Number(prefGet('fcLow', 500)) || 0;
+    let bal = cash.total, minB = bal, minDay = 0; const pts = [];
+    for (let i = 0; i <= DAYS; i++) { if (i) bal -= daily; ev.filter((e) => e.day === i).forEach((e) => { bal += e.amt; }); if (bal < minB) { minB = bal; minDay = i; } const d = new Date(today.getTime() + i * 864e5); pts.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), v: Math.round(bal) }); }
+    const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const head = document.createElement('p'); head.className = 'fd-note' + (minB < low ? ' fd-bad' : '');
+    head.textContent = `Checking & savings: ${money0(cash.total)} today → about ${money0(bal)} in 90 days. Lowest point ≈ ${money0(minB)} around ${when(minDay)}.` + (minB < low ? ` ⚠ That's below your ${money0(low)} cushion.` : '');
+    el.append(head);
+    const box = document.createElement('div'); box.className = 'fd-box'; el.append(box);
+    window.FD.lineChart(box, { labels: pts.map((p) => p.label), zero: false, aria: '90-day cash forecast', series: [{ name: 'Projected cash', points: pts }, ...(low ? [{ name: 'Cushion', points: pts.map((p) => ({ label: p.label, v: low })) }] : [])] });
+    const row = document.createElement('div'); row.className = 'fd-rb-row'; const lab = document.createElement('label'); lab.className = 'fd-field fd-narrow'; lab.textContent = 'Warn me below ';
+    const li = document.createElement('input'); li.type = 'number'; li.min = 0; li.step = 100; li.value = low; li.style.width = '7em'; li.addEventListener('change', () => { prefSet('fcLow', Math.max(0, Number(li.value) || 0)); dash.draw('forecast90'); }); lab.append(li); row.append(lab); el.append(row);
+    const g = document.createElement('div'); g.className = 'fd-grid2';
+    const list = (title, items, empty1) => { const w = document.createElement('div'); w.append(rhead(title)); if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = empty1; w.append(p); }
+      items.forEach((e) => { const r2 = document.createElement('div'); r2.className = 'fd-alloc'; const a = document.createElement('span'); a.textContent = `${when(e.day)} · ${e.label}`; const b = document.createElement('span'); b.textContent = (e.amt > 0 ? '+' : '−') + money0(Math.abs(e.amt)); b.className = e.amt > 0 ? 'fd-good' : ''; r2.append(a, b); w.append(r2); }); return w; };
+    g.append(list('Expected income', ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day).slice(0, 12), 'No regular income found in the last 4 months (needs 2+ deposits from the same source).'),
+      list('Bills & recurring', ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day).slice(0, 15), 'No recurring bills found.'));
+    el.append(g);
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Also assumes about ${money0(daily * 30.4)} a month of other everyday spending (your last ${m.length} months, minus recurring bills). Paychecks are detected from income that arrived at least twice in the last 4 months.`; el.append(p);
+  });
+
+  // ================= Broker positions import (Holdings) =================
+  let posImp = null;
+  dash.draw('posImport', (el) => {
+    el.replaceChildren(); if (st('holdings', 'accounts') !== 'ok') return;
+    if (!posImp) { el.append(rbtn('Import positions from a brokerage CSV…', () => { posImp = { step: 'pick' }; dash.draw('posImport'); })); return; }
+    const w = document.createElement('div'); w.className = 'fd-rb'; w.append(rhead('Import positions'));
+    const note = document.createElement('p'); note.className = 'fd-note'; note.textContent = 'On your brokerage website, open Positions (or Holdings) and download/export it as CSV. Fidelity, Vanguard, Schwab, E*TRADE and most others work. Each position becomes a holding with one lot at your average cost.'; w.append(note);
+    const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.csv,text/csv';
+    fi.addEventListener('change', async () => { const f = fi.files[0]; if (!f) return; const r = window.FDImport.parsePositions(await f.text()); posImp = { step: 'review', ...r, file: f.name, pick: r.rows.map(() => true), acct: '', replace: true, date: new Date().toLocaleDateString('en-CA') }; dash.draw('posImport'); });
+    w.append(fi);
+    if (posImp.step === 'review') {
+      if (posImp.error) { const e = document.createElement('p'); e.className = 'fd-note fd-bad'; e.textContent = posImp.error; w.append(e); }
+      if (posImp.rows.length) {
+        const accts = acctList().filter((a) => a.kind === 'investment').map((a) => a.name);
+        const r1 = document.createElement('div'); r1.className = 'fd-rb-row';
+        const al = document.createElement('label'); al.className = 'fd-field'; al.textContent = 'Investment account';
+        const sel = document.createElement('select'); sel.className = 'dash-select'; sel.append(new Option('Use the account in the file (or none)', ''), ...accts.map((n) => new Option(n, n))); sel.value = posImp.acct; sel.addEventListener('change', () => { posImp.acct = sel.value; }); al.append(sel);
+        const dl = document.createElement('label'); dl.className = 'fd-field fd-narrow'; dl.textContent = 'Lot date'; const di = document.createElement('input'); di.type = 'date'; di.value = posImp.date; di.addEventListener('change', () => { posImp.date = di.value; }); dl.append(di);
+        const rl = document.createElement('label'); rl.className = 'fd-check'; const rc = document.createElement('input'); rc.type = 'checkbox'; rc.checked = posImp.replace; rc.addEventListener('change', () => { posImp.replace = rc.checked; }); rl.append(rc, ' Replace holdings I already have for the same symbol and account');
+        r1.append(al, dl, rl); w.append(r1);
+        const tb = document.createElement('table'); tb.className = 'fd-table'; const h = document.createElement('tr'); ['', 'Symbol', 'Name', 'Shares', 'Avg cost', 'Type'].forEach((t, i) => { const c = document.createElement('th'); c.textContent = t; if (i < 3 || i === 5) c.className = 'fd-l'; h.append(c); }); tb.append(h);
+        posImp.rows.forEach((x, i) => { const tr = document.createElement('tr'); const c0 = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = posImp.pick[i]; cb.addEventListener('change', () => { posImp.pick[i] = cb.checked; }); c0.append(cb);
+          tr.append(c0, td(x.symbol, 'fd-l'), td(x.name, 'fd-l fd-zero'), td(String(x.qty)), td(x.price != null ? money2(x.price) : 'unknown'), td(x.kind, 'fd-l')); tb.append(tr); });
+        const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); w.append(sc);
+        const msg = document.createElement('p'); msg.className = 'fd-note';
+        const go = rbtn(`Import ${posImp.rows.length} positions`, async () => {
+          go.disabled = true; msg.textContent = 'Saving…';
+          try {
+            const d = await db(), have = hRows(); let n = 0;
+            for (const [i, x] of posImp.rows.entries()) { if (!posImp.pick[i]) continue; const account = posImp.acct || x.account || '';
+              if (posImp.replace) for (const h2 of have.filter((h2) => h2.symbol === x.symbol && (h2.account || '') === account)) await d.doc('data/household/holdings/' + h2.id).delete();
+              await d.collection('data/household/holdings').add({ symbol: x.symbol, name: x.name, account, kind: x.kind, sector: '', lots: [{ date: posImp.date, qty: x.qty, price: x.price || 0 }], sales: [], divs: [] }); n++; }
+            posImp = null; qWant = ''; msg.textContent = `Imported ${n} positions.`; dash.draw('posImport');
+          } catch (e) { go.disabled = false; msg.className = 'fd-note fd-bad'; msg.textContent = 'Not saved: ' + (e.message || 'only editors can change holdings'); }
+        }, false);
+        const bar = document.createElement('div'); bar.className = 'fd-rb-row'; bar.append(go, rbtn('Cancel', () => { posImp = null; dash.draw('posImport'); })); w.append(bar, msg);
+        if (posImp.rows.some((x) => x.price == null)) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Some positions have no cost in the file; they’re saved at $0 cost. Edit those holdings to enter what you paid.'; w.append(p); }
+      }
+    } else w.append(rbtn('Cancel', () => { posImp = null; dash.draw('posImport'); }));
+    el.append(w);
   });
 
   // ---- markets: indexes, commodities, sectors and top movers (self-hosted app; refreshed at most hourly) ----
@@ -2305,7 +2446,7 @@
         const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = gl; det.append(h); const w = document.createElement('div'); w.className = 'fd-chkgrid';
         ids.forEach((id) => w.append(chk(secTitle(id), !(s.hideSec || []).includes(id), (on) => { const x = new Set(s.hideSec || []); on ? x.delete(id) : x.add(id); s.hideSec = [...x]; }))); det.append(w); });
       const h2 = document.createElement('div'); h2.className = 'fd-rb-h'; h2.textContent = 'Details inside sections'; det.append(h2); const w2 = document.createElement('div'); w2.className = 'fd-chkgrid';
-      [['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-det', 'Holdings: news & analyst details']]
+      [['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-rings', 'Holdings: allocation rings'], ['h-det', 'Holdings: news & analyst details']]
         .forEach(([k, lab]) => w2.append(chk(lab, !(s.hideParts || []).includes(k), (on) => { const x = new Set(s.hideParts || []); on ? x.delete(k) : x.add(k); s.hideParts = [...x]; })));
       det.append(w2); const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(det); box.append(r); }
     const hw = document.createElement('div'); hw.className = 'fd-chkgrid';

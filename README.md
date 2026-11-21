@@ -354,6 +354,8 @@ Click **+ Report** in the top bar to make your own tab. Click **Edit**, then **A
   - Add purchases as lots; sales use the oldest shares first.
   - Shows allocation by holding, type, sector and account.
   - Shows dividends (last 12 months, plus a **dividend calendar** for the next 12) and a **watchlist** with price alerts.
+  - **Import positions from a brokerage CSV:** download *Positions* as CSV from Fidelity, Vanguard, Schwab, E*TRADE or similar, review the list, pick the account, and import. Each position becomes a holding with one lot at your average cost. Tick *Replace* to overwrite holdings you already have for the same symbol and account. Money-market and cash lines are skipped.
+  - **Allocation rings:** by type, by asset class and by account (holdings without a live price count at cost). Hide them under Settings → Sections & details.
   - **ⓘ details** show the 52-week range, earnings date, analysts' ratings, news and what a fund holds.
   - **Update account balances from holdings** records today's value on the linked investment accounts.
 
@@ -380,6 +382,10 @@ On a **personal** dashboard, edit an account or asset and tick the shared dashbo
   - **Followed sectors** filters the movers list.
   - Data refreshes at most once an hour while the market is open, plus once after the close.
 - **Rates & economy:** mortgage and Treasury rates, inflation (overall and Midwest categories), gas and electricity prices, and local home prices. Updated daily.
+
+### Planning
+- **90-day cash forecast:** checking and savings projected day by day: expected paychecks in (any income that arrived at least twice in the last 4 months, at its real monthly total), recurring bills out (from *Subscriptions & recurring*) and your typical other spending. It shows the lowest point and warns if it falls below your cushion (**Warn me below**, $500 by default). Lists the upcoming paychecks and bills.
+- **Debt payoff planner:** every credit card and loan with a balance (tick **Include mortgage** to add it). Compare **minimum payments only**, **avalanche** (highest rate first, least interest) and **snowball** (smallest balance first), and drag **Extra each month** to see the debt-free date and the interest saved. When a debt is paid off, its payment rolls into the next one. Uses each account's rate and payment from Accounts → Edit; cards with no payment set use a typical minimum (marked *est.*).
 
 ### Year in review
 Pick a year to see income, spending, what you kept, the biggest and lightest months, the top category and vendor, and an **after inflation** comparison. Click a month for its snapshot and calendar.

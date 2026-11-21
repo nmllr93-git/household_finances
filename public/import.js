@@ -3,6 +3,34 @@
   const S = (window.FDImport = { text: null, fileName: '', grid: [], header: [], hdrRow: -1, cols: {}, sign: 'auto', parsed: [] });
   const { money2 } = window.FD;
 
+  // Broker positions export (Fidelity, Vanguard, Schwab, E*TRADE, etc.): find the header row and read symbol, shares and cost.
+  function parsePositions(text) {
+    const g = parseCSV(String(text || '').replace(/^\uFEFF/, ''));
+    const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z/]/g, '');
+    const hi = g.findIndex((r) => r.some((c) => /^(symbol|ticker)$/.test(norm(c))) && r.some((c) => /^(quantity|shares|qty)/.test(norm(c))));
+    if (hi < 0) return { error: 'Couldn\u2019t find Symbol and Quantity columns. Export \u201cPositions\u201d as CSV from your brokerage.', rows: [] };
+    const h = g[hi].map(norm), col = (...re) => h.findIndex((c) => re.some((r) => r.test(c)));
+    const cSym = col(/^(symbol|ticker)$/), cQty = col(/^(quantity|shares|qty)/), cName = col(/^description$/, /^(security)?name$/, /^investmentname$/, /^securitydescription$/);
+    const cTot = col(/^costbasistotal$/, /^costbasis$/, /^totalcost(basis)?$/, /^cost$/), cAvg = col(/^(average|avg)cost(basis)?(\/share|pershare)?$/, /^costpershare$/, /^costbasispershare$/, /^pricepaid$/);
+    const cAcct = col(/^accountname$/, /^account$/), cType = col(/^(security|investment|asset)type$/);
+    const n = (x) => { const v = Number(String(x || '').replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1')); return isFinite(v) ? v : null; };
+    const rows = [];
+    for (const r of g.slice(hi + 1)) {
+      const sym = String(r[cSym] || '').trim().toUpperCase().replace(/\*+$/, '');
+      if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(sym) || /^(TOTAL|CASH|PENDING|ACCOUNT)/.test(sym)) continue;
+      const qty = n(r[cQty]); if (!(qty > 0)) continue;
+      const name = cName >= 0 ? r[cName] || '' : '';
+      if (/money market|cash (reserves|investments)|core position|sweep/i.test(name)) continue;
+      let price = null; const tot = cTot >= 0 ? n(r[cTot]) : null, avg = cAvg >= 0 ? n(r[cAvg]) : null;
+      if (avg > 0) price = avg; else if (tot > 0) price = tot / qty;
+      const t = (cType >= 0 ? r[cType] : '') + ' ' + name;
+      const kind = /\betf\b|exchange.traded|ishares|spdr|vanguard .* etf/i.test(t) ? 'etf' : /mutual fund|\bfund\b|\bfd\b|index|admiral|investor sh/i.test(t) ? 'fund' : /bond|treasury|note/i.test(t) ? 'bond' : 'stock';
+      rows.push({ symbol: sym, name: name.slice(0, 60), qty: Math.round(qty * 10000) / 10000, price: price != null ? Math.round(price * 10000) / 10000 : null, kind, account: cAcct >= 0 ? (r[cAcct] || '').slice(0, 60) : '' });
+    }
+    return { rows, error: rows.length ? '' : 'No positions found in that file.' };
+  }
+  S.parsePositions = (t) => parsePositions(t);
+
   function parseCSV(text) {
     const out = []; let row = [], cell = '', q = false;
     for (let i = 0; i < text.length; i++) {

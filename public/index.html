@@ -46,6 +46,7 @@
     <button type="button" class="fd-navb" data-group="expenses">Expenses</button>
     <button type="button" class="fd-navb" data-group="budget">Budget</button>
     <button type="button" class="fd-navb" data-group="tx">Transactions</button>
+    <button type="button" class="fd-navb" data-group="planning">Planning</button>
     <button type="button" class="fd-navb" data-group="markets">Markets</button>
     <button type="button" class="fd-navb" data-group="review">Year in review</button>
     <button type="button" class="fd-navb" data-group="import">Import</button>
@@ -240,6 +241,7 @@
     <div data-draw="holdTotals" data-source="holdings accounts"></div>
     <div data-draw="holdEditor" data-source="accounts"></div>
     <div class="fd-scroll" data-draw="holdRows" data-source="holdings"></div>
+    <div data-draw="posImport" data-source="holdings accounts"></div>
     <div data-draw="holdAlloc" data-source="holdings"></div>
     <div data-draw="divCal" data-source="holdings"></div>
     <div data-draw="watchView" data-source="prefs holdings"></div>
@@ -302,6 +304,18 @@
     <p class="fd-note">Totals for everything you've tagged, across all time and categories. Click a tag to list its transactions.</p>
     <div class="fd-scroll"><table class="fd-table" data-source="txns"><tbody data-draw="tagRows"></tbody></table></div>
     <datalist id="fd-tags" data-draw="tagList"></datalist>
+  </section>
+
+  <section id="forecast">
+    <h2>90-day cash forecast</h2>
+    <p class="fd-note">Checking &amp; savings projected day by day: expected paychecks in, recurring bills out, and your typical other spending.</p>
+    <div data-draw="forecast90" data-source="subs monthly balance_totals txns prefs"></div>
+  </section>
+
+  <section id="planner">
+    <h2>Debt payoff planner</h2>
+    <p class="fd-note">Compare paying off your cards and loans with the avalanche or snowball method, and see what extra each month does.</p>
+    <div data-draw="planner" data-source="balances accounts prefs"></div>
   </section>
 
   <section id="markets">
