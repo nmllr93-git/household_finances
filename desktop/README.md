@@ -45,8 +45,8 @@ Logs: `%APPDATA%\Household Finances\server.log`. App settings: `%APPDATA%\Househ
 Not yet included: auto-updates (needs a place to publish releases, e.g. a private GitHub repo) and code signing.
 
 ## Updates
-- **Source code:** the private repo `household-finances`.
-- **Installers:** the public repo `household-finances-releases`. It holds only the release files, so the app can check it without a password.
+- **Source code:** the private repo `household_finances`.
+- **Installers:** the public repo `household_finances-releases`. It holds only the release files, so the app can check it without a password.
 - The app checks once a day, and when you click **Tray → Check for updates** (or **Help → Check for updates**). It asks before downloading, and again before restarting. Your data folder is never touched.
 - **To publish a version:** bump the version and push a tag, e.g. `git tag v1.0.1 && git push --tags`. GitHub Actions builds the installer on Windows, runs the tests and publishes it to the releases repo.
-- **One-time setup:** in the private repo, go to Settings → Secrets → Actions and add `RELEASES_TOKEN`. Use a fine-grained token with **Contents: Read and write** on `household-finances-releases` only.
+- **One-time setup:** in the private repo, go to Settings → Secrets → Actions and add `RELEASES_TOKEN`. Use a fine-grained token with **Contents: Read and write** on `household_finances-releases` only.

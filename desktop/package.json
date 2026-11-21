@@ -60,7 +60,7 @@
       {
         "provider": "github",
         "owner": "GITHUB_OWNER",
-        "repo": "household-finances-releases",
+        "repo": "household_finances-releases",
         "releaseType": "release"
       }
     ]
