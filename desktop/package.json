@@ -1,7 +1,7 @@
 {
   "name": "household-finances-desktop",
   "productName": "Household Finances",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Household Finances for Windows: runs your finance server and dashboard in one app.",
   "main": "main.js",
   "private": true,

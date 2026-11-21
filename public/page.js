@@ -531,13 +531,20 @@
       const ed = document.createElement('button'); ed.type = 'button'; ed.className = 'fd-btn fd-quiet fd-sm'; ed.textContent = 'Change';
       ed.addEventListener('click', () => fillBudget(x.category, x.planned, x.rollover));
       c.append(ed);
-      if (mine.has(x.category)) {
+      {
         const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'fd-btn fd-quiet fd-sm'; rm.textContent = 'Remove';
-        rm.title = 'Remove the budgets set on this page for this category';
+        rm.title = `Stop budgeting ${x.category} from ${last.label || last.month} on (earlier months keep their history)`;
         rm.addEventListener('click', async () => {
+          if (!confirm(`Remove the ${x.category} budget from ${last.label || last.month} onward? Earlier months keep their budget history.`)) return;
           rm.disabled = true;
-          try { const d = await db(); for (const b of rows('budgets').filter((b) => b.book === book() && b.category === x.category)) await d.doc('data/household/budgets/' + b.id).delete(); }
-          catch { rm.disabled = false; rm.textContent = 'Not removed'; }
+          try {
+            const d = await db(), list = rows('budgets').filter((b) => b.book === book() && b.category === x.category);
+            // budgets set on this page from this month on are deleted outright
+            for (const b of list.filter((b) => b.from >= last.month)) await d.doc('data/household/budgets/' + b.id).delete();
+            // anything still planned (an earlier page budget or the imported sheet's plan) is switched off with a $0 budget from this month
+            const still = list.some((b) => b.from < last.month) || !mine.has(x.category) || x.planned > 0;
+            if (still) await d.collection('data/household/budgets').add({ book: book(), category: x.category.slice(0, 40), amount: 0, from: last.month, rollover: false, createdAt: new Date().toISOString() });
+          } catch { rm.disabled = false; rm.textContent = 'Not removed'; }
         });
         c.append(rm);
       }

@@ -342,6 +342,7 @@ Click **+ Report** in the top bar to make your own tab. Click **Edit**, then **A
 
 ### Budget
 - Budget versus actual per category, with rollover, pace bars and the budget ring.
+- **Change** edits a category's budget; **Remove** stops budgeting that category from the month you're viewing onward (earlier months keep their history). This works for budgets set in the app and for ones imported from a spreadsheet.
 
 ### Accounts
 - **Your accounts:** grouped as cash, credit, loans and investments, with balances, estimated interest, *Net cash after cards* and *Net worth*.
@@ -484,7 +485,7 @@ Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`,
 |---|---|
 | "Port 8080 is already in use" | Another copy is running (for example the self-hosted scheduled task alongside the desktop app). Stop one, or choose another port. |
 | A phone can't connect | Is the host on and awake, and in host mode? Is the phone on the same Wi-Fi, or Tailscale *Connected*? Is the PC's network set to **Private**? Did Windows block Node.js at the firewall? Allow it on Private networks. |
-| The page looks half-updated | Press Ctrl+F5, or fully close and reopen the app. |
+| The page looks half-updated | Click **⟳ Refresh** (top right, next to your name). It throws away cached files and reloads everything from the server. |
 | Markets say "No API keys found" | Add keys under ⚙ Settings → Data sources. The **Data check** link lists what's missing. |
 | Markets say "1 item unavailable" | That data isn't included in your free plan, or the service was briefly down. It retries on the next refresh. |
 | An investment shows up under Cash | Edit it and set the right type, or **Delete account** and record the balance again with the right type. |

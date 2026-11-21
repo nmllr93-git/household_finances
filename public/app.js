@@ -61,3 +61,16 @@
   } catch (e) {}
 })();
 
+
+// "Refresh": throw away cached page files and reload everything from the server (fixes a half-updated page).
+(function () {
+  const box = document.querySelector('.fd-account'); if (!box) return;
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link'; b.textContent = '⟳ Refresh'; b.title = 'Reload the newest version of every page and all data from the server';
+  b.addEventListener('click', async () => {
+    b.disabled = true; b.textContent = 'Refreshing…';
+    try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
+    try { if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.update(); } catch (e) {}
+    location.reload();
+  });
+  box.prepend(b, ' · ');
+})();
