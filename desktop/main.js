@@ -86,7 +86,10 @@ let win = null, tray = null, quitting = false;
 function makeWindow() {
   if (win) return win;
   win = new BrowserWindow({ width: 1280, height: 860, minWidth: 380, minHeight: 500, show: false, icon: ICON, title: 'Household Finances', backgroundColor: '#1f2a37', autoHideMenuBar: true,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true } });
+  // the dashboard tab is a <webview>: only allow it to show the local server, and open outside links in the browser
+  win.webContents.on('will-attach-webview', (_e, wp, params) => { delete wp.preload; wp.nodeIntegration = false; wp.contextIsolation = true; if (params.src && !/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(params.src)) _e.preventDefault(); });
+  win.webContents.on('did-attach-webview', (_e, wc) => wc.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; }));
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.on('close', (e) => { if (!quitting && S.role === 'host') { e.preventDefault(); win.hide(); } });
   win.on('closed', () => { win = null; });
@@ -99,7 +102,7 @@ async function openDashboard() {
   if (!S.role) await w.loadFile(path.join(__dirname, 'ui', 'setup.html'));
   else if (S.role === 'remote') await (S.remoteUrl ? w.loadURL(S.remoteUrl + '/') : w.loadFile(path.join(__dirname, 'ui', 'connect.html')));
   else {
-    try { if (!INFO.running) await startServer(); await w.loadURL(INFO.url + '/'); }
+    try { if (!INFO.running) await startServer(); await w.loadFile(path.join(__dirname, 'ui', 'host.html')); }
     catch (e) { dialog.showErrorBox('Household Finances', `${e.message}\n\nIf another copy of the server is running (for example your self-hosted one), stop it or pick a different port under Tray → Change setup.`); await w.loadFile(path.join(__dirname, 'ui', 'setup.html')); }
   }
   if (!HIDDEN || !S.role) show();
@@ -107,6 +110,7 @@ async function openDashboard() {
 
 // ---------- tray ----------
 function buildTray() {
+  notifyHost();
   if (S.role !== 'host') { if (tray) { tray.destroy(); tray = null; } return; }
   if (!tray) { tray = new Tray(nativeImage.createFromPath(TRAY_ICON)); tray.setToolTip('Household Finances'); tray.on('click', show); }
   const on = !!INFO.running, others = on && INFO.mode === 'host';
@@ -119,7 +123,7 @@ function buildTray() {
     { type: 'separator' },
     { label: on ? (others ? '● Running · other devices can connect' : '● Running · this computer only') : '○ Stopped', enabled: false },
     on ? { label: 'Stop server', click: () => stopServer().catch((e) => dialog.showErrorBox('Stop failed', e.message)) }
-       : { label: 'Start server', click: () => startServer().then(() => win && win.loadURL(INFO.url + '/')).catch((e) => dialog.showErrorBox('Start failed', e.message)) },
+       : { label: 'Start server', click: () => startServer().then(() => win && win.loadFile(path.join(__dirname, 'ui', 'host.html'))).catch((e) => dialog.showErrorBox('Start failed', e.message)) },
     { label: 'Allow other devices (phone, other PCs)', type: 'checkbox', checked: S.mode === 'host', click: async (it) => {
         S.mode = it.checked ? 'host' : 'local'; saveSet();
         try { if (child) INFO = await call('setMode', { mode: S.mode, port: S.port }); } catch (e) { dialog.showErrorBox('Change failed', e.message); }
@@ -175,6 +179,9 @@ let updBusy = false, updManual = false;
 function setupUpdates() {
   if (!autoUpdater || !app.isPackaged) return;
   autoUpdater.autoDownload = false; autoUpdater.autoInstallOnAppQuit = true;
+  // The releases repo also holds Android builds; point straight at GitHub's "latest" release (always the desktop one)
+  // so an Android release published afterwards can't hide latest.yml.
+  try { const pub = require('./package.json').build.publish[0]; autoUpdater.setFeedURL({ provider: 'generic', url: `https://github.com/${pub.owner}/${pub.repo}/releases/latest/download` }); } catch {}
   autoUpdater.on('update-available', async (i) => {
     const r = await dialog.showMessageBox({ type: 'info', buttons: ['Download now', 'Later'], defaultId: 0, message: `Version ${i.version} is available`, detail: `You have ${app.getVersion()}.${i.releaseNotes ? '\n\n' + String(i.releaseNotes).replace(/<[^>]+>/g, '').slice(0, 600) : ''}` });
     if (r.response === 0) autoUpdater.downloadUpdate(); else updBusy = false;
@@ -194,6 +201,33 @@ function checkUpdates(manual) {
   autoUpdater.checkForUpdates().catch(() => { updBusy = false; });
 }
 ipcMain.handle('fd:checkUpdates', () => checkUpdates(true));
+
+// ---------- host options tab (same controls as the tray, for remote desktops / virtual displays) ----------
+const hostState = () => {
+  const on = !!INFO.running, others = on && INFO.mode === 'host';
+  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
+    addrs: others ? [...(INFO.lan || []), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])] : [], ts: TS };
+};
+const notifyHost = () => { try { if (win && !win.isDestroyed()) win.webContents.send('fd:hostChanged', hostState()); } catch {} };
+ipcMain.handle('fd:hostState', () => hostState());
+ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
+  switch (act) {
+    case 'start': await startServer(); break;
+    case 'stop': await stopServer(); break;
+    case 'mode': S.mode = arg ? 'host' : 'local'; saveSet(); if (child) INFO = await call('setMode', { mode: S.mode, port: S.port }); buildTray(); if (arg) maybeFirewallNote(); break;
+    case 'startWithWindows': S.startWithWindows = !!arg; saveSet(); loginItem(); buildTray(); break;
+    case 'backup': return call('backup');
+    case 'openData': shell.openPath(S.dataDir || defaultDataDir()); break;
+    case 'copy': clipboard.writeText(String(arg || '')); break;
+    case 'tailscale': shell.openExternal(TS.installed ? 'https://login.tailscale.com/admin/machines' : 'https://tailscale.com/download'); break;
+    case 'refreshTs': tailscale(); await new Promise((r) => setTimeout(r, 1500)); break;
+    case 'updates': checkUpdates(true); break;
+    case 'setup': await win.loadFile(path.join(__dirname, 'ui', 'setup.html')); return null;
+    case 'quit': quitting = true; app.quit(); return null;
+    default: throw new Error('unknown action');
+  }
+  return hostState();
+});
 
 // ---------- app lifecycle ----------
 app.on('second-instance', () => openDashboard());

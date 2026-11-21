@@ -79,8 +79,10 @@ The app opens a short setup screen.
 
 A brand-new data folder starts with two empty dashboards, **Personal** and **Shared household**. You can rename them, add more, and set each one's type in the app (see [Basic configuration](#basic-configuration)).
 
-### A3. The tray icon
-When this PC is the host, a tray icon (bottom right, by the clock) controls the server. Right-click it for:
+### A3. Host options and the tray icon
+When this PC is the host, the app window has two tabs: **Dashboard** and **Host options**. Host options has every control listed below, so you can manage hosting over Remote Desktop or on a virtual display without the tray. If you close the window, reopen it from the Start menu or desktop shortcut.
+
+There's also a tray icon (bottom right, by the clock) controls the server. Right-click it for:
 
 | Menu item | What it does |
 |---|---|

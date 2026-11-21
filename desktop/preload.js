@@ -16,5 +16,8 @@ if (local) Object.assign(api, {
   addUser: (o) => ipcRenderer.invoke('fd:addUser', o),
   openDashboard: () => ipcRenderer.invoke('fd:openDashboard'),
   useRemote: () => ipcRenderer.invoke('fd:useRemote'),
+  hostState: () => ipcRenderer.invoke('fd:hostState'),
+  hostAction: (act, arg) => ipcRenderer.invoke('fd:hostAction', act, arg),
+  onHostChanged: (fn) => ipcRenderer.on('fd:hostChanged', (_e, st) => fn(st)),
 });
 contextBridge.exposeInMainWorld('FDApp', api);

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://localhost:* http://127.0.0.1:*">
+<title>Household Finances</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1f2a37; --mut:#5b6675; --card:#fff; --line:#d8dde3; --acc:#1f5f8b; --soft:#e6eff7; --bad:#b3261e; --ok:#1e7a46; --bar:#1f2a37; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12171d; --fg:#e6e9ed; --mut:#9aa4b0; --card:#1b222b; --line:#2c3540; --acc:#6fb0e0; --soft:#1f2f3d; --bad:#f08a80; --ok:#6fcf97; --bar:#0d1116; } }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  body { display:flex; flex-direction:column; }
+  nav { display:flex; align-items:center; gap:4px; background:var(--bar); padding:0 10px; height:38px; flex:none; }
+  nav button { font:inherit; color:#cfd6de; background:transparent; border:0; padding:8px 14px; border-radius:6px 6px 0 0; cursor:pointer; height:38px; }
+  nav button.on { background:var(--bg); color:var(--fg); font-weight:600; }
+  nav .st { margin-left:auto; color:#cfd6de; font-size:12.5px; display:flex; align-items:center; gap:6px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#8a939d; display:inline-block; } .dot.on { background:#4cc38a; } .dot.warn { background:#e0a43a; }
+  #dash { flex:1; border:0; width:100%; }
+  #opts { flex:1; overflow:auto; padding:20px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; max-width:1100px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .card h2 { font-size:1rem; margin:0 0 10px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+  .row:first-of-type { border-top:0; }
+  .row small { display:block; color:var(--mut); }
+  .mut { color:var(--mut); } .bad { color:var(--bad); } .ok { color:var(--ok); }
+  button.b { font:inherit; font-weight:600; border:0; border-radius:7px; padding:7px 14px; background:var(--acc); color:#fff; cursor:pointer; white-space:nowrap; }
+  button.q { font:inherit; border:1px solid var(--line); border-radius:7px; padding:6px 12px; background:transparent; color:var(--fg); cursor:pointer; white-space:nowrap; }
+  button:disabled { opacity:.5; cursor:default; }
+  .sw { position:relative; width:42px; height:24px; flex:none; } .sw input { opacity:0; width:0; height:0; }
+  .sw span { position:absolute; inset:0; background:#9aa4b0; border-radius:12px; transition:.15s; cursor:pointer; }
+  .sw span::after { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .sw input:checked + span { background:var(--acc); } .sw input:checked + span::after { left:21px; }
+  code { font:12.5px ui-monospace, Consolas, monospace; background:var(--soft); padding:2px 6px; border-radius:5px; word-break:break-all; }
+  #msg { margin-top:12px; min-height:1.3em; }
+  .warnbox { border:1px solid var(--bad); background:color-mix(in srgb, var(--bad) 8%, transparent); border-radius:10px; padding:12px 14px; margin-bottom:16px; max-width:1100px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<nav role="tablist">
+  <button type="button" id="t-dash" class="on" role="tab">Dashboard</button>
+  <button type="button" id="t-opts" role="tab">Host options</button>
+  <span class="st"><span class="dot" id="dot"></span><span id="stxt">…</span></span>
+</nav>
+<webview id="dash" allowpopups></webview>
+<section id="opts" hidden>
+  <div class="warnbox" id="warn" hidden></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Server</h2>
+      <div class="row"><div><b id="srvState">…</b><small id="srvSub"></small></div><button class="b" id="startStop" type="button">…</button></div>
+      <div class="row"><div>Allow other devices<small>Phones and other PCs on your network or Tailscale can sign in. Off = this computer only.</small></div><label class="sw"><input type="checkbox" id="mode"><span></span></label></div>
+      <div class="row"><div>Start with Windows<small>Starts quietly in the background when you sign in.</small></div><label class="sw"><input type="checkbox" id="sww"><span></span></label></div>
+    </div>
+    <div class="card">
+      <h2>Addresses for phones &amp; other devices</h2>
+      <div id="addrs"></div>
+      <div class="row"><div><b id="tsState">Tailscale</b><small id="tsSub"></small></div><span><button class="q" id="tsRefresh" type="button">Refresh</button> <button class="q" id="tsOpen" type="button">Open</button></span></div>
+    </div>
+    <div class="card">
+      <h2>Data &amp; backups</h2>
+      <div class="row"><div>Data folder<small><code id="dir"></code></small></div><button class="q" id="openData" type="button">Open</button></div>
+      <div class="row"><div>Back up now<small>A full copy goes in the data folder's <i>backups</i> folder. One is also made automatically every day.</small></div><button class="q" id="backup" type="button">Back up</button></div>
+    </div>
+    <div class="card">
+      <h2>App</h2>
+      <div class="row"><div>Version <b id="ver"></b><small>Checks automatically once a day.</small></div><button class="q" id="updates" type="button">Check for updates</button></div>
+      <div class="row"><div>Change setup<small>Port, data folder, add logins, or switch this PC to connecting to another server.</small></div><button class="q" id="setup" type="button">Change setup…</button></div>
+      <div class="row"><div>Quit<small>Stops the server and closes the app. Other devices can't connect until it's started again.</small></div><button class="q" id="quit" type="button">Quit</button></div>
+    </div>
+  </div>
+  <div id="msg" role="status"></div>
+</section>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id), A = window.FDApp, dash = $('dash');
+  const say = (t, c) => { $('msg').textContent = t || ''; $('msg').className = c || ''; };
+  let st = await A.hostState(), loadedUrl = '';
+  const tab = (which) => { const d = which === 'dash'; $('t-dash').classList.toggle('on', d); $('t-opts').classList.toggle('on', !d); dash.hidden = !d; $('opts').hidden = d; try { localStorage.setItem('fd-hosttab', which); } catch (e) {} };
+  $('t-dash').addEventListener('click', () => tab('dash')); $('t-opts').addEventListener('click', () => tab('opts'));
+  function render(s) {
+    st = s;
+    const others = s.running && s.mode === 'host';
+    $('dot').className = 'dot' + (s.running ? (s.writable ? ' on' : ' warn') : '');
+    $('stxt').textContent = s.running ? (others ? 'Hosting · other devices can connect' : 'Running · this computer only') : 'Server stopped';
+    $('srvState').textContent = s.running ? `Running on port ${s.port}` : 'Stopped';
+    $('srvSub').textContent = s.running ? (others ? 'Other devices can connect.' : 'Only this computer can open it.') : 'Nobody can open the dashboard until you start it.';
+    $('startStop').textContent = s.running ? 'Stop server' : 'Start server';
+    $('mode').checked = s.mode === 'host'; $('sww').checked = s.startWithWindows;
+    $('dir').textContent = s.dataDir; $('ver').textContent = s.version; $('backup').disabled = !s.running;
+    $('warn').hidden = s.writable; $('warn').textContent = s.writeHelp || '';
+    const box = $('addrs'); box.replaceChildren();
+    if (!s.addrs.length) { const p = document.createElement('p'); p.className = 'mut'; p.textContent = s.running ? 'Turn on "Allow other devices" to see the addresses phones can use.' : 'Start the server to see addresses.'; box.append(p); }
+    s.addrs.forEach((a) => { const r = document.createElement('div'); r.className = 'row'; const c = document.createElement('code'); c.textContent = a; const b = document.createElement('button'); b.className = 'q'; b.type = 'button'; b.textContent = 'Copy';
+      b.addEventListener('click', async () => { await A.hostAction('copy', a); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); }); r.append(c, b); box.append(r); });
+    const ts = s.ts || {};
+    $('tsState').textContent = !ts.installed ? 'Tailscale isn\'t installed' : ts.on ? 'Tailscale is on' : 'Tailscale is off';
+    $('tsSub').textContent = !ts.installed ? 'Needed to connect from outside your home network.' : ts.on ? (ts.name || ts.ip || '') : 'Open Tailscale and sign in to connect from away.';
+    $('tsOpen').textContent = ts.installed ? 'Open' : 'Get Tailscale';
+    if (s.running && s.url && loadedUrl !== s.url) { loadedUrl = s.url; dash.setAttribute('src', s.url + '/'); }
+  }
+  const act = async (a, v, okMsg) => { say(''); try { const r = await A.hostAction(a, v); if (r && typeof r === 'object') render(r); if (okMsg) say(typeof okMsg === 'function' ? okMsg(r) : okMsg, 'ok'); } catch (e) { say(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'bad'); render(await A.hostState()); } };
+  $('startStop').addEventListener('click', () => act(st.running ? 'stop' : 'start'));
+  $('mode').addEventListener('change', (e) => act('mode', e.target.checked));
+  $('sww').addEventListener('change', (e) => act('startWithWindows', e.target.checked));
+  $('openData').addEventListener('click', () => act('openData'));
+  $('backup').addEventListener('click', async () => { say('Backing up…'); try { const f = await A.hostAction('backup'); say('Backup saved: ' + f, 'ok'); } catch (e) { say('Backup failed: ' + (e.message || e), 'bad'); } });
+  $('tsRefresh').addEventListener('click', () => act('refreshTs'));
+  $('tsOpen').addEventListener('click', () => act('tailscale'));
+  $('updates').addEventListener('click', () => act('updates'));
+  $('setup').addEventListener('click', () => A.hostAction('setup'));
+  $('quit').addEventListener('click', () => { if (confirm('Quit Household Finances? The server stops and other devices can\'t connect until you start it again.')) A.hostAction('quit'); });
+  A.onHostChanged((s) => render(s));
+  render(st);
+  let last = 'dash'; try { last = localStorage.getItem('fd-hosttab') || 'dash'; } catch (e) {}
+  tab(st.running ? last : 'opts');
+})();
+</script>
+</body>
+</html>

@@ -22,6 +22,9 @@ The installer bundles its own copy of Node (copied from yours during the build),
    - Default folder: `%APPDATA%\HouseholdFinances`.
 3. Create a login (and pick which dashboards it can see). Skipped if the folder already has logins.
 
+## Host options tab (when this computer is the server)
+The window has two tabs: **Dashboard** and **Host options**. Host options has everything the tray menu has (start/stop, allow other devices, addresses to copy, Tailscale status, start with Windows, back up, data folder, updates, change setup, quit), so it works over Remote Desktop or on a virtual display where the tray can't be reached. If the window is closed, open the app again from the Start menu or desktop shortcut to bring it back.
+
 ## Tray icon (when this computer is the server)
 - Open dashboard · Start / Stop server · **Allow other devices** on/off (takes effect immediately)
 - **Phone & other device addresses**: copy your network and Tailscale addresses
