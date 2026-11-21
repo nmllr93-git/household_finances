@@ -25,7 +25,11 @@ function fakeEnv(keys, saved = {}) {
   return { calls, saved,
     getJson: async (u) => { calls.push(u); if (u.includes('finnhub')) return fh(u); if (u.includes('financialmodelingprep')) return fmp(u);
       if (u.includes('stlouisfed')) return { observations: [{ date: '2026-11-13', value: '6.5' }, { date: '2026-11-06', value: '6.6' }, { date: '2026-10-30', value: '.' }] };
-      if (u.includes('nager')) return [{ date: '2026-12-25', name: 'Christmas' }]; throw new Error('HTTP 404'); },
+      if (u.includes('frankfurter')) return { base: 'USD', date: '2026-11-20', rates: { EUR: 0.92, MXN: 18.1 } };
+      if (u.includes('nager')) return [{ date: '2026-12-25', name: 'Christmas' }];
+      if (u.includes('i_bonds_interest_rates')) return { data: [{ earning_period: '2026-11', earning_period_start: '2026-11-01', issue_year_month: '2026-11', fixed_rate: '1.10', combined_rate: '4.03' }, { earning_period: '2026-11', earning_period_start: '2026-11-01', issue_year_month: '2020-05', fixed_rate: '0.00', combined_rate: '2.90' }, { earning_period: '2026-05', earning_period_start: '2026-05-01', issue_year_month: '2026-05', fixed_rate: '1.20', combined_rate: '3.98' }] };
+      if (u.includes('avg_interest_rates')) return { data: [{ record_date: '2026-10-31', security_desc: 'Treasury Bills', avg_interest_rate_amt: '4.10' }, { record_date: '2026-10-31', security_desc: 'Treasury Notes', avg_interest_rate_amt: '3.30' }, { record_date: '2026-10-31', security_desc: 'Treasury Inflation-Protected Securities (TIPS)', avg_interest_rate_amt: '1.10' }] };
+      throw new Error('HTTP 404'); },
     getText: async (u) => { calls.push(u); return 'Symbol,Date,Time,Open,High,Low,Close,Volume,Name\nAAPL.US,2026-11-20,22:00,1,1,1,230,1,"APPLE"'; },
     postJson: async (u) => { calls.push(u); return { status: 'REQUEST_SUCCEEDED', Results: { series: [] } }; },
     keys: () => keys, keyNote: () => '',
@@ -65,3 +69,10 @@ test('dividends and holding details', async () => {
   assert.equal((await m.dividends(['VTI'])).VTI[0].amount, 0.5);
   const d = await m.stock('NVDA'); assert.equal(d.range.hi, 120); assert.equal(d.news.length, 1);
 });
+
+test('economy: Treasury I bond and average rates need no key', async () => {
+  const e = await createMarketData(fakeEnv({})).econ(false);
+  assert.deepEqual(e.treasury.ibond.obs, [['2026-05-01', 3.98], ['2026-11-01', 4.03]]); assert.equal(e.treasury.ibond.fixed, 1.1);
+  assert.equal(e.treasury.bills.obs[0][1], 4.1); assert.equal(e.treasury.tips.obs[0][1], 1.1);
+});
+test('economy: exchange rates', async () => { const e = await createMarketData(fakeEnv({})).econ(false); assert.equal(e.fx.rates.EUR, 0.92); assert.equal(e.fx.date, '2026-11-20'); });

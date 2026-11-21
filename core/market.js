@@ -129,6 +129,19 @@
         try { const j = await getJson(`https://api.eia.gov/v2/electricity/retail-sales/data/?api_key=${k.eia}&frequency=monthly&data[0]=price&facets[stateid][]=IA&facets[sectorid][]=RES&sort[0][column]=period&sort[0][direction]=desc&length=36`);
           out.eia.elec = { label: 'Iowa home electricity (¢/kWh)', obs: ((j.response && j.response.data) || []).map((d) => [d.period, Number(d.price)]).sort((a, b) => a[0].localeCompare(b[0])) }; } catch (e) { err('EIA electricity', e); }
       } else out.errors.push('No EIA key: gas and electricity prices are off.');
+      // exchange rates (Frankfurter / European Central Bank, no key): 1 USD = x of each currency
+      try { const j = await getJson('https://api.frankfurter.dev/v1/latest?base=USD'); if (j && j.rates) out.fx = { date: j.date, rates: j.rates }; } catch (e) { err('Exchange rates', e); }
+      // U.S. Treasury (no key): I bond rate for new bonds, and average rates on bills/notes/TIPS
+      out.treasury = {};
+      try { const j = await getJson('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/i_bonds_interest_rates?sort=-earning_period_start&page[size]=400');
+        const rows = ((j && j.data) || []).filter((r) => r.issue_year_month === r.earning_period && isFinite(Number(r.combined_rate)));
+        const obs = rows.map((r) => [r.earning_period_start, Number(r.combined_rate)]).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+        if (obs.length) { const last = rows.find((r) => r.earning_period_start === obs[obs.length - 1][0]); out.treasury.ibond = { label: 'I bonds (new)', obs, fixed: last ? Number(last.fixed_rate) : null }; }
+      } catch (e) { err('Treasury I bonds', e); }
+      try { const j = await getJson('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates?sort=-record_date&page[size]=400&filter=security_type_desc:eq:Marketable');
+        const pick = { bills: /^Treasury Bills$/i, notes: /^Treasury Notes$/i, tips: /Inflation-Protected/i };
+        for (const [id, re] of Object.entries(pick)) { const obs = ((j && j.data) || []).filter((r) => re.test(r.security_desc) && isFinite(Number(r.avg_interest_rate_amt))).map((r) => [r.record_date, Number(r.avg_interest_rate_amt)]).sort((a, b) => a[0].localeCompare(b[0])).slice(-24); if (obs.length) out.treasury[id] = { obs }; }
+      } catch (e) { err('Treasury average rates', e); }
       try { const y = new Date().getFullYear(); for (const yr of [y, y + 1]) { const j = await getJson(`https://date.nager.at/api/v3/PublicHolidays/${yr}/US`); out.holidays.push(...(j || []).filter((h) => !h.counties).map((h) => [h.date, h.name])); } } catch (e) { err('Holidays', e); }
       ECON = out; await save('econ', out);
       return out;
