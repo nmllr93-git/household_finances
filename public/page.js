@@ -2431,6 +2431,37 @@
     if (list.length > 40) box.append(phMsg(`Showing the latest 40 of ${list.length}.`));
   };
 
+  // ================= Markets → Screener (FMP) =================
+  let scrF = null, scrRes = null, scrBusy = false;
+  dash.draw('screenView', (el) => {
+    el.replaceChildren(); if (PART('m-scr')) return;
+    if (!scrF) scrF = { sector: '', cap: 10e9, yield: 0, maxPrice: 0, ...(prefGet('screener', {}) || {}) };
+    el.append(rhead('Screener'));
+    el.append(phMsg('Find US companies by sector, size, dividend and price. Add any to your watchlist to follow its price.'));
+    const r = document.createElement('div'); r.className = 'fd-rb-row';
+    const sec = document.createElement('select'); sec.className = 'dash-select'; sec.append(new Option('Any sector', ''), ...['Technology', 'Healthcare', 'Financial Services', 'Consumer Cyclical', 'Consumer Defensive', 'Industrials', 'Energy', 'Utilities', 'Real Estate', 'Communication Services', 'Basic Materials'].map((x) => new Option(x, x))); sec.value = scrF.sector;
+    const cap = document.createElement('select'); cap.className = 'dash-select'; [[0, 'Any size'], [2e9, 'Over $2B'], [10e9, 'Over $10B'], [50e9, 'Over $50B'], [200e9, 'Over $200B']].forEach(([v, l]) => cap.append(new Option(l, v))); cap.value = scrF.cap;
+    const yl = document.createElement('select'); yl.className = 'dash-select'; [[0, 'Any dividend'], [1, 'Yield over 1%'], [2, 'Yield over 2%'], [3, 'Yield over 3%'], [4, 'Yield over 4%']].forEach(([v, l]) => yl.append(new Option(l, v))); yl.value = scrF.yield;
+    const mp = document.createElement('select'); mp.className = 'dash-select'; [[0, 'Any price'], [50, 'Under $50'], [100, 'Under $100'], [250, 'Under $250']].forEach(([v, l]) => mp.append(new Option(l, v))); mp.value = scrF.maxPrice;
+    const go = rbtn(scrBusy ? 'Searching…' : 'Search', async () => {
+      scrF = { sector: sec.value, cap: Number(cap.value), yield: Number(yl.value), maxPrice: Number(mp.value) }; prefSet('screener', scrF); scrBusy = true; dash.draw('screenView');
+      try { const q = new URLSearchParams({ sector: scrF.sector, cap: scrF.cap, yield: scrF.yield, maxPrice: scrF.maxPrice }); const r2 = await FDStore.fetch('/api/screener?' + q, {}); scrRes = r2.ok ? await r2.json() : { rows: [], error: 'The screener isn\u2019t available right now.' }; }
+      catch (e) { scrRes = { rows: [], error: 'The screener isn\u2019t available right now.' }; }
+      scrBusy = false; dash.draw('screenView'); }, false);
+    go.disabled = scrBusy; r.append(sec, cap, yl, mp, go); el.append(r);
+    if (!scrRes) return;
+    if (scrRes.error) { el.append(phMsg(scrRes.error, 'fd-bad')); return; }
+    if (!scrRes.rows.length) { el.append(phMsg('No companies match. Try widening the filters.')); return; }
+    const watched = new Set((prefGet('watch', []) || []).map((w) => w.symbol)), own = new Set(hRows().map((h) => h.symbol));
+    const tb = document.createElement('table'); tb.className = 'fd-table'; const h = document.createElement('tr'); ['Company', 'Price', 'Size', 'Dividend yield', ''].forEach((t, i) => { const c = document.createElement('th'); c.textContent = t; if (!i) c.className = 'fd-l'; h.append(c); }); tb.append(h);
+    const big = (v) => (v == null ? '–' : v >= 1e12 ? '$' + (v / 1e12).toFixed(1) + 'T' : v >= 1e9 ? '$' + (v / 1e9).toFixed(1) + 'B' : '$' + Math.round(v / 1e6) + 'M');
+    scrRes.rows.slice(0, 40).forEach((x) => { const tr = document.createElement('tr'); const n = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = x.symbol + (own.has(x.symbol) ? ' ★' : ''); const s2 = document.createElement('div'); s2.className = 'fd-zero fd-rsub'; s2.textContent = [x.name, x.industry].filter(Boolean).join(' · '); n.append(b, s2);
+      const a = document.createElement('td'); if (watched.has(x.symbol) || own.has(x.symbol)) a.textContent = watched.has(x.symbol) ? 'Watching' : 'You own it'; else a.append(rbtn('+ Watch', async () => { const w = [...(prefGet('watch', []) || []), { symbol: x.symbol }]; await prefSet('watch', w); dash.draw('screenView'); }));
+      tr.append(n, td(x.price != null ? money2(x.price) : '–'), td(big(x.cap)), td(x.yield != null ? x.yield.toFixed(2) + '%' : '–'), a); tb.append(tr); });
+    const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
+    el.append(phMsg('From Financial Modeling Prep, refreshed at most every 6 hours for the same filters. Not investment advice.'));
+  });
+
   // ================= Phone-only mode: settings, backup reminder, bill notifications, first-run walkthrough =================
   const PH = () => window.FD_LOCAL && window.FDLocal;
   const phMsg = (t, cls) => { const p = document.createElement('p'); p.className = 'fd-note' + (cls ? ' ' + cls : ''); p.textContent = t; return p; };
@@ -2692,7 +2723,7 @@
         const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = gl; det.append(h); const w = document.createElement('div'); w.className = 'fd-chkgrid';
         ids.forEach((id) => w.append(chk(secTitle(id), !(s.hideSec || []).includes(id), (on) => { const x = new Set(s.hideSec || []); on ? x.delete(id) : x.add(id); s.hideSec = [...x]; }))); det.append(w); });
       const h2 = document.createElement('div'); h2.className = 'fd-rb-h'; h2.textContent = 'Details inside sections'; det.append(h2); const w2 = document.createElement('div'); w2.className = 'fd-chkgrid';
-      [['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-treas', 'Economy: Treasury savings options'], ['e-fx', 'Economy: exchange rates'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-rings', 'Holdings: allocation rings'], ['h-det', 'Holdings: news & analyst details']]
+      [['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-treas', 'Economy: Treasury savings options'], ['e-fx', 'Economy: exchange rates'], ['e-cal', 'Economy: economic calendar'], ['m-scr', 'Markets: stock screener'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-rings', 'Holdings: allocation rings'], ['h-det', 'Holdings: news & analyst details']]
         .forEach(([k, lab]) => w2.append(chk(lab, !(s.hideParts || []).includes(k), (on) => { const x = new Set(s.hideParts || []); on ? x.delete(k) : x.add(k); s.hideParts = [...x]; })));
       det.append(w2); const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(det); box.append(r); }
     const hw = document.createElement('div'); hw.className = 'fd-chkgrid';
@@ -3085,6 +3116,10 @@
       const outp = document.createElement('b'); const calc = () => { const r = (c) => (c === 'USD' ? 1 : ECO.fx.rates[c]); const v = (Number(amt.value) || 0) / r(from.value) * r(to.value); outp.textContent = `= ${v.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${to.value}`; };
       [amt, from, to].forEach((x) => x.addEventListener('input', calc)); calc(); w.append(amt, from, document.createTextNode('→'), to, outp); el.append(w);
       const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'European Central Bank reference rates (via Frankfurter), updated each working day. Your card\u2019s rate and fees will differ a little. Trips you tag can show their total in another currency under Expenses → Tags.'; el.append(n); }
+    if (!PART('e-cal') && (ECO.calendar || []).length) { el.append(rhead('Economic calendar · next few weeks'));
+      const tb = document.createElement('table'); tb.className = 'fd-table'; ECO.calendar.slice(0, 14).forEach((c) => { const d = new Date(c.date + 'T12:00:00'); const tr = document.createElement('tr'); tr.append(td(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), 'fd-l'), td(c.name, 'fd-l'), td(c.full, 'fd-l fd-zero')); tb.append(tr); });
+      const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
+      const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Release dates from FRED. Inflation, jobs and Fed announcements are the ones most likely to move markets and loan rates.'; el.append(n); }
     if (!PART('e-infl')) grp('Inflation (price change over 12 months)', [infl('cpi', 'US, all items'), infl('cpiMW', 'Midwest, all items'), infl('foodHomeMW', 'Groceries'), infl('diningMW', 'Restaurants'), infl('energyMW', 'Energy'), infl('gasMW', 'Gasoline'), infl('shelterMW', 'Shelter')], 'Midwest figures from the Bureau of Labor Statistics. Compare with how your own spending in each category changed.');
     if (!PART('e-ener')) grp('Energy & housing', [tile2('Midwest gas ($/gal)', ser('eia', 'gas'), (v) => '$' + v.toFixed(2)), tile2('Iowa home electricity', ser('eia', 'elec'), (v) => v.toFixed(1) + '¢/kWh'), infl('hpiIC', 'Iowa City home prices')]);
     const nh = ((ECO.holidays || []).filter((h) => h[0] >= new Date().toISOString().slice(0, 10))[0]); if (nh) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Next bank holiday: ${nh[1]} (${nh[0]}). Bills due that day usually post the next business day.`; el.append(p); }

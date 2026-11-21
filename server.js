@@ -345,6 +345,7 @@ async function api(req, res, url) {
     if (!sym) return send(res, 400, { error: 'symbol?' });
     return send(res, 200, await MARKET.stock(sym));
   }
+  if (parts[1] === 'screener' && req.method === 'GET') { const sp = url.searchParams; return send(res, 200, await MARKET.screener({ sector: String(sp.get('sector') || '').slice(0, 40), cap: Number(sp.get('cap')) || 0, yield: Number(sp.get('yield')) || 0, maxPrice: Number(sp.get('maxPrice')) || 0 })); }
   if (parts[1] === 'econ' && req.method === 'GET') return send(res, 200, await MARKET.econ(url.searchParams.get('refresh') === '1'));
   if (parts[1] === 'vehicle' && req.method === 'GET') { try { return send(res, 200, await MARKET.vehicle(url.searchParams.get('vin'))); } catch (e) { return send(res, 502, { error: 'Couldn’t reach NHTSA: ' + e.message }); } }
   if (parts[1] === 'markets' && req.method === 'GET') {

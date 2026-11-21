@@ -116,6 +116,14 @@
         try { const j = await getJson(`https://api.stlouisfed.org/fred/series/observations?series_id=${sid}&api_key=${k.fred}&file_type=json&sort_order=desc&limit=60&observation_start=2015-01-01`);
           const obs = (j.observations || []).filter((o) => o.value !== '.' && isFinite(Number(o.value))).map((o) => [o.date, Number(o.value)]).sort((a, b) => a[0].localeCompare(b[0]));
           out.fred[id] = { label, unit, sid, obs }; } catch (e) { err('FRED ' + sid, e); }
+        // economic calendar: upcoming release dates for the reports that move markets and rates
+        try { const d0 = new Date().toISOString().slice(0, 10), d1 = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
+          const j = await getJson(`https://api.stlouisfed.org/fred/releases/dates?api_key=${k.fred}&file_type=json&realtime_start=${d0}&realtime_end=${d1}&include_release_dates_with_no_data=true&sort_order=asc&order_by=release_date&limit=1000`);
+          const KEEP = [[/^Consumer Price Index$/i, 'Inflation (CPI)'], [/^Employment Situation$/i, 'Jobs report'], [/^Gross Domestic Product$/i, 'GDP'], [/^Personal Income and Outlays$/i, 'Spending & PCE inflation'], [/^Advance Monthly Sales for Retail/i, 'Retail sales'], [/FOMC Press Release/i, 'Fed rate decision'], [/^Producer Price Index$/i, 'Producer prices'], [/^Job Openings and Labor Turnover/i, 'Job openings (JOLTS)'], [/^New Residential Construction$/i, 'Housing starts'], [/Existing Home Sales/i, 'Existing home sales'], [/Surveys of Consumers|Consumer Sentiment/i, 'Consumer sentiment'], [/^Unemployment Insurance Weekly Claims/i, 'Jobless claims']];
+          const seen = new Set();
+          out.calendar = ((j && j.release_dates) || []).map((r) => { const m = KEEP.find(([re]) => re.test(r.release_name || '')); return m ? { date: r.date, name: m[1], full: r.release_name } : null; })
+            .filter((x) => x && x.date >= d0 && !seen.has(x.date + x.name) && seen.add(x.date + x.name)).filter((x, i, a) => x.name !== 'Jobless claims' || a.filter((y) => y.name === 'Jobless claims').indexOf(x) < 2).slice(0, 30);
+        } catch (e) { err('FRED calendar', e); }
       } else out.errors.push('No FRED key: mortgage/Treasury rates, inflation and home prices are off.');
       if (k.bls) {
         try { const y = new Date().getFullYear(); const j = await postJson('https://api.bls.gov/publicAPI/v2/timeseries/data/', { seriesid: Object.values(BLS_SERIES).map((x) => x[0]), startyear: String(y - 2), endyear: String(y), registrationkey: k.bls }); for (const sr of (j.Results && j.Results.series) || []) { const id = Object.keys(BLS_SERIES).find((x) => BLS_SERIES[x][0] === sr.seriesID); if (!id) continue;
@@ -235,10 +243,24 @@
       return mktBusy;
     }
 
+    // stock screener (FMP), cached 6 hours per set of filters
+    const SCR = cache('screener');
+    async function screener(f) {
+      const k = apiKeys(); if (!k.fmp) return { rows: [], error: 'The screener needs a Financial Modeling Prep key (Settings → Data sources).' };
+      const q = new URLSearchParams(); if (f.sector) q.set('sector', f.sector); if (f.cap > 0) q.set('marketCapMoreThan', String(Math.round(f.cap))); if (f.yield > 0) q.set('dividendYieldMoreThan', String(f.yield)); if (f.maxPrice > 0) q.set('priceLowerThan', String(f.maxPrice));
+      q.set('isEtf', 'false'); q.set('isActivelyTrading', 'true'); q.set('country', 'US'); q.set('limit', '60');
+      const key = q.toString(), c = SCR.get(key); if (c && Date.now() - c.at < 6 * 3600e3) return c.v;
+      let v;
+      try { const j = await getJson(`https://financialmodelingprep.com/stable/company-screener?${key}&apikey=${k.fmp}`);
+        v = { rows: (Array.isArray(j) ? j : []).map((x) => ({ symbol: x.symbol, name: x.companyName || x.name || '', sector: x.sector || '', industry: x.industry || '', price: x.price ?? null, cap: x.marketCap ?? null, div: x.lastAnnualDividend ?? null, beta: x.beta ?? null, yield: x.price > 0 && x.lastAnnualDividend > 0 ? (x.lastAnnualDividend / x.price) * 100 : null })).filter((x) => x.symbol), error: '' };
+      } catch (e) { v = { rows: [], error: /HTTP 40[23]/.test(e.message) ? 'Your Financial Modeling Prep plan doesn\u2019t include the screener.' : `Couldn\u2019t reach the screener (${e.message}).` }; }
+      SCR.set(key, { at: Date.now(), v }); return v;
+    }
+
     const started = (async () => { MKT = (await load('market')) || null; ECON = (await load('econ')) || null; await Promise.all(Object.values(caches).map((c) => c.ready)); })();
     const wrap = (f) => async (...a) => { await started; note(); return f(...a); };
     return {
-      quotes: wrap(getQuotes), dividends: wrap(getDividends), stock: wrap(stockDetail), econ: wrap(getEcon), vehicle: wrap(vehicleInfo), markets: wrap(getMarkets),
+      quotes: wrap(getQuotes), dividends: wrap(getDividends), screener: wrap(screener), stock: wrap(stockDetail), econ: wrap(getEcon), vehicle: wrap(vehicleInfo), markets: wrap(getMarkets),
       sources: () => quoteSources(), marketOpen: () => marketOpen(),
       // call after keys change: forget cached results that depended on the old keys
       resetKeys: async () => { await started; MKT = null; ECON = null; QCACHE.clear(); PCACHE.clear(); },

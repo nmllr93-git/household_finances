@@ -385,6 +385,9 @@ On a **personal** dashboard, edit an account or asset and tick the shared dashbo
   - ☆ follows a sector and pins it to the top.
   - **Followed sectors** filters the movers list.
   - Data refreshes at most once an hour while the market is open, plus once after the close.
+- **Screener** (Markets, FMP key): find US companies by sector, size, dividend yield and price; **+ Watch** adds one to your watchlist. Results for the same filters are reused for 6 hours. If your FMP plan doesn't include the screener, it says so.
+- **Economic calendar** (Rates & economy, FRED key): upcoming inflation (CPI), jobs, GDP, retail sales, Fed rate decisions and similar reports for the next few weeks.
+- **Treasury savings options & exchange rates** (Rates & economy, no key): today's I bond rate, average Treasury bill/note/TIPS rates, and a currency converter (European Central Bank rates). A trip tag can show its total in another currency.
 - **Rates & economy:** mortgage and Treasury rates, inflation (overall and Midwest categories), gas and electricity prices, and local home prices. Updated daily.
 
 ### Planning

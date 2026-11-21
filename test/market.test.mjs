@@ -19,11 +19,13 @@ function fakeEnv(keys, saved = {}) {
     if (u.includes('sector-performance')) return [{ sector: 'Technology', averageChange: 1.2 }, { sector: 'Energy', averageChange: -0.5 }];
     if (u.includes('historical-price-eod')) return [{ date: '2026-11-20', price: 100 }, { date: '2025-12-31', price: 80 }];
     if (u.includes('dividends')) return [{ date: '2026-09-01', dividend: 0.5 }];
+    if (u.includes('company-screener')) return [{ symbol: 'KO', companyName: 'Coca-Cola', sector: 'Consumer Defensive', price: 70, marketCap: 3e11, lastAnnualDividend: 2.1 }];
     if (u.includes('quote?')) return [{ price: 2000, changePercentage: 0.3 }];
     return [];
   };
   return { calls, saved,
     getJson: async (u) => { calls.push(u); if (u.includes('finnhub')) return fh(u); if (u.includes('financialmodelingprep')) return fmp(u);
+      if (u.includes('releases/dates')) return { release_dates: [{ release_id: 10, release_name: 'Consumer Price Index', date: new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10) }, { release_id: 9, release_name: 'Some Obscure Release', date: new Date(Date.now() + 6 * 864e5).toISOString().slice(0, 10) }, { release_id: 101, release_name: 'FOMC Press Release', date: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10) }] };
       if (u.includes('stlouisfed')) return { observations: [{ date: '2026-11-13', value: '6.5' }, { date: '2026-11-06', value: '6.6' }, { date: '2026-10-30', value: '.' }] };
       if (u.includes('frankfurter')) return { base: 'USD', date: '2026-11-20', rates: { EUR: 0.92, MXN: 18.1 } };
       if (u.includes('nager')) return [{ date: '2026-12-25', name: 'Christmas' }];
@@ -76,3 +78,9 @@ test('economy: Treasury I bond and average rates need no key', async () => {
   assert.equal(e.treasury.bills.obs[0][1], 4.1); assert.equal(e.treasury.tips.obs[0][1], 1.1);
 });
 test('economy: exchange rates', async () => { const e = await createMarketData(fakeEnv({})).econ(false); assert.equal(e.fx.rates.EUR, 0.92); assert.equal(e.fx.date, '2026-11-20'); });
+test('economic calendar keeps the reports that matter', async () => { const e = await createMarketData(fakeEnv({ fred: 'k' })).econ(false); assert.deepEqual(e.calendar.map((c) => c.name), ['Inflation (CPI)', 'Fed rate decision']); });
+test('screener: results with yield, cached, and a clear message without a key', async () => {
+  const env = fakeEnv({ fmp: 'k' }), m = createMarketData(env); const r = await m.screener({ sector: 'Consumer Defensive', cap: 1e10, yield: 2, maxPrice: 0 });
+  assert.equal(r.rows[0].symbol, 'KO'); assert.equal(Math.round(r.rows[0].yield * 10) / 10, 3); const n = env.calls.length; await m.screener({ sector: 'Consumer Defensive', cap: 1e10, yield: 2, maxPrice: 0 }); assert.equal(env.calls.length, n);
+  assert.match((await createMarketData(fakeEnv({})).screener({})).error, /needs a Financial Modeling Prep key/);
+});

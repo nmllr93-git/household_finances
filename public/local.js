@@ -109,6 +109,7 @@
       case 'quotes': { const m = await marketReady; return json(200, { sources: m.sources(), quotes: await m.quotes(symList(url, 60)) }); }
       case 'dividends': return json(200, { dividends: await (await marketReady).dividends(symList(url, 40)) });
       case 'stock': { const sym = symList(url, 1)[0]; if (!sym) return json(400, { error: 'symbol?' }); return json(200, await (await marketReady).stock(sym)); }
+      case 'screener': { const sp = url.searchParams; return json(200, await (await marketReady).screener({ sector: String(sp.get('sector') || '').slice(0, 40), cap: Number(sp.get('cap')) || 0, yield: Number(sp.get('yield')) || 0, maxPrice: Number(sp.get('maxPrice')) || 0 })); }
       case 'econ': return json(200, await (await marketReady).econ(url.searchParams.get('refresh') === '1'));
       case 'vehicle': try { return json(200, await (await marketReady).vehicle(url.searchParams.get('vin'))); } catch (e) { return json(502, { error: 'Couldn\u2019t reach NHTSA: ' + e.message }); }
       case 'markets': { const m = await marketReady, d = await m.markets(url.searchParams.get('refresh') === '1'), open = m.marketOpen(); return json(200, { ...d, hist: undefined, open, nextRefresh: open ? d.at + 3600e3 : null }); }
