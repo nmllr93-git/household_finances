@@ -46,3 +46,18 @@
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   boot();
 })();
+
+// Inside the desktop or phone app: a "Switch server" link back to the connect screen.
+(function () {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('app') === 'phone') { localStorage.setItem('fd-inapp', 'phone'); history.replaceState(null, '', location.pathname + location.hash); }
+    const phone = localStorage.getItem('fd-inapp') === 'phone', desk = !!(window.FDApp && window.FDApp.setupAgain);
+    if (!phone && !desk) return;
+    const box = document.querySelector('.fd-account'); if (!box) return;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link'; b.textContent = 'Switch server';
+    b.addEventListener('click', () => { if (desk) window.FDApp.setupAgain(); else location.href = 'https://localhost/?pick=1'; });
+    box.append(' · ', b);
+  } catch (e) {}
+})();
+

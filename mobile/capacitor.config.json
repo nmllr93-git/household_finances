@@ -1,0 +1,14 @@
+{
+  "appId": "com.householdfinances.app",
+  "appName": "Household Finances",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#1f2a37"
+  }
+}

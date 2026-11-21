@@ -1,0 +1,61 @@
+# Builds the Android app (APK) and publishes it to the PUBLIC repo <owner>/household_finances-releases
+# as release "android-v<version>". Runs when mobile/package.json changes on main (raise "version"),
+# only if that version isn't released yet. Can also be run by hand: Actions → Android release → Run workflow.
+# Signing: secrets ANDROID_KEYSTORE_B64 + ANDROID_KEYSTORE_PASSWORD (same key every time, so updates install over the old app).
+name: Android release
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/package.json', 'apps/connect.html']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Is this version new?
+        id: ver
+        env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}" }
+        run: |
+          V=$(node -p "require('./mobile/package.json').version"); echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "android-v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" >/dev/null 2>&1; then
+            echo "android-v$V already released"; echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Create the Android project
+        if: steps.ver.outputs.new == 'true'
+        working-directory: mobile
+        run: |
+          npm install
+          npm run android:add
+          V=${{ steps.ver.outputs.version }}; IFS=. read -r A B C <<< "$V"; CODE=$((A*10000 + B*100 + C))
+          sed -i "s/versionCode [0-9]*/versionCode $CODE/; s/versionName \"[^\"]*\"/versionName \"$V\"/" android/app/build.gradle
+      - name: Build
+        if: steps.ver.outputs.new == 'true'
+        working-directory: mobile/android
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Sign
+        if: steps.ver.outputs.new == 'true'
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS" ]; then echo "::error::Add the ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD secrets (see mobile/README.md)"; exit 1; fi
+          echo "$KS" | base64 -d > hf.keystore
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          IN=$(ls mobile/android/app/build/outputs/apk/release/*.apk | head -1)
+          "$BT/zipalign" -f -p 4 "$IN" aligned.apk
+          "$BT/apksigner" sign --ks hf.keystore --ks-key-alias hf --ks-pass "pass:$PW" --key-pass "pass:$PW" --out "HouseholdFinances-${{ steps.ver.outputs.version }}.apk" aligned.apk
+          "$BT/apksigner" verify "HouseholdFinances-${{ steps.ver.outputs.version }}.apk"
+          rm hf.keystore
+      - name: Publish
+        if: steps.ver.outputs.new == 'true'
+        env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}" }
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          gh release create "android-v$V" "HouseholdFinances-$V.apk" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" \
+            --title "Android $V" --notes "Install: open this page on your phone, download the APK and allow your browser to install apps when asked." --latest=false
