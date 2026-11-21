@@ -2391,6 +2391,19 @@
     box.append(rbtn('Save sending account', async () => { try { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp: { host: h.value, port: Number(pt.value), user: u.value, pass: pw.value, from: fr.value } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error); DIG = null; m2.className = 'fd-note fd-good'; m2.textContent = 'Saved. Use "Send me one now" to test it.'; } catch (e) { m2.className = 'fd-note fd-bad'; m2.textContent = e.message || 'Not saved'; } }), m2);
   };
 
+  // ⚙ Settings → Recent changes (who changed what on this dashboard)
+  const activityBox = async (host) => {
+    if (window.FD_LOCAL || host.querySelector('.fd-actbox')) return; const tok = {}; host.__act = tok;
+    let list = []; try { const r = await FDStore.fetch(`/api/books/${encodeURIComponent(myBookId())}/activity`, {}); if (!r.ok) return; list = await r.json(); } catch (e) { return; }
+    if (host.__act !== tok || host.querySelector('.fd-actbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-actbox'; box.append(rhead('Recent changes')); host.append(box);
+    if (!list.length) { box.append(phMsg('Nothing yet. Imports, edits, rules, budgets, accounts, goals and holdings added or removed on this dashboard are listed here, with who did it.')); return; }
+    const tb = document.createElement('table'); tb.className = 'fd-table';
+    list.slice(0, 40).forEach((x) => { const tr = document.createElement('tr'); const d = new Date(x.at); tr.append(td(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), 'fd-l fd-zero'), td(x.username || '', 'fd-l'), td(x.action, 'fd-l'), td(x.summary || '', 'fd-l fd-zero')); tb.append(tr); });
+    const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); box.append(sc);
+    if (list.length > 40) box.append(phMsg(`Showing the latest 40 of ${list.length}.`));
+  };
+
   // ================= Phone-only mode: settings, backup reminder, bill notifications, first-run walkthrough =================
   const PH = () => window.FD_LOCAL && window.FDLocal;
   const phMsg = (t, cls) => { const p = document.createElement('p'); p.className = 'fd-note' + (cls ? ' ' + cls : ''); p.textContent = t; return p; };
@@ -2668,6 +2681,7 @@
     apiBox(el);
     phoneBox(el).catch(() => {});
     emailBox(el).catch(() => {});
+    activityBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {
       const bk = document.createElement('div'); bk.className = 'fd-rb fd-backup'; bk.append(rhead('Backup & restore'));
       const bn = document.createElement('p'); bn.className = 'fd-note'; bn.textContent = `Download a copy of everything saved in the ${book()} dashboard (statements, edits, rules, accounts, budgets, goals, holdings, settings). The server also keeps a full daily backup of all dashboards for 30 days.`; bk.append(bn);

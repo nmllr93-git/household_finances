@@ -97,12 +97,13 @@
   });
   function showLogin() {
     const box = $('books'); box.replaceChildren();
-    (info.books || []).forEach((b, i) => { const l = document.createElement('label'); l.className = 'chk'; const c = document.createElement('input'); c.type = 'checkbox'; c.value = b.id; c.checked = i === 0 || /shared/i.test(b.id); l.append(c, ' ' + b.name); box.append(l); });
+    (info.books || []).forEach((b, i) => { const l = document.createElement('label'); l.className = 'chk'; const c = document.createElement('input'); c.type = 'checkbox'; c.value = b.id; c.checked = i === 0 || /shared/i.test(b.id);
+      const r = document.createElement('select'); r.className = 'role'; r.style.marginLeft = 'auto'; r.append(new Option('Can edit', ''), new Option('View only', ':view')); l.append(c, ' ' + b.name, r); box.append(l); });
     $('un').value = ''; $('pw').value = ''; $('pw2').value = ''; step('s3'); $('un').focus();
   }
   $('go3').addEventListener('click', async () => {
     if ($('pw').value !== $('pw2').value) { say("The passwords don't match.", 'bad'); return; }
-    const books = [...$('books').querySelectorAll('input:checked')].map((c) => c.value);
+    const books = [...$('books').querySelectorAll('input:checked')].map((c) => c.value + (c.parentNode.querySelector('select.role').value || ''));
     try { const r = await A.addUser({ name: $('un').value.trim(), password: $('pw').value, books }); info.users = (info.users || 0) + 1; finish(`Login "${r.user}" is ready.`); }
     catch (e) { say(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'bad'); }
   });

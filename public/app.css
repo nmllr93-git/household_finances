@@ -280,3 +280,5 @@ body > .fd-tip { position: absolute; z-index: 50; font-family: var(--font-anthro
 .fd-walk-card .fd-field{display:block;margin:8px 0}.fd-walk-card .fd-field input{display:block;width:100%;margin-top:4px;font:inherit;padding:8px 10px;border-radius:7px;border:1px solid var(--color-border-line,#d8dde3)}
 .fd-walk-dots{display:flex;gap:6px}.fd-walk-dots i{width:8px;height:8px;border-radius:50%;background:var(--color-border-line,#cfd6de)}.fd-walk-dots i.on{background:var(--color-accent,#1f5f8b)}
 .fd-walk-bar{justify-content:flex-end;margin-top:14px}
+.fd-viewonly{font-size:12px;font-weight:600;vertical-align:middle;padding:2px 8px;border-radius:10px;background:var(--color-border-line,#e3e7eb);color:var(--color-fg,#1f2a37)}
+.fd-readonly #fd-fab,.fd-readonly .fd-navb[data-group=import],.fd-readonly #import,.fd-readonly #fd-budget-form,.fd-readonly #fd-tx-form,.fd-readonly label:has(#fd-tedit){display:none!important}

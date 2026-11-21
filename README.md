@@ -159,7 +159,7 @@ Run these from the app folder. Commands that change logins can be run while the 
 | `node server.js` | Starts the server |
 | `node server.js budgets` | Lists dashboards with their ids |
 | `node server.js add-budget <id> <name>` | Creates a dashboard, or renames one if the id exists |
-| `node server.js add-user <name> <ids>` | Creates a login (or replaces its dashboard list), then asks for a password. Example: `add-user sam sam,shared` |
+| `node server.js add-user <name> <ids>` | Creates a login (or replaces its dashboard list), then asks for a password. Example: `add-user sam sam,shared`. Add `:view` for **view-only** access, e.g. `add-user parent shared:view`. |
 | `node server.js passwd <name>` | Changes a password and signs that login out everywhere |
 | `node server.js users` | Lists logins and their dashboards |
 | `node server.js backup` | Writes a backup now |
@@ -293,6 +293,7 @@ All of these are per dashboard, saved on the server, and follow you to every dev
 | **Reset all chart colors** | Undo all chart color changes |
 | **Data sources (API keys)** | Add optional market and economy keys ([details](#optional-data-sources-api-keys)) |
 | **Backup & restore** | Download or restore this dashboard's data |
+| **Recent changes** | Who added or removed what on this dashboard (statements, manual entries, edits, rules, budgets, accounts, goals, holdings, restores), kept for about a year. Settings, colors and shared balances aren't listed. |
 | **Weekly email** | A short weekly summary by email for each of your dashboards: last week's spending and top categories, the month's budget, bills due in the next 7 days, cash on hand, and anything needing a category. Pick the day and time; **Send me one now** to test. The server owner sets the sending account once (Gmail: `smtp.gmail.com`, port 465, with an app password; Outlook: `smtp-mail.outlook.com`, port 587). Server and desktop host only. |
 
 Click **⚙ Settings** again to go back to the tab you were on.
@@ -444,6 +445,7 @@ Keys are stored only on the host. Calls are cached and paced to stay within the 
 - **Full restore:** stop the server, replace `finance.db` in the data folder with a file from `backups`, then start it again.
 
 ### Logins and passwords
+- **View-only logins** can see a dashboard but not change it: the page shows a *View only* badge and hides editing controls, and the server refuses changes. Command line: `add-user <name> shared:view`. Desktop app: choose *View only* next to the dashboard when creating the login.
 - **Desktop app:** tray → **Change setup…** → **Add another login**.
 - **Self-hosted:** `node server.js add-user <name> <dashboards>`. Change a password with `node server.js passwd <name>`.
 - Sign-ins last 60 days. After 10 wrong passwords, a device must wait 15 minutes.

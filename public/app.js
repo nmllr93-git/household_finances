@@ -10,6 +10,9 @@
     window.FD_BOOK = b.label;
     document.title = `${b.name} · Household Finances`;
     $('#fd-title').textContent = b.name;
+    // view-only logins: say so, and hide the controls that change things (the server refuses changes anyway)
+    document.body.classList.toggle('fd-readonly', !!b.readOnly);
+    if (b.readOnly) { const t = document.createElement('span'); t.className = 'fd-viewonly'; t.textContent = 'View only'; t.title = 'This login can see this dashboard but not change it'; $('#fd-title').append(' ', t); }
     document.querySelectorAll('input[name=book]').forEach((i) => { i.value = b.label; });
     document.querySelectorAll('#fd-books .hf-tab').forEach((btn) => {
       const on = btn.dataset.id === b.id;

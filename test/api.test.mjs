@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'fd-api-'));
 process.env.DATA_DIR = DIR;
 const srv = require('../server.js');
-let base = '', cookieA = '', cookieB = '';
+let base = '', cookieA = '', cookieB = '', cookieC = '';
 const books = () => srv.books().map((b) => b.id);
 
 async function req(method, p, body, cookie = cookieA) {
@@ -23,9 +23,10 @@ before(async () => {
   const [b1, b2] = books();
   srv.addUser('alice', 'password123', [b1, b2]);
   srv.addUser('bob', 'password456', [b2]);
+  srv.addUser('carol', 'password789', [b2 + ':view']);
   const i = await srv.start({ mode: 'local', port: 0, quiet: true });
   base = `http://127.0.0.1:${i.port}`;
-  cookieA = (await login('alice', 'password123')).cookie; cookieB = (await login('bob', 'password456')).cookie;
+  cookieA = (await login('alice', 'password123')).cookie; cookieB = (await login('bob', 'password456')).cookie; cookieC = (await login('carol', 'password789')).cookie;
 });
 after(async () => { await srv.stop(); fs.rmSync(DIR, { recursive: true, force: true }); });
 
@@ -100,4 +101,23 @@ test('weekly email: only the owner sets the mail account; a user can send themse
   const t = await req('POST', '/api/digest/test'); assert.equal(t.status, 200, JSON.stringify(t.json));
   assert.equal(got.length, 1); assert.match(got[0], /To: alice@example.com/);
   smtp.close();
+});
+
+test('view-only login can read but not change a dashboard', async () => {
+  const b = books()[1];
+  const me = await req('GET', '/api/me', null, cookieC); assert.equal(me.json.books[0].readOnly, true);
+  assert.equal((await req('GET', `/api/books/${b}/data`, null, cookieC)).status, 200);
+  const w = await req('POST', `/api/books/${b}/budgets`, { category: 'X', amount: 1 }, cookieC); assert.equal(w.status, 403); assert.match(w.json.error, /view/);
+  assert.equal((await req('POST', `/api/books/${b}/restore`, { docs: {} }, cookieC)).status, 403);
+});
+
+test('activity log records who added and removed what', async () => {
+  const b = books()[1];
+  const a = await req('POST', `/api/books/${b}/goals`, { name: 'Vacation', target: 3000 }, cookieB);
+  await req('DELETE', `/api/books/${b}/goals/${a.json.id}`, null, cookieB);
+  await req('POST', `/api/books/${b}/prefs`, { key: 'x', value: '1' }, cookieB);
+  const log = (await req('GET', `/api/books/${b}/activity`, null, cookieC)).json;
+  assert.equal(log[0].username, 'bob'); assert.equal(log[0].action, 'removed a savings goal'); assert.match(log[0].summary, /Vacation \$3,000/);
+  assert.equal(log[1].action, 'added a savings goal');
+  assert.ok(!log.some((x) => x.coll === 'prefs'), 'settings changes are not logged');
 });

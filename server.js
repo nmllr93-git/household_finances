@@ -77,6 +77,8 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS docs (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     coll TEXT NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL, created_by TEXT);
   CREATE INDEX IF NOT EXISTS docs_book ON docs (book_id, coll);
+  CREATE TABLE IF NOT EXISTS activity (at TEXT NOT NULL, username TEXT, book_id TEXT NOT NULL, action TEXT NOT NULL, coll TEXT, summary TEXT);
+  CREATE INDEX IF NOT EXISTS activity_book ON activity (book_id, at);
 `;
 try { db.exec(SCHEMA); } catch (e) { if (!/readonly/i.test(e.message)) throw e; DB_WRITABLE = false; try { db.exec('PRAGMA foreign_keys = ON;'); } catch {} }
 
@@ -98,6 +100,8 @@ function seedIfEmpty() {
   });
   console.log(`Created ${cfg.books.length} budgets: ${cfg.books.map((b) => b.name).join(', ')}`);
 }
+// read-only logins: members.role is 'edit' (default) or 'view' (added to databases made before this existed)
+try { if (!db.prepare('PRAGMA table_info(members)').all().some((c) => c.name === 'role')) db.exec("ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT 'edit'"); } catch {}
 if (DB_WRITABLE) { try { db.exec('CREATE TABLE IF NOT EXISTS _write_check (x INTEGER); DELETE FROM _write_check;'); } catch (e) { DB_WRITABLE = false; } }
 if (!DB_WRITABLE) console.error('\n*** ' + WRITE_HELP + '\n');
 try { seedIfEmpty(); } catch (e) { if (!/readonly/i.test(e.message)) throw e; }
@@ -128,8 +132,9 @@ function sessionUser(req) {
   if (!s || s.expires < Date.now()) return null;
   return s.username;
 }
-const userBooks = (u) => db.prepare(`SELECT b.id, b.name, b.label FROM books b JOIN members m ON m.book_id = b.id
-  WHERE m.username = ? ORDER BY b.label = 'Shared', b.sort`).all(u);
+const userBooks = (u) => db.prepare(`SELECT b.id, b.name, b.label, m.role FROM books b JOIN members m ON m.book_id = b.id
+  WHERE m.username = ? ORDER BY b.label = 'Shared', b.sort`).all(u).map((b) => ({ ...b, readOnly: b.role === 'view' }));
+const roleOf = (u, bookId) => (db.prepare('SELECT role FROM members WHERE username = ? AND book_id = ?').get(u, bookId) || {}).role;
 const canUse = (u, bookId) => !!db.prepare('SELECT 1 FROM members WHERE username = ? AND book_id = ?').get(u, bookId);
 
 // Slow down password guessing: 10 failures per address per 15 minutes.
@@ -217,6 +222,35 @@ const MARKET = require('./core/market.js').createMarketData({
   load: (name) => { try { return JSON.parse(fs.readFileSync(cacheFile(name), 'utf8')); } catch { return null; } },
   save: (name, obj) => { try { fs.writeFileSync(cacheFile(name), JSON.stringify(obj)); } catch {} },
 });
+
+// ---------- activity log: who changed what on each dashboard (settings, colors and shared balances aren't logged) ----------
+const ACT_SKIP = new Set(['prefs', 'shares']);
+const NOUN = { imports: 'statement', manual: 'manual entry', edits: 'transaction edit', rules: 'rule', budgets: 'budget', accounts: 'account', goals: 'savings goal', holdings: 'holding' };
+function describeDoc(coll, d) {
+  if (!d) return '';
+  const m = (v) => (v == null || v === '' ? '' : '$' + Math.round(Number(v)).toLocaleString('en-US'));
+  switch (coll) {
+    case 'imports': return `${d.accountName || 'account'}${d.rowCount ? ` · ${d.rowCount} transactions` : ''}${d.balance != null ? ` · balance ${m(d.balance)}` : ''}`;
+    case 'manual': return `${d.vendor || d.category || ''} ${m(d.amount)} on ${d.date || ''}`.trim();
+    case 'edits': return d.ignored ? 'ignored a transaction' : [d.vendor, d.category, d.type].filter(Boolean).join(' · ') || 'edited a transaction';
+    case 'rules': return d.ignore ? `ignore “${d.match || 'matching'}”` : `“${d.match || (d.conds && d.conds[0] && d.conds[0].value) || 'matching'}” → ${d.category || d.vendor || d.type || 'changes'}`;
+    case 'budgets': return `${d.category} ${d.amount ? m(d.amount) + '/mo' : 'removed'} from ${d.from}`;
+    case 'accounts': return d.name || '';
+    case 'goals': return `${d.name || ''} ${m(d.target)}`.trim();
+    case 'holdings': return `${d.symbol || ''}${d.lots && d.lots.length ? ` · ${d.lots.reduce((t, l) => t + l.qty, 0)} shares` : ''}`;
+    default: return '';
+  }
+}
+function logActivity(user, bookId, method, coll, r, before) {
+  if (ACT_SKIP.has(coll)) return;
+  let action = '', doc = null;
+  if (coll === 'restore') { action = 'restored a backup'; }
+  else if (method === 'POST') { const row = r.body && r.body.id && db.prepare('SELECT json FROM docs WHERE id = ?').get(r.body.id); doc = row ? JSON.parse(row.json) : null; action = `added ${/^[aeiou]/.test(NOUN[coll] || '') ? 'an' : 'a'} ${NOUN[coll] || coll}`; }
+  else if (method === 'DELETE') { doc = before ? JSON.parse(before.json) : null; action = `removed ${/^[aeiou]/.test(NOUN[coll] || '') ? 'an' : 'a'} ${NOUN[coll] || coll}`; }
+  if (!action) return;
+  db.prepare('INSERT INTO activity (at, username, book_id, action, coll, summary) VALUES (?, ?, ?, ?, ?, ?)').run(new Date().toISOString(), user, bookId, action, coll, String(describeDoc(coll, doc)).slice(0, 200));
+  db.prepare("DELETE FROM activity WHERE book_id = ? AND at < ?").run(bookId, new Date(Date.now() - 400 * 864e5).toISOString());
+}
 
 // ---------- weekly email digest (settings in <data>/digest.json; mail sent with the server owner's SMTP account) ----------
 const DIGEST = require('./digest.js');
@@ -329,7 +363,12 @@ async function api(req, res, url) {
     if (!canUse(user, bookId)) return send(res, 403, { error: 'No access to this budget' });
     const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(bookId);
     const getBody = async (max) => readJson(req, max);
+    if (parts[3] === 'activity' && req.method === 'GET') return send(res, 200, db.prepare('SELECT at, username, action, coll, summary FROM activity WHERE book_id = ? ORDER BY at DESC LIMIT 300').all(bookId));
+    const writing = req.method !== 'GET';
+    if (writing && roleOf(user, bookId) === 'view' && parts[3] !== 'shares') return send(res, 403, { error: 'This login can view this dashboard but not change it.' });
+    const before = req.method === 'DELETE' && parts[4] ? db.prepare('SELECT json FROM docs WHERE id = ? AND book_id = ?').get(parts[4], bookId) : null;
     let r; try { r = await BOOKS.handle(req.method, parts.slice(3), book, getBody, user); } catch (e) { if (e.code >= 400 && e.code < 500) return send(res, e.code, { error: e.message }); throw e; }
+    if (writing && r.status < 300) { try { logActivity(user, bookId, req.method, parts[3], r, before); } catch {} }
     if (r.headers && r.headers.download) return send(res, r.status, JSON.stringify(r.body, null, 1), { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${r.headers.download}"` });
     return send(res, r.status, r.body);
   }
@@ -412,11 +451,11 @@ function addUser(name, pw, ids) {
   const u = String(name || '').toLowerCase();
   if (!/^[a-z0-9_.-]{2,32}$/.test(u)) throw new Error('Login names are 2–32 letters, numbers, dots, dashes or underscores.');
   if (String(pw || '').length < 8) throw new Error('Passwords need at least 8 characters.');
-  const books = db.prepare('SELECT id FROM books').all().map((b) => b.id), list = (ids || []).filter((id) => books.includes(id));
+  const books = db.prepare('SELECT id FROM books').all().map((b) => b.id), all2 = (ids || []).map((x) => String(x)), view = new Set(all2.filter((x) => /:view$/.test(x)).map((x) => x.split(':')[0])), list = all2.map((x) => x.split(':')[0]).filter((id) => books.includes(id));
   if (!list.length) throw new Error('Choose at least one budget.');
   setPassword(u, pw); db.prepare('DELETE FROM members WHERE username = ?').run(u);
-  for (const id of list) db.prepare('INSERT INTO members (username, book_id) VALUES (?, ?)').run(u, id);
-  return { user: u, books: list };
+  for (const id of list) db.prepare('INSERT INTO members (username, book_id, role) VALUES (?, ?, ?)').run(u, id, view.has(id) ? 'view' : 'edit');
+  return { user: u, books: list, viewOnly: [...view] };
 }
 
 
@@ -447,24 +486,24 @@ async function cli(cmd, args) {
   const books = db.prepare('SELECT id, name FROM books ORDER BY sort').all();
   if (cmd === 'add-user') {
     const [name, list] = args;
-    const ids = String(list || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const items = String(list || '').split(',').map((s) => s.trim()).filter(Boolean), ids = items.map((x) => x.split(':')[0]), view = new Set(items.filter((x) => /:view$|:read$/i.test(x)).map((x) => x.split(':')[0]));
     if (!/^[a-z0-9_.-]{2,32}$/i.test(name || '') || !ids.length) {
-      console.log(`Usage: node server.js add-user <name> <budgets>\nBudgets: ${books.map((b) => `${b.id} (${b.name})`).join(', ')}`); return;
+      console.log(`Usage: node server.js add-user <name> <budgets>   (add :view for read-only, e.g. add-user sam shared:view)\nBudgets: ${books.map((b) => `${b.id} (${b.name})`).join(', ')}`); return;
     }
     const bad = ids.filter((id) => !books.some((b) => b.id === id));
     if (bad.length) { console.log(`Unknown budget: ${bad.join(', ')}. Choose from ${books.map((b) => b.id).join(', ')}`); return; }
     const u = name.toLowerCase();
     setPassword(u, await askPassword());
     db.prepare('DELETE FROM members WHERE username = ?').run(u);
-    for (const id of ids) db.prepare('INSERT INTO members (username, book_id) VALUES (?, ?)').run(u, id);
-    console.log(`Login "${u}" can now see: ${ids.join(', ')}`);
+    for (const id of ids) db.prepare('INSERT INTO members (username, book_id, role) VALUES (?, ?, ?)').run(u, id, view.has(id) ? 'view' : 'edit');
+    console.log(`Login "${u}" can now see: ${ids.map((id) => id + (view.has(id) ? ' (view only)' : '')).join(', ')}`);
   } else if (cmd === 'passwd') {
     const u = String(args[0] || '').toLowerCase();
     if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(u)) { console.log('No such login.'); return; }
     setPassword(u, await askPassword());
     console.log('Password changed. That login was signed out everywhere.');
   } else if (cmd === 'users') {
-    for (const u of db.prepare('SELECT username FROM users ORDER BY username').all()) console.log(`${u.username}: ${userBooks(u.username).map((b) => b.id).join(', ')}`);
+    for (const u of db.prepare('SELECT username FROM users ORDER BY username').all()) console.log(`${u.username}: ${userBooks(u.username).map((b) => b.id + (b.readOnly ? ' (view only)' : '')).join(', ')}`);
   } else if (cmd === 'budgets') {
     for (const b of db.prepare('SELECT id, name FROM books ORDER BY sort').all()) console.log(`${b.id}  ${b.name}`);
   } else if (cmd === 'add-budget') {
