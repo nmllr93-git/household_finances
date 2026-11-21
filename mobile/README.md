@@ -47,3 +47,25 @@ Needs Node.js and Android Studio: `npm install`, `npm run android:add`, then `np
 
 ## Local mode (later)
 Running entirely on the phone, without a server, is a separate, larger step (an on-device database behind `public/store.js`).
+
+## Google Play (store release)
+Every Android release also produces **`HouseholdFinances-x.y.z.aab`**, the bundle the Play Store needs. It's signed with the same key as the APK, and Play uses that key as your **upload key**.
+- Download it: private repo → **Actions → Android release →** the run → **Artifacts** → `play-store-bundle-x.y.z`. It's kept 90 days and isn't public.
+- In Play Console: **Test and release → Closed testing → Create release** → upload the `.aab`. The first time, accept **Play App Signing**: Google keeps the final signing key, and your key stays the upload key.
+- The app targets Android 16 (API 36), as Google Play requires (Capacitor 8).
+
+## iPhone (TestFlight and App Store)
+GitHub builds the iPhone app on its Macs and uploads it to App Store Connect, so you don't need a Mac. The iOS build skips quietly until these secrets exist in the private repo (Settings → Secrets and variables → Actions):
+
+| Secret | Where to get it |
+|---|---|
+| `APPLE_TEAM_ID` | developer.apple.com → Account → Membership details → **Team ID** (10 characters) |
+| `APPSTORE_KEY_ID` | App Store Connect → Users and Access → **Integrations → App Store Connect API** → Team Keys → **+**, role **App Manager** → the key's **Key ID** |
+| `APPSTORE_ISSUER_ID` | Same page, **Issuer ID** at the top |
+| `APPSTORE_KEY_P8` | **Download API Key** (only possible once) → open the `.p8` file in a text editor → paste everything, including the BEGIN/END lines |
+
+Before the first build: in App Store Connect, **Apps → + → New App**, platform iOS, bundle ID `com.householdfinances.app` (register it first under developer.apple.com → Certificates, Identifiers & Profiles → **Identifiers**, if it isn't offered), SKU anything such as `hf-ios`.
+
+Each release then uploads a new build. After Apple processes it (about 10–30 minutes), it appears under **TestFlight**. Add yourself and testers there, or submit it for App Store review.
+
+The iPhone app asks permission for the camera (receipt photos), photos and local network (reaching your home server). It allows plain-http home servers only inside the dashboard view and on the local network.

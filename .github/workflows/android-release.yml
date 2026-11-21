@@ -36,7 +36,7 @@ jobs:
       - name: Build
         if: steps.ver.outputs.new == 'true'
         working-directory: mobile/android
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon assembleRelease bundleRelease
       - name: Sign
         if: steps.ver.outputs.new == 'true'
         env:
@@ -50,7 +50,18 @@ jobs:
           "$BT/zipalign" -f -p 4 "$IN" aligned.apk
           "$BT/apksigner" sign --ks hf.keystore --ks-key-alias hf --ks-pass "pass:$PW" --key-pass "pass:$PW" --out "HouseholdFinances-${{ steps.ver.outputs.version }}.apk" aligned.apk
           "$BT/apksigner" verify "HouseholdFinances-${{ steps.ver.outputs.version }}.apk"
+          # Play Store bundle, signed with the same key (Play uses it as the upload key)
+          cp mobile/android/app/build/outputs/bundle/release/app-release.aab "HouseholdFinances-${{ steps.ver.outputs.version }}.aab"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore hf.keystore -storepass "$PW" -keypass "$PW" "HouseholdFinances-${{ steps.ver.outputs.version }}.aab" hf
           rm hf.keystore
+      # the .aab is for uploading to Play Console: kept private as a download on this run (Actions → this run → Artifacts)
+      - name: Keep the Play Store bundle
+        if: steps.ver.outputs.new == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-store-bundle-${{ steps.ver.outputs.version }}
+          path: HouseholdFinances-${{ steps.ver.outputs.version }}.aab
+          retention-days: 90
       - name: Publish
         if: steps.ver.outputs.new == 'true'
         env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}" }

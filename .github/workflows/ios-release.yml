@@ -1,0 +1,60 @@
+# Builds the iPhone app on GitHub's Macs and uploads it to App Store Connect (TestFlight).
+# Runs with the other release builds (push to the `release` branch) or by hand (Actions → iOS release → Run workflow).
+# Skips quietly until these secrets exist (see mobile/README.md → iPhone):
+#   APPSTORE_KEY_ID, APPSTORE_ISSUER_ID, APPSTORE_KEY_P8 (the .p8 file's text), APPLE_TEAM_ID
+# Signing is automatic: Xcode uses the App Store Connect API key to create the certificate and profile.
+name: iOS release
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - name: Are the Apple secrets set?
+        id: ok
+        env: { K: "${{ secrets.APPSTORE_KEY_ID }}", T: "${{ secrets.APPLE_TEAM_ID }}" }
+        run: if [ -n "$K" ] && [ -n "$T" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "Apple secrets not set yet; skipping the iOS build."; echo "go=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.ok.outputs.go == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.ok.outputs.go == 'true'
+        with: { node-version: 22 }
+      - name: Use the newest Xcode
+        if: steps.ok.outputs.go == 'true'
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)" && xcodebuild -version
+      - name: Create the iOS project
+        if: steps.ok.outputs.go == 'true'
+        working-directory: mobile
+        env: { IOS_BUILD: "${{ github.run_number }}" }
+        run: npm install && npm run ios:add
+      - name: API key
+        if: steps.ok.outputs.go == 'true'
+        env: { P8: "${{ secrets.APPSTORE_KEY_P8 }}", KID: "${{ secrets.APPSTORE_KEY_ID }}" }
+        run: mkdir -p ~/.appstoreconnect/private_keys && printf '%s' "$P8" > ~/.appstoreconnect/private_keys/AuthKey_$KID.p8
+      - name: Build and archive
+        if: steps.ok.outputs.go == 'true'
+        env: { KID: "${{ secrets.APPSTORE_KEY_ID }}", ISS: "${{ secrets.APPSTORE_ISSUER_ID }}", TEAM: "${{ secrets.APPLE_TEAM_ID }}" }
+        run: |
+          xcodebuild -project mobile/ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" archive DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_$KID.p8 -authenticationKeyID "$KID" -authenticationKeyIssuerID "$ISS"
+      - name: Export and upload to TestFlight
+        if: steps.ok.outputs.go == 'true'
+        env: { KID: "${{ secrets.APPSTORE_KEY_ID }}", ISS: "${{ secrets.APPSTORE_ISSUER_ID }}", TEAM: "${{ secrets.APPLE_TEAM_ID }}" }
+        run: |
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/out" \
+            -allowProvisioningUpdates -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_$KID.p8 -authenticationKeyID "$KID" -authenticationKeyIssuerID "$ISS"
