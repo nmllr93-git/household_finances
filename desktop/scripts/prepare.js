@@ -8,7 +8,7 @@ const cp = (a, b) => fs.cpSync(a, b, { recursive: true });
 
 // 1. server + pages (no data, no keys)
 rm(path.join(D, 'app-server')); fs.mkdirSync(path.join(D, 'app-server'), { recursive: true });
-for (const f of ['server.js', 'package.json', 'public']) cp(path.join(ROOT, f), path.join(D, 'app-server', f));
+for (const f of ['server.js', 'package.json', 'public', 'core']) cp(path.join(ROOT, f), path.join(D, 'app-server', f));
 
 // 2. Node runtime: the one running this script (needs 22.13+ for built-in SQLite)
 const [maj, min] = process.versions.node.split('.').map(Number);

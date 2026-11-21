@@ -51,7 +51,6 @@ const HOST = process.env.HOST || (CFG.mode === 'local' ? '127.0.0.1' : '0.0.0.0'
 const saveCfg = (patch) => { Object.assign(CFG, patch); fs.writeFileSync(CFG_FILE, JSON.stringify(CFG, null, 2)); };
 const SESSION_DAYS = 60;
 const MAX_BODY = 1024 * 1024; // 1 MB
-const COLLECTIONS = new Set(['imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares']);
 
 try { fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch (e) { console.error(`Can't create ${BACKUP_DIR}: ${e.code || e.message}`); }
 // "attempt to write a readonly database" means Windows won't let this user change the database files:
@@ -174,58 +173,23 @@ const isHttps = (req) => req.headers['x-forwarded-proto'] === 'https';
 const cookie = (req, v, maxAge) => `hf_session=${v}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
 
 // ---------- clean up what the page sends before storing it ----------
-const str = (v, n) => String(v ?? '').slice(0, n);
-const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
-const TYPES_OK = ['expense', 'income', 'transfer'];
-function cleanDoc(coll, d, label) {
-  const now = new Date().toISOString();
-  if (coll === 'edits') {
-    const splits = Array.isArray(d.splits) ? d.splits.slice(0, 6).map((s) => ({ category: str(s.category, 40), amount: num(s.amount) })).filter((s) => s.category && s.amount !== null) : null;
-    return { book: label, txKey: str(d.txKey, 80), vendor: str(d.vendor, 40), category: str(d.category, 40), type: TYPES_OK.includes(d.type) ? d.type : '',
-      oneTime: !!d.oneTime, splits: splits && splits.length >= 2 ? splits : null, ignored: !!d.ignored, tags: Array.isArray(d.tags) ? d.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) : null, createdAt: now };
-  }
-  if (coll === 'rules') {
-    const cc = (arr) => (Array.isArray(arr) ? arr.slice(0, 8).map((c) => ({ field: ['description', 'vendor', 'category', 'type', 'amount'].includes(c && c.field) ? c.field : 'description', op: ['is', 'lt', 'gt', 'gte', 'eq'].includes(c && c.op) ? c.op : 'contains', value: str(c && c.value, 60) })).filter((c) => c.value) : []);
-    const groups = Array.isArray(d.groups) ? d.groups.slice(0, 6).map(cc).filter((g) => g.length) : [];
-    return { book: label, match: str(d.match, 60), ifVendor: str(d.ifVendor, 40), logic: groups.length > 1 ? 'or' : 'and', conds: cc(d.conds), groups, vendor: str(d.vendor, 40), category: str(d.category, 40), type: TYPES_OK.includes(d.type) ? d.type : '',
-      oneTime: !!d.oneTime, ignore: !!d.ignore, tag: str(d.tag, 30), order: num(d.order), createdAt: now };
-  }
-  if (coll === 'accounts') {
-    const KINDS = ['deposit', 'credit', 'investment', 'mortgage', 'loan'];
-    return { book: label, shareTo: Array.isArray(d.shareTo) ? d.shareTo.slice(0, 6).map((x) => str(x, 40)).filter(Boolean) : [], shareHist: !!d.shareHist, name: str(d.name, 60), match: str(d.match || d.name, 60), kind: KINDS.includes(d.kind) ? d.kind : 'deposit', type: str(d.type, 20),
-      rate: num(d.rate), owner: str(d.owner, 30), note: str(d.note, 120), rateEnds: str(d.rateEnds, 10), aliases: Array.isArray(d.aliases) ? d.aliases.slice(0, 10).map((x) => str(x, 60)).filter(Boolean) : [], limit: num(d.limit), payment: num(d.payment), escrow: num(d.escrow), extra: num(d.extra), active: d.active !== false, createdAt: now };
-  }
-  if (coll === 'shares') {
-    const hist = Array.isArray(d.history) ? d.history.slice(-72).filter((x) => Array.isArray(x) && /^\d{4}-\d{2}$/.test(x[0]) && isFinite(Number(x[1]))).map((x) => [x[0], Math.round(Number(x[1]) * 100) / 100]) : null;
-    return { book: label, src: str(d.src, 40), srcLabel: str(d.srcLabel, 40), key: str(d.key, 140), owner: str(d.owner, 30), name: str(d.name, 60),
-      kind: ['deposit', 'investment', 'credit', 'mortgage', 'loan', 'asset'].includes(d.kind) ? d.kind : 'deposit', type: str(d.type, 20), balance: num(d.balance) || 0, asOf: str(d.asOf, 10), history: hist && hist.length ? hist : null, createdAt: now };
-  }
-  if (coll === 'prefs') {
-    return { book: label, key: str(d.key, 30).replace(/[^a-z0-9_-]/gi, ''), value: String(d.value == null ? '' : d.value).slice(0, 60000), createdAt: now };
-  }
-  if (coll === 'holdings') {
-    const lot = (x) => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(x && x.date || '') ? x.date : '', qty: Math.max(0, num(x && x.qty) || 0), price: Math.max(0, num(x && x.price) || 0) });
-    const lots = (a) => (Array.isArray(a) ? a.slice(0, 200).map(lot).filter((x) => x.qty > 0) : []);
-    return { book: label, symbol: str(d.symbol, 12).toUpperCase().replace(/[^A-Z0-9.\-^]/g, ''), name: str(d.name, 60), account: str(d.account, 60),
-      kind: ['stock', 'etf', 'fund', 'crypto', 'bond', 'other'].includes(d.kind) ? d.kind : 'stock', sector: str(d.sector, 40),
-      lots: lots(d.lots), sales: lots(d.sales), divs: Array.isArray(d.divs) ? d.divs.slice(0, 400).map((x) => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(x && x.date || '') ? x.date : '', amount: Math.max(0, num(x && x.amount) || 0) })).filter((x) => x.amount > 0) : [], manualPrice: num(d.manualPrice), manualAsOf: str(d.manualAsOf, 10), createdAt: now };
-  }
-  if (coll === 'goals') {
-    return { book: label, name: str(d.name, 60), target: num(d.target), by: str(d.by, 10), account: str(d.account, 60), saved: num(d.saved), createdAt: now };
-  }
-  if (coll === 'budgets') {
-    return { book: label, category: str(d.category, 40), amount: Math.max(0, num(d.amount) || 0), from: /^\d{4}-\d{2}$/.test(d.from || '') ? d.from : now.slice(0, 7),
-      rollover: !!d.rollover, createdAt: now };
-  }
-  if (coll === 'manual') {
-    return { book: label, type: d.type === 'income' ? 'income' : 'expense', date: str(d.date, 10), amount: num(d.amount),
-      vendor: str(d.vendor, 40), category: str(d.category, 40), note: str(d.note, 120), createdAt: new Date().toISOString() };
-  }
-  const txns = Array.isArray(d.txns) ? d.txns.slice(0, 2500).map((t) => ({ date: str(t.date, 10), description: str(t.description, 120), amount: num(t.amount) })) : [];
-  return { book: label, accountKind: ['deposit', 'credit', 'investment', 'mortgage', 'loan'].includes(d.accountKind) ? d.accountKind : 'deposit',
-    accountName: str(d.accountName, 60), owner: str(d.owner, 30), fileName: str(d.fileName, 80), importedAt: new Date().toISOString(),
-    rowCount: txns.length, dateFrom: str(d.dateFrom, 10), dateTo: str(d.dateTo, 10), balance: num(d.balance), balanceMonth: str(d.balanceMonth, 7), asOf: str(d.asOf, 10), accountType: str(d.accountType, 20), txns };
-}
+// Dashboard data rules (validation, load, save, export, restore) live in core/books.js, shared with the phone app.
+const CORE = require('./core/books.js');
+const { cleanDoc } = CORE;
+const BOOKS = CORE.createBookApi({
+  seedRows: (bookId) => db.prepare('SELECT dataset, json FROM seed WHERE book_id = ?').all(bookId),
+  listDocs: (bookId, coll) => db.prepare('SELECT id, json, created, created_by FROM docs WHERE book_id = ? AND coll = ? ORDER BY created').all(bookId, coll),
+  insertDoc: (r) => db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, r.json, r.created, r.createdBy),
+  deleteDoc: (bookId, coll, id) => db.prepare('DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = ?').run(id, bookId, coll),
+  replaceBookDocs: (bookId, rows) => {
+    db.exec('BEGIN');
+    try { db.prepare('DELETE FROM docs WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const r of rows) ins.run(r.id, bookId, r.coll, r.json, r.created, r.createdBy); db.exec('COMMIT'); }
+    catch (e) { db.exec('ROLLBACK'); throw e; }
+  },
+  newId: () => crypto.randomBytes(10).toString('base64url'),
+  backup: () => backup(),
+});
 
 // ---------- API ----------
 // ---- stock quotes: Finnhub and/or Financial Modeling Prep when keys are set, otherwise Stooq (no key) ----
@@ -508,59 +472,10 @@ async function api(req, res, url) {
     const bookId = parts[2];
     if (!canUse(user, bookId)) return send(res, 403, { error: 'No access to this budget' });
     const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(bookId);
-
-    if (parts[3] === 'shares-list' && req.method === 'GET') {
-      return send(res, 200, db.prepare('SELECT id, json FROM docs WHERE book_id = ? AND coll = ?').all(bookId, 'shares').map((r) => ({ id: r.id, ...JSON.parse(r.json) })));
-    }
-    if (parts[3] === 'data' && req.method === 'GET') {
-      const out = {};
-      for (const r of db.prepare('SELECT dataset, json FROM seed WHERE book_id = ?').all(bookId)) out[r.dataset] = JSON.parse(r.json);
-      for (const coll of COLLECTIONS) {
-        out[coll] = db.prepare('SELECT id, json FROM docs WHERE book_id = ? AND coll = ? ORDER BY created').all(bookId, coll)
-          .map((r) => ({ id: r.id, ...JSON.parse(r.json) }));
-      }
-      return send(res, 200, out);
-    }
-    if (parts[3] === 'export' && req.method === 'GET') {
-      const out = { book, exportedAt: new Date().toISOString(), seed: {}, docs: {} };
-      for (const r of db.prepare('SELECT dataset, json FROM seed WHERE book_id = ?').all(bookId)) out.seed[r.dataset] = JSON.parse(r.json);
-      for (const coll of COLLECTIONS) out.docs[coll] = db.prepare('SELECT id, json, created, created_by FROM docs WHERE book_id = ? AND coll = ?').all(bookId, coll)
-        .map((r) => ({ id: r.id, created: r.created, createdBy: r.created_by, ...JSON.parse(r.json) }));
-      return send(res, 200, JSON.stringify(out, null, 1), { 'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="${bookId}-${new Date().toISOString().slice(0, 10)}.json"` });
-    }
-    if (parts[3] === 'restore' && req.method === 'POST') {
-      // Replace this dashboard's saved data with a backup file made by Export. A full database backup is taken first.
-      let body; try { body = await readJson(req, 60 * 1024 * 1024); } catch (e) { return send(res, e.code || 400, { error: e.message }); }
-      if (!body || typeof body.docs !== 'object') return send(res, 400, { error: 'That doesn’t look like a backup file from this app.' });
-      const safety = backup();
-      let n = 0;
-      db.exec('BEGIN');
-      try {
-        db.prepare('DELETE FROM docs WHERE book_id = ?').run(bookId);
-        const ins = db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
-        for (const [c, list] of Object.entries(body.docs)) {
-          if (!COLLECTIONS.has(c) || !Array.isArray(list)) continue;
-          for (const d of list) { const { id, created, createdBy, ...rest } = d || {}; const doc = cleanDoc(c, rest, book.label); if (rest.createdAt) doc.createdAt = String(rest.createdAt).slice(0, 40);
-            ins.run(crypto.randomBytes(10).toString('base64url'), bookId, c, JSON.stringify(doc), created || new Date().toISOString(), createdBy || user); n++; }
-        }
-        db.exec('COMMIT');
-      } catch (e) { db.exec('ROLLBACK'); return send(res, 500, { error: 'Restore failed; nothing was changed. ' + e.message }); }
-      return send(res, 200, { ok: true, restored: n, safetyBackup: path.basename(safety) });
-    }
-    const coll = parts[3];
-    if (COLLECTIONS.has(coll) && req.method === 'POST' && !parts[4]) {
-      const doc = cleanDoc(coll, await readJson(req), book.label);
-      const json = JSON.stringify(doc);
-      if (json.length > 400000) return send(res, 413, { error: 'Too large' });
-      const id = crypto.randomBytes(10).toString('base64url');
-      db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(id, bookId, coll, json, new Date().toISOString(), user);
-      return send(res, 201, { id });
-    }
-    if (COLLECTIONS.has(coll) && req.method === 'DELETE' && parts[4]) {
-      db.prepare('DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = ?').run(parts[4], bookId, coll);
-      return send(res, 200, { ok: true });
-    }
+    const getBody = async (max) => readJson(req, max);
+    let r; try { r = await BOOKS.handle(req.method, parts.slice(3), book, getBody, user); } catch (e) { if (e.code >= 400 && e.code < 500) return send(res, e.code, { error: e.message }); throw e; }
+    if (r.headers && r.headers.download) return send(res, r.status, JSON.stringify(r.body, null, 1), { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${r.headers.download}"` });
+    return send(res, r.status, r.body);
   }
   return send(res, 404, { error: 'Not found' });
 }
@@ -620,7 +535,7 @@ function start(opts = {}) {
 // stop() → Promise. Closes open connections so the port frees right away (tray "Stop hosting").
 function stop() {
   if (!SERVER) return Promise.resolve();
-  const s = SERVER; SERVER = null; RUN = null;
+  const s = SERVER; SERVER = null; RUN = null; if (BTIMER) { clearInterval(BTIMER); BTIMER = null; }
   return new Promise((r) => { s.close(() => r()); if (s.closeAllConnections) s.closeAllConnections(); });
 }
 // info(): what the tray/settings screen shows.
