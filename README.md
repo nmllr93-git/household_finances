@@ -1,373 +1,525 @@
-# Household Finances (self-hosted)
+# Household Finances
 
-Your budget dashboard, running on your own computer. It has the same views as the Claude version:
-- top-5 vendors
-- income vs spending
-- investments, checking & savings, and mortgage
-- subscriptions
-- budget vs actual
-- a vendor search
-- CSV statement import, statement balances and manual entries
+A private budgeting and net-worth dashboard for a household, run on your own computer. Your statements, balances and budgets stay on a machine you control. Nothing goes to a cloud service unless you turn on the optional market-data features, and even those only send stock symbols, never your financial data.
 
-Each login sees only its own budgets:
+**What it does**
+- Imports bank and card statements (CSV, PDF, OFX/QFX) and sorts transactions into categories and vendors.
+- Shows spending, income, budgets, subscriptions, net worth, investments, loans and savings goals in charts and tables.
+- Supports several **budgets** (called *dashboards* in the app), such as one per person plus a shared household one. Each login sees only the dashboards it's allowed to.
+- Optional: live stock prices, market overview, interest rates and inflation, using free API keys.
 
-| Login | Budgets |
-|---|---|
-| `nate` | Nate – Personal, Shared household |
-| `mckenna` | McKenna – Personal, Shared household |
+**Ways to run it**
 
-On first start it loads the June–November 2026 history from your Google Sheets (Nate's personal and shared). McKenna's budget starts empty.
+| Option | Best for | Section |
+|---|---|---|
+| **Desktop app (Windows installer)** | Easiest. One install; a tray icon starts and stops it. | [A](#a-desktop-app-windows) |
+| **Self-hosted server (Node.js)** | An always-on PC or home server; full control from the command line. | [B](#b-self-hosted-server-windows-linux-macos) |
+| **Phone / other devices** | Opening the dashboard from phones and laptops once A or B is running. | [C](#c-using-it-from-phones-and-other-devices) |
+| **Old Android phone as the server** | Experimental, low-power hosting. | [D](#d-hosting-on-an-old-android-phone-optional) |
 
-**Quick start (about 20 minutes):**
-1. Install Node.js on the PC, unzip this folder, run `scripts\setup-windows.bat` (section 1).
-2. Run `scripts\install-autostart.ps1` as Administrator so it starts with Windows (section 1).
-3. Install Tailscale on the PC and run `tailscale serve --bg 8080` (section 2).
-4. Install Tailscale on both phones and add the app to each home screen (section 2).
-
-Already run your own WireGuard VPN? Use it instead of Tailscale for steps 3–4 (section 3).
-
-It needs **no npm packages**: only Node.js 22.13 or newer. The data is one SQLite file, `data/finance.db`. A backup copy is written to `data/backups/` once a day, and the last 30 are kept.
+Both A and B use the same data format, so you can switch between them later (see [Moving between setups](#moving-between-the-desktop-app-and-the-self-hosted-server)).
 
 ---
 
-## 1. Set it up on the Windows 11 PC
+## Contents
+- [Key ideas](#key-ideas)
+- [A. Desktop app (Windows)](#a-desktop-app-windows)
+- [B. Self-hosted server](#b-self-hosted-server-windows-linux-macos)
+- [C. Using it from phones and other devices](#c-using-it-from-phones-and-other-devices)
+- [D. Hosting on an old Android phone](#d-hosting-on-an-old-android-phone-optional)
+- [First steps after installing](#first-steps-after-installing)
+- [Basic configuration](#basic-configuration)
+- [Feature guide](#feature-guide)
+- [Optional data sources (API keys)](#optional-data-sources-api-keys)
+- [Maintenance: backups, passwords, updates](#maintenance)
+- [Moving between setups](#moving-between-the-desktop-app-and-the-self-hosted-server)
+- [Troubleshooting](#troubleshooting)
+- [Security notes](#security-notes)
+- [For developers](#for-developers)
 
-1. **Install Node.js.** Get the current **LTS** version from https://nodejs.org and accept the defaults.
-2. **Put this folder somewhere permanent,** for example `C:\HouseholdFinances`. Keep it out of OneDrive or Dropbox folders, because cloud syncing a live database can corrupt it.
-3. **Create the logins.** Double-click `scripts\setup-windows.bat` and type a password for Nate, then one for McKenna. Passwords don't show as you type.
-4. **Start it.** Pick one:
+---
+
+## Key ideas
+
+- **Server:** the program that stores the data and serves the pages. It runs on one computer, the *host*. Every other device just opens it in a browser or the app.
+- **Dashboard (budget):** a separate set of accounts, transactions and budgets. A typical household has *Alex – Personal*, *Sam – Personal* and *Shared household*. Each dashboard can be marked Personal or Shared in Settings.
+- **Login:** a username and password. Each login is given access to one or more dashboards. Logins never see dashboards they weren't given.
+- **Data folder:** one folder holds everything: the database (`finance.db`), daily backups, settings, API keys and caches. Back this folder up and you've backed up everything.
+- **Modes:**
+  - **local:** only the host computer can open the dashboard. Most private.
+  - **host:** other devices on your home network, or anywhere over a VPN like Tailscale, can sign in too.
+
+---
+
+## A. Desktop app (Windows)
+
+The app bundles everything it needs. The PCs you install it on don't need Node.js.
+
+### A1. Get the installer
+1. Go to the **Releases** page of the public releases repository (`household_finances-releases`).
+2. Under the newest release, download **`Household Finances Setup x.y.z.exe`**.
+3. Run it. Windows SmartScreen may say *"Windows protected your PC"*, because the installer isn't code-signed. Click **More info → Run anyway**.
+4. Pick an install folder, or keep the default, and finish. A desktop shortcut and a Start-menu entry are created.
+
+### A2. First-run setup
+The app opens a short setup screen.
+
+1. **How will you use this computer?**
+   - **Keep my finances on this computer:** this PC becomes the host. Continue to step 2.
+   - **Connect to another computer:** the data lives on a server somewhere else. You'll be asked for its address; see [C2](#c2-the-connect-screen-desktop-and-android-apps).
+2. **Who can open it?**
+   - **Only this computer:** local mode.
+   - **This computer, my phone and other devices:** host mode. You can change this any time from the tray icon.
+3. **Port:** keep **8080** unless another program already uses it. If a self-hosted copy is running on this PC, either stop it first or use **8081**.
+4. **Data folder:** the default is `%APPDATA%\HouseholdFinances`.
+   - **Moving from the self-hosted server?** Choose that install's `data` folder, the one containing `finance.db`. The screen confirms *"Found existing finance data"* and uses it as-is.
+5. **Start with Windows:** tick it to have the app start quietly in the tray when you sign in.
+6. Click **Start**. If the data folder has no logins yet, you're asked to **create a login**: name, password (8+ characters) and which dashboards it can see. You can add more logins from the same screen.
+7. Click **Open dashboard** and sign in with the login you just made.
+
+A brand-new data folder starts with two empty dashboards, **Personal** and **Shared household**. You can rename them, add more, and set each one's type in the app (see [Basic configuration](#basic-configuration)).
+
+### A3. The tray icon
+When this PC is the host, a tray icon (bottom right, by the clock) controls the server. Right-click it for:
+
+| Menu item | What it does |
+|---|---|
+| **Open dashboard** | Shows the window. Clicking the icon does the same. |
+| Status line | ● Running · this computer only / ● Running · other devices can connect / ○ Stopped |
+| **Start server / Stop server** | Turns the server on or off. Stopping makes it unreachable from every device. |
+| **Allow other devices** | Switches between local and host mode. Takes effect immediately. |
+| **Phone & other device addresses** | Your network and Tailscale addresses; click one to copy it. |
+| **Tailscale** | Shows whether Tailscale is on, or links to download it. |
+| **Start with Windows** | Starts the app in the tray when you sign in. |
+| **Back up now** | Writes a backup to the data folder's `backups` folder. |
+| **Open data folder** | Opens it in File Explorer. |
+| **Check for updates…** | Looks for a newer version (see [Updating](#updating)). |
+| **Change setup…** | Reopens the setup screen: change port or folder, add logins. |
+| **Quit** | Stops the server and closes the app. |
+
+Closing the window doesn't stop the server; it keeps running in the tray. Use **Quit** to stop it.
+
+The first time you allow other devices, Windows may ask whether to let **Node.js** through the firewall. Choose **Private networks** only.
+
+### A4. Where the desktop app keeps things
+| What | Where |
+|---|---|
+| Finance data (database, backups, API keys, settings) | The data folder chosen in setup, default `%APPDATA%\HouseholdFinances` |
+| App preferences (role, port, start with Windows) | `%APPDATA%\Household Finances\desktop.json` |
+| Server log | `%APPDATA%\Household Finances\server.log` |
+
+Uninstalling the app does **not** delete your finance data.
+
+---
+
+## B. Self-hosted server (Windows, Linux, macOS)
+
+Use this for an always-on machine, or if you prefer running it yourself. It needs **no npm packages**, only **Node.js 22.13 or newer**.
+
+### B1. Install on Windows
+1. **Install Node.js:** download the current **LTS** from https://nodejs.org and accept the defaults.
+2. **Unzip the app** somewhere permanent, for example `C:\HouseholdFinances`. Don't use a OneDrive or Dropbox folder; syncing a live database can corrupt it.
+3. **Create logins:** double-click `scripts\setup-windows.bat`. It:
+   - checks your Node.js version,
+   - lists the existing dashboards (on a new install, `personal` and `shared`),
+   - optionally creates another dashboard (for example id `sam`, name `Sam – Personal`),
+   - asks for each login's name, the dashboards it can see (for example `personal,shared`) and a password. Typed passwords don't show. Leave the login name blank to finish.
+4. **Start it** in one of two ways:
    - **To try it out:** double-click `scripts\start-windows.bat`. Closing that window stops the server.
-   - **To keep it running:** open **Terminal (Admin)** in the folder and run:
+   - **To keep it running in the background:** open **Terminal (Admin)** in the folder and run:
      ```
      powershell -ExecutionPolicy Bypass -File .\scripts\install-autostart.ps1
      ```
-     This starts it in the background every time the PC boots, with no window. It also opens port 8080 on your home network only.
-5. **Open it.** On the PC, go to http://localhost:8080. On a phone on the same Wi-Fi, use the "on your network" address the server prints, for example `http://192.168.1.50:8080`.
+     This creates a scheduled task, **Household Finances**, that starts the server at boot with no window. It also opens port 8080 to your home (Private) network only.
+5. **Open it:** on the PC, go to http://localhost:8080. The server also prints *"on your network"* addresses (like `http://192.168.1.50:8080`) for other devices.
 
-Make sure Windows treats your home Wi-Fi as a **Private** network: Settings → Network & internet → Wi-Fi → your network → Private. Also keep the PC from sleeping (Settings → System → Power) or the app can't be reached.
+Also check two Windows settings:
+- Your home network should be set to **Private**: Settings → Network & internet → Wi-Fi or Ethernet → your network → **Private**. The firewall rule only applies on Private networks.
+- If other devices need to reach the PC, stop it from sleeping: Settings → System → Power.
 
-## 2. Use it from your phones, at home or away (recommended)
+### B2. Install on Linux or macOS
+```bash
+# Node.js 22.13+ from https://nodejs.org or your package manager
+unzip household-finance.zip && cd household-finance
+node server.js budgets                          # list dashboards
+node server.js add-budget sam "Sam – Personal"  # optional: create another
+node server.js add-user alex personal,shared    # prompts for a password
+node server.js                                  # start (Ctrl+C to stop)
+```
+To keep it running after reboots, run it as a service, for example a systemd unit that runs `node /path/to/server.js` as your user, with `Restart=on-failure`.
 
-[Tailscale](https://tailscale.com) is free for personal use. It gives your devices a private network with real HTTPS, so you never open ports on your router. HTTPS also lets Android **install it like an app**.
+### B3. Command-line reference
+Run these from the app folder. Commands that change logins can be run while the server is running.
 
-The free Personal plan covers this: up to 6 users and unlimited devices, for non-commercial use.
+| Command | What it does |
+|---|---|
+| `node server.js` | Starts the server |
+| `node server.js budgets` | Lists dashboards with their ids |
+| `node server.js add-budget <id> <name>` | Creates a dashboard, or renames one if the id exists |
+| `node server.js add-user <name> <ids>` | Creates a login (or replaces its dashboard list), then asks for a password. Example: `add-user sam sam,shared` |
+| `node server.js passwd <name>` | Changes a password and signs that login out everywhere |
+| `node server.js users` | Lists logins and their dashboards |
+| `node server.js backup` | Writes a backup now |
+| `node server.js where` | Shows the data folder, database, settings, API keys and backups paths |
+| `node server.js mode local` / `mode host` | Only this computer / other devices too (applies on next start) |
 
-**On the PC (do this first)**
-1. Download Tailscale for Windows from https://tailscale.com/download and install it.
-2. Click the Tailscale icon in the system tray and choose **Log in**. Sign in with your Google, Microsoft or Apple account; this creates your private network (your "tailnet").
-3. Open the admin console at https://login.tailscale.com/admin. Under **DNS**, turn on **MagicDNS**, then turn on **HTTPS Certificates**.
-4. Open a terminal (Start → Terminal) and run:
+Options you can add to any command: `--data <folder>` (use a different data folder) and `--port <n>`.
+
+### B4. Data folder and settings
+- **Default data folder:** `data/` next to `server.js`. Override it, in order of priority, with:
+  1. the `DATA_DIR` environment variable, or `--data <folder>`,
+  2. `{ "dataDir": "D:/Finance" }` in a `config.json` next to `server.js`.
+- **`<data folder>/config.json`** holds `{ "mode": "local" | "host", "port": 8080 }`. It's created when you run `mode` (or by the desktop app). Without it, the server runs in host mode on port 8080.
+- The environment variables `PORT` and `HOST` override everything; for example, `HOST=127.0.0.1` makes the server local-only.
+
+---
+
+## C. Using it from phones and other devices
+
+The host must be in **host mode**:
+- **Desktop app:** tray → **Allow other devices**.
+- **Self-hosted:** host is the default.
+
+### C1. At home (same Wi-Fi)
+Open the host's network address in a browser, for example `http://192.168.1.50:8080`.
+- **Desktop app:** tray → *Phone & other device addresses* copies it.
+- **Self-hosted:** the server prints it when it starts.
+
+To make the address stable, give the host a **DHCP reservation** in your router's settings, usually under LAN, DHCP or "Address reservation".
+
+### C2. The connect screen (desktop and Android apps)
+When an app is set to **Connect to another computer**, it shows a connect screen.
+1. Type the server address: `192.168.1.50:8080`, a Tailscale name like `my-pc.tail1234.ts.net:8080`, or a full `https://…` address. If you leave out `http://` and `:8080`, they're added.
+2. The app checks that the address really is Household Finances, then opens its sign-in page.
+3. Recent addresses are remembered on that device as one-tap buttons.
+
+If it can't connect, check that the host is on and awake and in host mode, that this device is on the same network (or Tailscale is on), and that the address and port are right.
+
+### C3. Away from home with Tailscale (recommended)
+[Tailscale](https://tailscale.com) creates a private network between your devices, with no router ports opened. The free Personal plan covers a household.
+
+**On the host:**
+1. Install Tailscale from https://tailscale.com/download and sign in. That creates your private network, the *tailnet*.
+2. In the admin console (https://login.tailscale.com/admin), under **DNS**, turn on **MagicDNS** and **HTTPS Certificates**.
+3. *(Optional but recommended: gives you HTTPS and an installable phone app.)* In a terminal run:
    ```
    tailscale serve --bg 8080
    ```
-   It prints an address like `https://your-pc.tail1234.ts.net`. Write it down. Only devices on your tailnet can open it. The setting survives restarts, so you only run this once.
+   It prints an address like `https://my-pc.tail1234.ts.net`. Only devices on your tailnet can open it, and the setting survives restarts.
 
-**Your Android phone**
-1. Install **Tailscale** from the Play Store, open it and sign in with the **same account** you used on the PC. Leave it switched on.
-2. In Chrome, open the `https://…ts.net` address and sign in to Household Finances as `nate`.
-3. Tap **⋮ → Install app** (or **Add to Home screen**). It opens full-screen with its own icon, like a normal app.
+**On each phone:**
+1. Install **Tailscale** (Play Store or App Store) and sign in to the same tailnet. Invite other household members under **Users → Invite users** in the admin console.
+2. Open the `https://…ts.net` address. Without `serve`, use `http://my-pc:8080` instead.
+3. Sign in and add the app to your home screen:
+   - **Android (Chrome):** ⋮ → **Install app**.
+   - **iPhone:** use **Safari**, then Share → **Add to Home Screen**. Only Safari can install web apps on iPhone.
 
-**McKenna's iPhone**
-1. In the Tailscale admin console go to **Users → Invite users** and enter her email. Or she can simply sign in to the Tailscale app with your account, if you're fine sharing that login.
-2. She installs **Tailscale** from the App Store, accepts the invite (or signs in) and lets it add the VPN configuration. Leave it switched on.
-3. In **Safari** (not Chrome; only Safari can install web apps on iPhone), she opens the `https://…ts.net` address and signs in as `mckenna`.
-4. She taps **Share → Add to Home Screen → Add**. It opens full-screen from its own icon.
+iPhone notes:
+- iPhones run one VPN at a time.
+- iOS may sign out a home-screen app that goes unused for weeks. Nothing is lost; the data is on the host.
 
-Two iPhone notes:
-- An iPhone runs only one VPN at a time. If she uses another VPN (work, NordVPN, etc.), she switches between them.
-- If the home-screen app goes unused for several weeks, iOS may sign her out. Nothing is lost; all data lives on the PC.
+### C4. Using your own WireGuard VPN instead
+If you already run WireGuard into your home network, it works too. Nothing in the app changes.
+- Each phone's peer needs `AllowedIPs` that include your **home subnet** (for example `10.8.0.0/24, 192.168.1.0/24`), not just the VPN subnet.
+- The VPN server must forward to the LAN. That's usually automatic on routers; on a Pi or NAS, enable IP forwarding and NAT.
+- Give each person their own peer, so one phone can be revoked without affecting the others.
+- Open `http://<host LAN address>:8080`.
 
-**If a phone can't connect:** check that the Tailscale app shows **Connected** on that phone and that the PC is on and awake. In the admin console's **Machines** list, both devices should appear.
-
-You don't need to sideload an APK. If you ever want one anyway, the same web app can be wrapped with Capacitor; ask Claude to do it.
-
-## 3. Or use your own WireGuard VPN instead of Tailscale
-
-If you already run a WireGuard VPN into your home network, you can use it instead of Tailscale. Nothing in the app changes. It listens on port 8080 on the PC, and any device that can reach the PC's home address can open it, including a phone connected through WireGuard. The firewall rule from `install-autostart.ps1` allows connections from your VPN's addresses too, as long as the PC's network is set to **Private**.
-
-**What you give up: HTTPS.** Tailscale's `serve` command is what gives the app a real `https://` address. Over WireGuard you'll use plain `http://192.168.x.x:8080`:
-- **Everything still works.** Login, dashboards, imports and edits behave the same.
-  - Away from home, traffic is encrypted inside the WireGuard tunnel.
-  - At home, it crosses your own Wi-Fi unencrypted, which is normally fine.
-- **The "installable app" part mostly goes away.** Browsers only allow app install and offline caching on HTTPS pages.
-  - **Android:** Chrome offers **Add to Home screen** (a shortcut that opens in the browser) instead of **Install app**.
-  - **iPhone:** Safari → Add to Home Screen still works, but it acts more like a bookmark.
-
-**On the PC and router (do this first)**
-1. **Give the PC a fixed address.**
-   - In your router's settings, create a DHCP reservation for the PC, for example `192.168.1.50`.
-   - Look under LAN, DHCP or "Address reservation".
-   - Restart the PC (or run `ipconfig /renew`) and confirm the address with `ipconfig`.
-2. **Set the PC's network to Private.** Go to Settings → Network & internet → Wi-Fi (or Ethernet) → your network → **Private**. The firewall rule only applies on Private networks.
-3. **Check it locally first.** From a phone on your home Wi-Fi (VPN off), open `http://192.168.1.50:8080` and sign in. If this doesn't work, fix it before involving the VPN.
-
-**WireGuard peer settings (each phone)**
-1. **AllowedIPs:** each phone's profile must route your **home network**, not just the VPN's own subnet.
-   - Example: `AllowedIPs = 10.8.0.0/24, 192.168.1.0/24`, using your own subnets.
-   - If only the VPN subnet is listed, the phone can reach the VPN server but not the PC.
-   - `0.0.0.0/0` (send all traffic home) also works.
-2. **Make sure the VPN server forwards to the LAN.**
-   - If WireGuard runs on your router, this is usually automatic.
-   - If it runs on another machine at home (a Pi, a NAS), that machine needs IP forwarding turned on. It also needs either NAT/masquerade to the LAN or a route on the router back to the VPN subnet.
-3. **Give McKenna her own peer.**
-   - Create a separate peer with its own keys and VPN address for her iPhone.
-   - Don't share yours, so either phone can be revoked on its own.
-
-**Your Android phone**
-1. Install the official **WireGuard** app from the Play Store and import your config (file or QR code). Turn the tunnel on.
-2. In Chrome, open `http://192.168.1.50:8080` (your PC's address) and sign in as `nate`.
-3. Tap **⋮ → Add to Home screen**.
-
-**McKenna's iPhone**
-1. She installs **WireGuard** from the App Store.
-2. In the app, she taps **+ → Create from QR code**, scans the QR code for her peer, and allows the VPN configuration.
-3. **Optional: connect automatically when away.** In the tunnel's settings, turn on **On-Demand** for cellular and for Wi-Fi networks other than your home Wi-Fi, so it connects whenever she leaves the house.
-4. In **Safari**, she opens `http://192.168.1.50:8080` and signs in as `mckenna`.
-5. She taps **Share → Add to Home Screen → Add**.
-
-The same iPhone notes apply as with Tailscale:
-- An iPhone runs one VPN at a time.
-- iOS may clear a long-unused sign-in. No data is lost; it all lives on the PC.
-
-**If a phone can't connect over WireGuard:**
-- **The tunnel shows no handshake:** check the WireGuard server and the router's port forward for its UDP port.
-- **It connects, but the page won't load:** check that AllowedIPs includes the home subnet, that the VPN server forwards to the LAN, that the PC's network is Private, and that the PC is awake.
-- **Test the path from the phone with the tunnel on:** open `http://192.168.1.50:8080`. You can also ping the PC from the phone's terminal app, if it has one.
-
-**Optional: get HTTPS back with a reverse proxy**
-
-If you want the full app install over WireGuard, put a reverse proxy such as [Caddy](https://caddyserver.com) in front of the app on the PC, with a certificate. There are two ways to get one:
-- **Use a domain you own (cleanest).**
-  - Create a DNS record such as `finance.yourdomain.com` pointing to the PC's private address (`192.168.1.50`).
-  - Have Caddy get a free Let's Encrypt certificate using the **DNS challenge** through your DNS provider's plugin. The PC doesn't need to be reachable from the internet.
-- **Caddy's own internal certificate.**
-  - Use `tls internal` in the Caddyfile.
-  - Then install and trust Caddy's root certificate on every phone.
-  - On iPhone, after installing the profile, turn it on under Settings → General → About → **Certificate Trust Settings**. This is fiddly.
-
-A minimal Caddyfile (domain option):
+Plain `http://` works for everything except installing the dashboard as an app and offline caching. Browsers require HTTPS for those. To get HTTPS over WireGuard, put a reverse proxy like [Caddy](https://caddyserver.com) in front:
 ```
 finance.yourdomain.com {
     reverse_proxy 127.0.0.1:8080
 }
 ```
-- Caddy sends the `X-Forwarded-Proto: https` header by default. The app needs it to mark the login cookie Secure.
-- Open port 443 in Windows Firewall (Private profile) for Caddy.
-- Phones then use `https://finance.yourdomain.com`. **Install app** on Android and full home-screen apps on iPhone work as they do with Tailscale.
+For the certificate, either use a domain you own with Caddy's DNS-challenge plugin (the PC doesn't need to be public), or use `tls internal` and trust Caddy's root certificate on each phone. Open port 443 on the Private firewall profile.
 
-## 4. Hosting on an old Android phone instead (optional)
+**Never forward port 8080 on your router to the internet.**
 
-It works: the server has no dependencies, so it runs under **Termux**. It's fine for a two-person household. A PC is still the steadier choice, because Android likes to kill background apps.
+---
+
+## D. Hosting on an old Android phone (optional)
+The server has no dependencies, so it runs under **Termux**. It's fine for a small household, but a PC is steadier, because Android likes to stop background apps.
 
 1. Install **Termux** from F-Droid (https://f-droid.org/packages/com.termux/). The Play Store version is outdated.
 2. In Termux:
    ```
    pkg update && pkg install nodejs-lts unzip
-   termux-setup-storage            # lets Termux read your Downloads folder
-   cd ~ && unzip ~/storage/downloads/household-finance.zip
-   cd household-finance
-   node -e "require('node:sqlite'); console.log('ok')"   # must print ok
-   node server.js add-user nate nate,shared
-   node server.js add-user mckenna mckenna,shared
+   termux-setup-storage
+   cd ~ && unzip ~/storage/downloads/household-finance.zip && cd household-finance
+   node -e "require('node:sqlite'); console.log('ok')"    # must print ok; if not: pkg install nodejs
+   node server.js add-user alex personal,shared
    sh scripts/start-termux.sh
    ```
-   If the `node:sqlite` check fails, `pkg install nodejs` (the newest version) usually fixes it.
-3. **Keep it alive:**
-   - In Android settings, set Termux's battery use to **Unrestricted**.
-   - `start-termux.sh` holds a wake lock so the phone doesn't sleep the server.
-   - To start it automatically after a reboot, install the **Termux:Boot** add-on and copy `scripts/start-termux.sh` into `~/.termux/boot/`.
-4. **Battery safety:** a phone left on the charger for months can swell. Use a phone that has a charge limit (often "Protect battery" or "Adaptive charging" set to 80%), keep it somewhere cool, and check it now and then.
-5. Install the Tailscale app on that phone too. In Termux, Tailscale's `serve` command isn't available, so open `http://<phone's Tailscale name>:8080`. HTTPS app install from other phones won't be offered over plain http, but **Add to Home screen** still works.
+3. Set Termux's battery use to **Unrestricted**. `start-termux.sh` holds a wake lock. For auto-start after a reboot, install **Termux:Boot** and copy `scripts/start-termux.sh` into `~/.termux/boot/`.
+4. **Battery safety:** a phone kept on the charger for months can swell. Use a charge limit (often called "Protect battery", 80%) and keep it somewhere cool.
 
-## 5. Everyday use
+---
 
-- **Find your way around:** the bar at the top shows one group at a time: **Overview**, **Accounts**, **Expenses**, **Budget**, **Transactions**, **Import**, or **Everything**. Click any section heading (▾/▸) to fold it. Both are remembered in that browser.
-- **Account details:** click the *Checking & savings*, *Investments* or *Subscriptions* card at the top to see each account (or subscription) with its balance and totals.
-- **Switch budgets** with the tabs under the summary sentence.
-- **Overview extras:** *Unusual this month* flags categories running 30%+ above their 6-month average; *Biggest purchases* lists the 10 largest expenses; the Income card shows how much of your income you kept. Clicking a row in any of these jumps to the matching transactions (clearing any old search text).
-- **Your accounts** (Accounts view): every account grouped as Cash, Credit, Mortgage, Loans and Investments, with type, rate, latest balance, estimated monthly interest, totals, *Net cash after cards* and *Net worth*. **Edit** an account to set its type (checking, savings, money market, CD, credit card, mortgage, HELOC, 401(k), Roth IRA, HSA…), rate (APY/APR), owner, notes, credit limit (shows a usage bar), or loan payment + escrow + extra principal (shows payoff date and interest left). Untick **Active** to hide a closed account but keep its history.
-- **Rules:** *+ New rule* → IF Description / Vendor / Category / Counts as / Amount (all must match) → SET Category, Vendor, Counts as, a tag, or Ignore. A live preview shows what a rule will match before you save; ↑/↓ sets which rule wins.
-- **Tags** (e.g. "Colorado trip"): add them in a transaction's Edit window, the Tags column, or with a rule; *Tags* under Expenses totals each one across all time.
-- **Net worth over time** (Accounts) charts cash + investments − debts by month. **Upcoming bills & 30-day cash forecast** (Overview) lists recurring charges due in the next 30 days and a rough end-of-month cash estimate.
-- **Export CSV** under the transaction list downloads every transaction currently listed (respecting your filters and search).
-- **Phones:** a round **+** button (bottom right) jumps straight to *Add income or an expense by hand*.
-- **Accounts:** adding an account with a name that already exists updates that account instead of making a copy; names match regardless of capitals or an "Owner – " prefix, and the owner always shows as "(Nate)" after the name. If two entries are really the same account under different names, open one with **Edit** and choose **Same account as…** to merge them (its name becomes an alias, so future imports under either name land there). **Delete account** removes one created by mistake, along with its imported statements and balances.
-- **Big monitors:** the page uses the full width and puts more sections side by side.
-- **Needs attention** (top of Overview) lists things to fix so the numbers stay right: accounts with no new transactions in 35+ days, investment or loan balances 2+ months old, transactions needing a category, subscription price changes, and promo/rate dates coming up. Each has a button that takes you to the fix.
-- **Price changes** for subscriptions and recurring bills show at the top of that section (e.g. "Netflix: $15.49 → $17.99").
-- **Rate changes on:** set a date on an account (promo APR ending, CD maturing, savings rate review); it shows under the rate and in *Needs attention* from 60 days out.
-- **Savings goals** (Accounts view): a target, an optional date, and either an account to track or an amount you enter. Shows progress and how much to save per month.
-- **Spending by day of week** (Expenses view).
-- **Year in review** (top bar): pick a year to see income, spending, what you kept, biggest and lightest months, top category and vendor, and a category table compared with last year. Click any month card for its snapshot (income, spending, kept %, biggest purchase, month-end cash, top categories and vendors vs the month before) and jump to that month's transactions.
-- **Custom reports** (top bar, **+ Report**): make your own tab. Click **Edit**, use **Add a view** to pick any section, then size each one S (third), M (half), L (two-thirds) or F (full width) and move it with ↑/↓. Views sit side by side on a computer and stack on a phone. Reports are saved in each browser, so set them up separately on your phone and PC.
-- **Holdings** (Accounts tab): add each stock, ETF or fund with its purchases (date, shares, price). Use **+ Buy more** for new purchases and **+ Sell shares** for sales; sales use the oldest shares first, so realized and unrealized gains are split correctly. Link a holding to an investment account, then press **Update account balances from holdings** to record today's value as that account's balance. Allocation by holding, type, sector and account is shown below the table, with a warning when one holding is over 20%.
+## First steps after installing
 
-- **Markets** (top bar, self-hosted app only): S&P 500, Nasdaq 100, Dow and Russell 2000 (through the SPY, QQQ, DIA and IWM funds) with today, 1-month and year-to-date change and a 3-month sparkline; gold, silver, oil and natural gas; sector performance (☆ to follow a sector and pin it to the top); and today's top gainers and losers. Data refreshes at most once an hour while the market is open, plus once after the close, and is saved in `data/market-cache.json` so restarts don't use extra calls. A manual Refresh is limited to once every 10 minutes. "Data check" at the bottom lists anything your API plan didn't return.
+A suggested order for a new household:
 
-- **Settings** (⚙ Settings, right end of the top bar): per dashboard, choose Personal or Shared, the people and their % split (Shared), which tab to open on, the default date range, and the first day of the week. Settings, chart colors and custom reports are saved on the server, so they follow you to every device.
-- **Chart colors:** every chart and ring has a small ⚙ in its top-right corner. Click it to pick colors for that chart; "Reset to default" undoes it. Settings → "Reset all chart colors" resets everything.
-- **Who paid what** (Shared dashboards, Overview and Budget tabs): shared spending is credited to whoever owns the account it was paid from (set Owner on each account), compared with each person's share, with a "who owes whom" line.
-- **Home, vehicles & other assets** (Accounts tab): enter a value and date; vehicles lose a set % per year (15% by default) and you're reminded to update values. Link a mortgage or auto loan to see equity. These count toward net worth in the top tile and the net worth ring.
-- **More rings:** net worth (what you own vs. owe), subscriptions by yearly cost, and credit-card usage gauges on the Accounts tab.
+1. **Sign in** at the host's address, or in the desktop app.
+2. **Set up each dashboard:** open **⚙ Settings** (right end of the top bar):
+   - **Dashboard type:** Personal or Shared. For Shared, add each person and their **% share** of shared costs (for example 50/50); this feeds *Who paid what*.
+   - Pick the tab to open on, the default date range and the first day of the week. Click **Save settings**.
+3. **Add your accounts:** go to the **Import** tab.
+   - **Import a transactions file** for checking, savings and credit cards. Choose the account (or **+** to add one, with its type), then pick a CSV, PDF, OFX or QFX file from your bank's website. Check the preview (purchases should show as *Out*) and click **Save import**.
+   - **Record a statement balance** for investment, retirement and mortgage accounts. Pick the account, then enter the ending balance and date.
+4. **Fix categories:** in **Transactions**, tick **Needs a category** and edit each one. To save time, tick *"Do this for every transaction whose description contains…"* to make a **rule** that also applies to past and future imports.
+5. **Set budgets:** in **Budget**, use **Set a monthly budget** (category, amount, starting month, optional rollover).
+6. **Fill in account details:** in **Accounts → Your accounts → Edit**, set each account's type, interest rate, owner, credit limit or loan payment.
+7. **Optional:** add savings goals, your home and vehicles as assets, investment holdings, and API keys for market data.
 
-- **Payoff schedule** (Mortgage & loans, needs the rate and payment on the account): payoff date, interest left, and a year-by-year table (tap a year for its months). Drag "Extra each month" to see how extra principal changes the payoff date and interest.
-- **Dividends** (Holdings): with an FMP key, dividends for the last 12 months are estimated from FMP's dividend history and your shares on each ex-dividend date. Or enter dividends yourself on a holding (entered ones take priority). Shown per holding with yield, and as a total tile.
-- **Watchlist** (Holdings): follow symbols you don't own, with an optional "alert below $" price; it's flagged ⚑ when the price drops under it.
+---
 
-- **Sharing balances with a shared dashboard** (self-hosted only): on a personal dashboard, edit an account (Accounts › Edit) or an asset and tick the shared dashboard under **Share value with**. For accounts you can also tick **Include month-end balance history**. Only the name, type, owner and balance (plus history, if ticked) are shared — never transactions. On the shared dashboard they appear under **Accounts › From personal dashboards**, read-only, updated whenever the owner opens their dashboard. Each has a ⚙ to choose where it counts: Cash & investments tile, Investments chart, Net worth (all on by default). If the shared dashboard already has its own entry with the same name, you'll be offered **Remove the copy here** or **Keep both**.
+## Basic configuration
 
-- **OFX / QFX import:** besides CSV and PDF, the Import form reads OFX and QFX files (most banks' "Download for Quicken" option). Transactions and the ledger balance are filled in automatically.
-- **Transfer matching:** a payment out of checking/savings and the same amount arriving on a credit card or loan within 5 days are marked as one transfer, so they don't count as spending or income. The transaction editor shows "↔ Matched transfer with …"; change "Counts as" to override.
-- **Backup & restore** (⚙ Settings): **Download backup** saves everything in the current dashboard to a JSON file. **Restore from backup…** replaces the dashboard's data with a backup file (two clicks to confirm); the server saves a full safety copy first. The server also keeps a daily full backup in `data/backups` (last 30).
+All of these are per dashboard, saved on the server, and follow you to every device.
 
-- **Rates & economy** (Markets tab, self-hosted): mortgage and Treasury rates (FRED), inflation overall and for Midwest groceries, restaurants, energy, gasoline and shelter (BLS), Midwest gas and Iowa electricity prices (EIA) and Iowa City home prices (FHFA via FRED). Refreshed once a day and saved to `data/econ-cache.json`; a Data check lists anything unavailable.
-- **Alerts in Needs attention:** your mortgage rate vs today's average (refinance check), savings rates far below Treasury bills, NHTSA recalls for vehicles with a VIN, and Iowa City home-price changes since you last valued your home. Bills due on a bank holiday or weekend are marked in Upcoming bills.
-- **Vehicle VIN lookup:** in a vehicle asset, enter the VIN and press **Look up** to fill in year, make, model and trim (NHTSA, no key needed).
-- **Year in review → After inflation:** your spending change for the year compared with Midwest price changes.
-
-Keys for FRED, BLS and EIA go in the same `api-keys.json` (see below). NHTSA and the holiday calendar need no key.
-
-- **Data sources (API keys)** in ⚙ Settings: lists each data service with what it adds (hover) and a link to sign up (click). Paste a key and press **Save keys**; it's written to `data/api-keys.json` and used right away. Only the first account created on the server can change keys; others see which are set.
-- **Sections & details to show** in ⚙ Settings: untick any section or detail (for example Markets commodities, Economy inflation, Holdings watchlist) to hide it on that dashboard.
-- **Holding details** (Holdings, ⓘ next to a symbol): 52-week range, next earnings date, analyst ratings and price target, recent news, and for ETFs/funds what they hold by sector. Fund sector weights are also used in the allocation "By sector".
-
-### Live stock prices (optional API keys)
-
-With no keys, the app tries Stooq's free delayed quotes. For better data, create free accounts at Finnhub (finnhub.io) and Financial Modeling Prep (financialmodelingprep.com), then create a file named `api-keys.json` in the app's `data` folder:
-
-```json
-{ "finnhub": "…", "fmp": "…", "fred": "…", "bls": "…", "eia": "…" }
-```
-
-Restart the app. Prices come from Finnhub first, then FMP, then Stooq; company names and sectors come from FMP (or Finnhub). Prices are cached for 15 minutes. Keep this file private: it's in the `data` folder, so don't share that folder or post it online. You can use the `FINNHUB_KEY` and `FMP_KEY` environment variables instead of the file.
-- **Small screens:** sections reflow to fit without sideways scrolling; minor columns hide on narrow screens and come back when there's room.
-- **Pick the time range** with "Show" at the top: last 3/6/12/24 months, this year, last year, all time or custom dates. Every chart and table follows it. Tick **Compare with the previous period** to see changes against the same number of months before.
-- **Spending by category:** click a category in the chart, legend or table. The vendor list and transactions below narrow to it; "Show all categories" undoes it.
-- **Quick fixes:** each row has an **Ignore** button (**Delete** for manual entries). Tick **Allow editing** above the table to change vendor, category and "counts as" right in the rows; each change saves as soon as you leave the field.
-- **Fix a transaction:** in *Transactions*, press **Edit**. You can:
-  - change the vendor or category
-  - mark it one-time (left out of everyday spending) or a transfer (not counted)
-  - split it across up to 4 categories
-  - **Ignore transaction** to leave it out of every total (like deleting it). For a manual entry this button reads **Delete entry** and removes it for good.
-  - tick "Do this for every transaction whose description contains…" to save a **rule** that also applies to past and future imports
-
-  "Needs a category" shows anything an import couldn't place. Rules are listed under the table, each with a Remove button.
-
-  Ignored transactions are listed under *Ignored transactions* (click to open), each with **Restore**. Tick the "every transaction whose description contains…" box before pressing Ignore to ignore all matching transactions with a rule. Remove that rule to bring them back.
-- **Budgets:** in *Budget vs actual*, use **Set a monthly budget**: category, amount, starting month, and optional rollover. These replace the spreadsheet's plan for that category from that month on. For the current month, the faint bar and the Budget card show where you're headed at the current pace.
-- **Statements:** under *Add statements*, choose the **Account** from the dropdown (or press **+** to add a new one with its type and name), then pick a CSV downloaded from your bank or card.
-  - **PDF statements work too** (pick a .pdf in the same box; the app tells CSV and PDF apart). The PDF is read on your device, nothing is uploaded anywhere but your own server.
-    - Checking, savings and credit card PDFs: the transaction table is read into the same preview as a CSV, and the ending balance is filled in.
-    - Investment, retirement, loan and mortgage PDFs: only the ending balance is recorded. The app lists every balance it found; tick the one for this account.
-    - If one PDF holds several accounts (e.g. SoFi checking, savings and vaults), choose which one you're importing from the list that appears.
-    - Always glance at the preview and balance before saving; statement layouts vary by bank. Check the preview (purchases should show as "Out"), then press **Save import**.
-  - Card payments and transfers between your own accounts are left out so nothing is counted twice.
-  - Once a month has imported transactions for a budget, they replace that month's spreadsheet rows.
-- **Account balances:** in *Record a statement balance*, choose the **Account** from the dropdown (its type and owner fill in automatically; press **+** for a new account), then enter the balance and its date ("Balance as of").
-  - **Checking, savings and credit cards** then update themselves from the transactions you import. Use the **same account name** as on your imports.
-  - Record each card as **Credit card (amount owed)**. That fills the *Credit cards* section and the "Net after cards" figure.
-  - If a calculated balance ever drifts from the bank's figure, record a new balance with today's date.
-  - **Investments, retirement and mortgage:** record the balance from each statement, since their values change without transactions.
-- **Transactions table:** use **Columns** to show, hide or reorder columns (Description and Counts as are available). Drag a header's corner to resize it. **Ignore** hides a transaction from all totals; it can be restored under *Ignored transactions*. **Allow editing** lets you change vendor, category and type right in the rows. After changing a category there, **Apply to all** turns it into a rule. Rules can be edited.
-- **Money that never shows on a statement** (like your brother paying for his phone line): use *Add income or an expense by hand*.
-- **Mistakes:** each import and manual entry has a **Remove** button.
-- **Download backup** (top right) saves the current budget's data as a JSON file.
-
-## 6. Looking after it
-
-| What | How |
+### ⚙ Settings page
+| Setting | What it does |
 |---|---|
-| Change a password | `node server.js passwd nate`. This also signs that login out everywhere. |
-| See logins | `node server.js users` |
-| Back up now | `node server.js backup`. Copy `data/backups/` somewhere off the PC now and then (USB drive, cloud folder). |
-| Restore a backup | Stop the server, replace `data/finance.db` with a file from `data/backups/`, start it again. |
-| Move to another computer | Copy the whole folder, including `data/`. |
-| PDF reading | Uses pdf.js (in `public/vendor/pdfjs`, Apache-2.0 license). |
-| Change the port | Set the `PORT` environment variable, for example `set PORT=9000` before starting. |
+| **Dashboard type** | *Personal* (one person) or *Shared*. Shared adds people and % shares for *Who paid what*. |
+| **Open on** | Which tab shows first |
+| **Default range** | The starting date range (last 3/6/12/24 months, this year, etc.) |
+| **Week starts on** | Sunday or Monday, for the spending calendar |
+| **Top-row tiles** | Choose which summary tiles show at the top |
+| **Hide cents** | Round money to whole dollars |
+| **Sections & details to show** | Untick any section, or a detail inside one, to hide it. Examples: the spending calendar, Markets commodities, the dividend calendar, the budget ring's *today* or *pace* marker. |
+| **Reset all chart colors** | Undo all chart color changes |
+| **Data sources (API keys)** | Add optional market and economy keys ([details](#optional-data-sources-api-keys)) |
+| **Backup & restore** | Download or restore this dashboard's data |
 
-**Security notes:**
-- The app is meant for your home network and Tailscale only. Don't forward port 8080 on your router.
-- Passwords are stored hashed (scrypt).
-- Sign-ins expire after 60 days.
-- After 10 wrong passwords from one device, that device has to wait 15 minutes.
+Click **⚙ Settings** again to go back to the tab you were on.
 
-## Checking the calculations (automatic tests)
+### Chart colors
+Every chart and ring has a small **⚙** in its top-right corner. Use it to pick colors for that chart (handy for color-blindness); **Reset to default** undoes it.
 
-From the app folder run `npm test`. It checks the core math behind the numbers — rules (AND and OR), ignore rules, edits beating rules, transfer matching, balance roll-forward and totals — and should end with `# fail 0`. Worth running after every update.
+### Accounts
+In **Accounts → Your accounts**, click **Edit** on an account to set:
+- **Type:** checking, savings, high-yield savings, CD, credit card, mortgage, HELOC, auto or student loan, 401(k), IRA, HSA, 529 and more.
+- **Rate** (APY or APR), **owner**, **notes**, and a **rate-change date** (a promo ending or a CD maturing).
+- **Credit limit** (shows a usage bar), and **loan payment / escrow / extra principal** (shows the payoff date).
+- **Active:** untick to hide a closed account but keep its history.
+- **Same account as…:** merges two names for one account. The old name becomes an alias, so future imports land in the right place.
+- **Share value with:** shares this account's balance with a shared dashboard ([details](#sharing-balances-with-a-shared-dashboard)).
 
-## 7. Updating to a new version
+### Rules
+In **Transactions → Rules**, click **+ New rule**.
+- **IF** Description, Vendor, Category, Counts as or Amount matches. All conditions in a group must match; add an **OR** group for alternatives.
+- **SET** Category, Vendor, Counts as, a tag, or *Ignore*.
+- A live preview shows what a rule will match before you save. Rules run top to bottom; use ↑/↓ to reorder. If two rules set the same field, the lower one wins.
 
-Your data lives only in the `data/` folder (`finance.db` plus `backups/`). A new zip never contains a `data/` folder, so updating means replacing the app files and leaving `data/` alone. The June–November sheet history is only loaded the first time the app starts, so updating won't duplicate it or undo your edits.
+### Transactions table
+- **⚙ Columns** shows, hides and reorders columns. Drag a header edge to resize it.
+- **Allow editing** lets you edit vendor, category and type right in the rows.
+- **Export CSV** downloads what's currently listed.
 
-**Windows PC (same steps whether you use Tailscale or WireGuard)**
-1. Open **Terminal (Admin)** in the app folder and stop the app:
+### Custom reports
+Click **+ Report** in the top bar to make your own tab. Click **Edit**, then **Add a view** to add any section. Size each one S, M, L or F (full width) and reorder with ↑/↓. Reports sync across devices.
+
+---
+
+## Feature guide
+
+### Overview
+- **Top tiles:**
+  - **Cash flow:** income versus spending, shown as numbers, a ring or bars.
+  - **Budget:** a ring with a **today** marker (how much of the month has passed) and a dashed **pace** marker (where spending will land at month end). A single bill that already covers most of its budget, like the mortgage, counts as paid instead of being projected forward.
+  - **Where the income went:** kept, everyday spending, mortgage or rent, utilities, subscriptions.
+  - **Cash & investments**, and **Mortgage & loans**.
+- **Needs attention:** stale accounts, uncategorized transactions, subscription price changes, upcoming rate changes and, with API keys, refinance and savings-rate alerts. Each item has a button that takes you to the fix.
+- **Unusual this month:** categories at least 30% (and $50) above their 6-month average.
+- **Biggest purchases:** the 10 largest expenses. Toggles hide the mortgage, subscriptions or recurring bills.
+- **Upcoming bills & 30-day cash forecast:** bills that land on a weekend or bank holiday are marked.
+- **Who paid what** (Shared dashboards): each person's spending versus their share, with a "who owes whom" line.
+
+### Expenses
+- Top 5 vendors, income versus spending, spending by category (click one to filter everything below), subscriptions with price-change history, spending by vendor, tags (for trips and events), and a spending calendar by day.
+
+### Budget
+- Budget versus actual per category, with rollover, pace bars and the budget ring.
+
+### Accounts
+- **Your accounts:** grouped as cash, credit, loans and investments, with balances, estimated interest, *Net cash after cards* and *Net worth*.
+- **Net worth over time**, **Checking & savings**, **Investment accounts** charts.
+- **Savings goals:** a target, an optional date, and progress from a linked account or an amount you enter.
+- **Home, vehicles & other assets:** enter a value; vehicles depreciate a set % per year (15% by default). Link a loan to see equity, and use **Look up** to fill in a vehicle's details from its VIN. These count toward net worth.
+- **Mortgage & loans:** balance history, a payoff ring, and a **payoff schedule** with an *extra each month* slider.
+- **Holdings** (stocks, ETFs and funds):
+  - Add purchases as lots; sales use the oldest shares first.
+  - Shows allocation by holding, type, sector and account.
+  - Shows dividends (last 12 months, plus a **dividend calendar** for the next 12) and a **watchlist** with price alerts.
+  - **ⓘ details** show the 52-week range, earnings date, analysts' ratings, news and what a fund holds.
+  - **Update account balances from holdings** records today's value on the linked investment accounts.
+
+### Sharing balances with a shared dashboard
+On a **personal** dashboard, edit an account or asset and tick the shared dashboard under **Share value with**. For accounts, you can also share month-end history.
+- Only the name, type, owner and balance are shared, never transactions.
+- A **⇄** badge marks shared items; hover it to see where they're shared.
+- On the shared dashboard, they appear under **Accounts → From personal dashboards**, read-only. Use each item's ⚙ to choose where it counts (cash and investments, investments chart, net worth).
+- If the shared dashboard already has its own entry with the same name, you can choose **Remove the copy here** or **Keep both**.
+
+### Transactions
+- Search, filter by type, and edit any transaction. In the editor you can:
+  - change the vendor or category,
+  - mark it **one-time** (left out of everyday spending) or a **transfer** (not counted),
+  - **split** it across up to 4 categories,
+  - **tag** it,
+  - **ignore** it (restore it later under *Ignored transactions*).
+- **Transfer matching:** a payment out of checking or savings that arrives on a card or loan for the same amount within 5 days counts as one transfer, not spending.
+- **Manual entries:** the round **+** button (bottom right) adds income or an expense that never appears on a statement.
+
+### Markets and economy (need API keys)
+- **Markets:** S&P 500, Nasdaq 100, Dow and Russell 2000 (via the SPY/QQQ/DIA/IWM funds), gold, silver, oil and gas, sector performance, and top gainers and losers.
+  - ☆ follows a sector and pins it to the top.
+  - **Followed sectors** filters the movers list.
+  - Data refreshes at most once an hour while the market is open, plus once after the close.
+- **Rates & economy:** mortgage and Treasury rates, inflation (overall and Midwest categories), gas and electricity prices, and local home prices. Updated daily.
+
+### Year in review
+Pick a year to see income, spending, what you kept, the biggest and lightest months, the top category and vendor, and an **after inflation** comparison. Click a month for its snapshot and calendar.
+
+### Importing statements
+| Format | Notes |
+|---|---|
+| **CSV** | Download it from your bank's website. Columns are detected; adjust them in the preview if needed. |
+| **PDF** | Read on your own device. Checking, savings and card PDFs give transactions plus the ending balance; investment and loan PDFs give the balance only. If one PDF holds several accounts, pick one. |
+| **OFX / QFX** | Your bank's "Download for Quicken" option. Transactions and balance are filled in automatically. |
+
+Once a month has imported transactions, they replace any older spreadsheet-loaded rows for that month. Every import has a **Remove** button.
+
+---
+
+## Optional data sources (API keys)
+
+None of these are required. Everything except Markets, Rates & economy and live prices works without them. All have free plans.
+
+| Service | Adds | Sign up |
+|---|---|---|
+| **Finnhub** | Live stock prices, company sectors, news, analysts' ratings, earnings dates | https://finnhub.io |
+| **Financial Modeling Prep (FMP)** | Indexes, commodities, sector performance, top movers, dividends, price targets, fund holdings (250 calls/day) | https://site.financialmodelingprep.com/developer/docs |
+| **FRED** (St. Louis Fed) | Mortgage and Treasury rates, home price index | https://fred.stlouisfed.org/docs/api/api_key.html |
+| **BLS** | Inflation by category | https://data.bls.gov/registrationEngine/ |
+| **EIA** | Gasoline and electricity prices | https://www.eia.gov/opendata/register.php |
+
+NHTSA (vehicle VIN look-up and recalls) and the holiday calendar need no key.
+
+**Adding keys:** **⚙ Settings → Data sources**. Hover a name for what it adds, click it to sign up, then paste the key and click **Save keys**. Keys take effect right away. Only the **first login created on the server** can change keys; other logins see which keys are set.
+
+Other ways to add keys:
+- Create `api-keys.json` in the data folder:
+  ```json
+  { "finnhub": "…", "fmp": "…", "fred": "…", "bls": "…", "eia": "…" }
+  ```
+  Save it as plain text. Windows may add a hidden `.txt` ending; the Data check message warns if it does.
+- Set the environment variables `FINNHUB_KEY`, `FMP_KEY`, `FRED_KEY`, `BLS_KEY` or `EIA_KEY`.
+
+Keys are stored only on the host. Calls are cached and paced to stay within the free limits (market data at most hourly, economy data daily), and caches are saved in the data folder so restarts don't use extra calls.
+
+---
+
+## Maintenance
+
+### Backups
+- **Automatic:** a full backup is written to `<data folder>/backups` once a day. The last 30 are kept.
+- **On demand:** desktop tray → **Back up now**, or `node server.js backup`.
+- **Per dashboard:** **⚙ Settings → Backup & restore → Download backup** saves a JSON file. **Restore from backup…** replaces that dashboard's data; the server saves a safety copy first.
+- **Off the machine:** copy the `backups` folder to a USB drive or cloud folder now and then.
+- **Full restore:** stop the server, replace `finance.db` in the data folder with a file from `backups`, then start it again.
+
+### Logins and passwords
+- **Desktop app:** tray → **Change setup…** → **Add another login**.
+- **Self-hosted:** `node server.js add-user <name> <dashboards>`. Change a password with `node server.js passwd <name>`.
+- Sign-ins last 60 days. After 10 wrong passwords, a device must wait 15 minutes.
+
+### Updating
+**Desktop app:**
+- It checks for updates once a day and from tray (or **Help**) → **Check for updates…**.
+- It asks before downloading, and again before restarting.
+- Your data folder is never touched by an update.
+
+**Self-hosted server on Windows:**
+1. Stop it: `Stop-ScheduledTask -TaskName 'Household Finances'` in Terminal (Admin), or close the `start-windows.bat` window.
+2. Back up: `node server.js backup`.
+3. Unzip the new version **over** the existing folder and choose **Replace the files**. The `data` folder isn't in the zip, so it isn't touched.
+4. Start it: `Start-ScheduledTask -TaskName 'Household Finances'`, or restart the PC. Open http://localhost:8080 to check.
+
+**Self-hosted server on Linux, macOS or Termux:** stop the server, back up, run `unzip -o` with the new zip over the folder, and start it again.
+
+**Phones** pick up the new version on the next load. If one still looks old, fully close the app and reopen it. On a PC, press **Ctrl+F5**. You don't need to reinstall or sign in again. Tailscale, WireGuard and addresses don't change with an update.
+
+**If an update goes wrong:** stop the server, restore `finance.db` from a backup, and reinstall the previous version.
+
+---
+
+## Moving between the desktop app and the self-hosted server
+
+Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`, caches).
+
+**Self-hosted to desktop app (same PC):**
+1. Stop the self-hosted server and disable its autostart:
    ```
    Stop-ScheduledTask -TaskName 'Household Finances'
+   Disable-ScheduledTask -TaskName 'Household Finances'
    ```
-   (If you start it with `start-windows.bat` instead, just close that window.)
-2. Back up first: `node server.js backup`, or copy the `data` folder somewhere safe.
-3. Unzip the new version **over** the existing folder (e.g. `C:\HouseholdFinances`) and choose **Replace the files** when Windows asks. Your `data` folder isn't touched.
-4. Start it again:
-   ```
-   Start-ScheduledTask -TaskName 'Household Finances'
-   ```
-   or restart the PC. Then open http://localhost:8080 to check it.
+   Disabling (instead of removing) lets you switch back easily.
+2. Back up: copy the self-hosted `data` folder somewhere safe.
+3. Install the desktop app. In setup, choose **Keep my finances on this computer**, keep port **8080** (now free), and under **Data folder** choose the self-hosted install's `data` folder (for example `C:\HouseholdFinances\data`). Leave the data where it is; don't move it while you're switching. Or copy its contents into `%APPDATA%\HouseholdFinances` first if you want the default location.
+4. Choose the same mode you had before. If phones used to connect, pick *This computer, my phone and other devices*.
+5. Existing logins, dashboards, API keys and phone addresses keep working. A Tailscale `serve` setting for port 8080 keeps working too.
 
-**Network side: nothing to redo**
-- **Tailscale:** the `tailscale serve --bg 8080` setting survives updates and restarts. The `https://…ts.net` address stays the same.
-- **WireGuard:** the PC's address and port don't change, so phone configs stay as they are.
+**Desktop app to self-hosted:** quit the app (tray → Quit), turn off **Start with Windows**, and start the self-hosted server with `--data` pointing at the app's data folder (or copy that folder's contents into `data/`).
 
-**Phones**
-- The app caches itself for speed and picks up the new version on the next load. If a phone still shows the old layout, close the app fully (swipe it away) and reopen it, or pull down to refresh in the browser.
-- **iPhone home-screen app:** close and reopen it; occasionally it needs a second reopen. If it still looks old, open the address in Safari once, then reopen the home-screen app.
-- You don't need to reinstall the home-screen app or sign in again.
+**To another computer:** stop the server, copy the whole data folder to the new machine, and point the new install at it.
 
-**Android phone hosting (Termux)**
-1. In Termux, stop the server with **Ctrl+C** (or `pkill node`).
-2. Back up: `cd ~/household-finance && node server.js backup`
-3. Copy the new zip to the phone's Downloads, then:
-   ```
-   cd ~ && unzip -o ~/storage/downloads/household-finance.zip
-   ```
-   (`-o` overwrites the app files; `data/` isn't in the zip, so it's kept.)
-4. Start it again: `cd household-finance && sh scripts/start-termux.sh`
+---
 
-**After updating to the Nov 20 (evening) version:** an earlier bug could save an investment balance as a checking/savings account. Open **Accounts → Cash**; if an investment name (e.g. "Empower 401k") is listed there, use **Edit → Delete account** on it and record that balance again with the account dropdown. Merge any remaining duplicate names with **Edit → Same account as…**.
+## Troubleshooting
 
-**If a page looks half-updated** (a missing dropdown or button) right after updating, press **Ctrl+F5** on the PC, or fully close and reopen the app on a phone. From the Nov 20 version on, the server tells browsers to always check for newer files, so this shouldn't happen again.
-
-**If something goes wrong after an update:** stop the app, put your backup back as `data/finance.db` (see *Restore a backup* above), and unzip the previous version.
-
-## How it's built
-
-| File | What it does |
+| Problem | Try |
 |---|---|
-| `server.js` | The web server, logins, the database, the API and the daily backups (Node built-ins only). |
-| `public/` | The app itself. `charts.js`, `calcs.js`, `page.js` and `import.js` are the same code as the Claude dashboard. `runtime.js` stands in for the Claude dashboard features they used; `app.js` handles signing in and switching budgets. |
-| `seed/` | The spreadsheet history loaded on first start. |
-| `public/vendor/d3.min.js` | The d3 charting library (ISC license, see `d3-LICENSE.txt`). |
+| "Port 8080 is already in use" | Another copy is running (for example the self-hosted scheduled task alongside the desktop app). Stop one, or choose another port. |
+| A phone can't connect | Is the host on and awake, and in host mode? Is the phone on the same Wi-Fi, or Tailscale *Connected*? Is the PC's network set to **Private**? Did Windows block Node.js at the firewall? Allow it on Private networks. |
+| The page looks half-updated | Press Ctrl+F5, or fully close and reopen the app. |
+| Markets say "No API keys found" | Add keys under ⚙ Settings → Data sources. The **Data check** link lists what's missing. |
+| Markets say "1 item unavailable" | That data isn't included in your free plan, or the service was briefly down. It retries on the next refresh. |
+| An investment shows up under Cash | Edit it and set the right type, or **Delete account** and record the balance again with the right type. |
+| Duplicate accounts with slightly different names | Edit one → **Same account as…** to merge them. |
+| SmartScreen blocks the installer | **More info → Run anyway**. The installer isn't code-signed. |
+| Desktop app won't start the server | Check `%APPDATA%\Household Finances\server.log`. |
+| Forgot a password | On the host: `node server.js passwd <name>`. Desktop app: tray → **Change setup…** and re-create the login with the same name, which replaces its password. |
 
-Vendor-name rules live at the top of `public/calcs.js` (the `RULES` list), for example `[/^office chair$/i, 'Amazon']`. Add a line there to group another description under a store.
+---
 
-### Dividend calendar & sector movers
-- **Holdings → Dividend calendar:** the next 12 months of expected dividends, projected from each holding's recent payment pattern (monthly, quarterly, semiannual, annual) times your current shares. Hover a month for the breakdown. Hide it under Settings → Sections & details.
-- **Markets → Top movers:** each mover shows its sector. Once you follow (★) a sector, an **All sectors / Followed sectors** button filters the list. Sectors come from Finnhub and are cached on disk (`data/sector-cache.json`), with at most 20 new lookups per refresh.
+## Security notes
+- Designed for your home network and a private VPN (Tailscale or WireGuard). **Don't expose port 8080 to the internet.**
+- Passwords are stored hashed (scrypt). Sign-ins expire after 60 days, and repeated wrong passwords are rate-limited.
+- API keys stay on the host. Only stock symbols, never your finances, are sent to market data services.
+- The data folder holds everything sensitive. Keep backups somewhere private, and don't share or publish that folder.
 
-### Where your data lives
-`node server.js where` prints the data folder, database, settings, API keys and backups locations.
-- Default: `./data` next to `server.js` (unchanged for existing installs). Override with `DATA_DIR=...` or `--data <folder>`, or put `{ "dataDir": "D:/Finance" }` in a `config.json` next to `server.js`.
-- The desktop and phone apps set `FD_APPMODE`, which uses your per-user folder (Windows `%APPDATA%\HouseholdFinances`).
-- `<data>/config.json` holds `{ "mode": "local" | "host", "port": 8080 }`. **local** = only this computer can open it; **host** = other devices (home network or Tailscale) can too. Change it with `node server.js mode local` / `mode host`. The `PORT` and `HOST` environment variables still win.
+---
 
-### Budget ring markers
-The budget ring shows **today** (how much of the month has passed) and a dashed **pace** marker (where spending will land at month end). Pace extrapolates everyday categories, and counts a single bill that already covers most of its budget (mortgage, utilities) as paid instead of multiplying it. Turn either marker off under Settings → Sections & details.
+## For developers
 
-### Running the server from another program (desktop app)
-`require('./server.js')` doesn't start anything by itself. It gives you:
-- `start({ mode, port, quiet })` → resolves with `info()`; rejects with a clear message if the port is in use
-- `stop()` → frees the port immediately ("Stop hosting")
-- `info()` → `{ running, mode, port, url, lan: [addresses], dataDir, users }`
-- `setMode('local' | 'host')` → saves and restarts on the same port if running
-- `addUser(name, password, [budgetIds])`, `books()`, `backup()` for a first-run setup screen
+**Project layout**
 
-`node server.js` works exactly as before and now shuts down cleanly on Ctrl+C.
+| Path | What it is |
+|---|---|
+| `server.js` | Web server, logins, SQLite database (`node:sqlite`), API, backups, market/economy data. Node built-ins only. |
+| `public/` | The web app: `page.js` (all views), `calcs.js` (data calculations), `charts.js`, `import.js` (CSV/OFX), `pdfstatement.js`, `runtime.js` (data loading and drawing), `store.js` (single data connector), `app.js`, `login.js`, `sw.js` (offline cache). |
+| `seed/` | *Optional*, git-ignored. `books.json` plus spreadsheet exports, loaded the first time a new database is created. Without it, you get two empty dashboards. |
+| `scripts/` | Windows setup, start and autostart scripts, and the Termux starter |
+| `test/` | `npm test`: checks rules, ignore rules, edit precedence, transfer matching, balance roll-forward and totals |
+| `desktop/` | Electron desktop app ([desktop/README.md](desktop/README.md)) |
+| `apps/` | Shared icons and the connect screen for the desktop and Android apps ([apps/README.md](apps/README.md)) |
+| `.github/workflows/` | Builds and publishes the desktop installer when `desktop/package.json`'s version changes |
+
+**Using the server from another program:** `require('./server.js')` doesn't start anything on its own. It exports `start({ mode, port, quiet })`, `stop()`, `info()`, `setMode(mode)`, `addUser(name, password, ids)`, `books()` and `backup()`. Running `node server.js` directly works as described above.
+
+**Data connector:** every request from the pages goes through `FDStore.fetch()` in `public/store.js`. A future on-device backend can plug in with `FDStore.use({ fetch })` and answer the same `/api/…` paths.
+
+**Vendor-name clean-up** lives at the top of `public/calcs.js` (the `RULES` list), for example `[/^office chair$/i, 'Amazon']`.
+
+**Licenses:** d3 (ISC, `public/vendor/d3-LICENSE.txt`), pdf.js (Apache-2.0, `public/vendor/pdfjs`). The desktop app bundles Electron and Node.js (MIT).

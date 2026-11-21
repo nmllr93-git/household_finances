@@ -7,6 +7,8 @@
 //   node server.js passwd <name>           change a password
 //   node server.js users                   list logins and their budgets
 //   node server.js backup                  write a backup copy of the database now
+//   node server.js budgets                 list budgets (dashboards)
+//   node server.js add-budget <id> <name>  create (or rename) a budget
 //   node server.js where                   show where the data, settings and keys are
 //   node server.js mode local|host         only this computer, or other devices too
 'use strict';
@@ -675,6 +677,16 @@ async function cli(cmd, args) {
     console.log('Password changed. That login was signed out everywhere.');
   } else if (cmd === 'users') {
     for (const u of db.prepare('SELECT username FROM users ORDER BY username').all()) console.log(`${u.username}: ${userBooks(u.username).map((b) => b.id).join(', ')}`);
+  } else if (cmd === 'budgets') {
+    for (const b of db.prepare('SELECT id, name FROM books ORDER BY sort').all()) console.log(`${b.id}  ${b.name}`);
+  } else if (cmd === 'add-budget') {
+    const id = String(args[0] || '').toLowerCase(), name = args.slice(1).join(' ').trim();
+    if (!/^[a-z0-9_-]{2,24}$/.test(id) || !name) { console.log('Usage: node server.js add-budget <id> <name>   e.g. add-budget alex "Alex – Personal"'); return; }
+    if (db.prepare('SELECT 1 FROM books WHERE id = ?').get(id)) { db.prepare('UPDATE books SET name = ? WHERE id = ?').run(name, id); console.log(`Renamed ${id} to "${name}".`); return; }
+    const sort = db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 n FROM books').get().n;
+    db.prepare('INSERT INTO books (id, name, label, sort) VALUES (?, ?, ?, ?)').run(id, name, /shared/i.test(id + name) ? 'Shared' : 'Personal', sort);
+    for (const ds of ['sheet_history', 'sheet_balances', 'sheet_budgets']) db.prepare('INSERT INTO seed (book_id, dataset, json) VALUES (?, ?, ?)').run(id, ds, '[]');
+    console.log(`Created budget ${id} ("${name}"). Give a login access with: node server.js add-user <name> ${id},...`);
   } else if (cmd === 'where') {
     console.log(`Data folder:   ${DATA_DIR}\nDatabase:      ${path.join(DATA_DIR, 'finance.db')}\nSettings:      ${CFG_FILE}\nAPI keys:      ${path.join(DATA_DIR, 'api-keys.json')}\nBackups:       ${BACKUP_DIR}\nMode:          ${CFG.mode} (${HOST}:${PORT})`);
   } else if (cmd === 'mode') {
@@ -683,7 +695,7 @@ async function cli(cmd, args) {
   } else if (cmd === 'backup') {
     console.log('Backup written to', backup());
   } else {
-    console.log('Commands: add-user <name> <budgets> | passwd <name> | users | backup | where | mode local|host   (no command = start the server)');
+    console.log('Commands: add-user <name> <budgets> | passwd <name> | users | budgets | add-budget <id> <name> | backup | where | mode local|host   (no command = start the server)');
   }
 }
 
