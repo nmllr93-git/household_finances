@@ -1,6 +1,8 @@
 # Household Finances — Android app
 
-Connects to your Household Finances server (the desktop app in host mode, or the self-hosted server), the same way the phone browser does, but as a real app with its own icon.
+Two ways to use it, chosen on the first screen:
+- **Keep my data on this phone** (phone-only mode): no PC or server at all. Everything is stored privately inside the app on this phone. Nothing is sent anywhere (market data in this mode comes later).
+- **Connect to a server:** the desktop app in host mode, or the self-hosted server, the same way the phone browser does.
 
 ## Install on a phone
 1. On the phone, open the releases page (`household_finances-releases` → Releases) and find the newest **Android** release.
@@ -14,8 +16,17 @@ Away from home: turn on the Tailscale app on the phone first.
 
 **Updates:** install the newer APK the same way; it installs over the old one and you stay signed in.
 
+## Phone-only mode
+- **Your data** lives in the app's private storage on the phone, kept until the app is uninstalled or its data is cleared in Android settings.
+- **Same rules as the PC:** it runs the same shared core (`core/books.js`) as the server, so imports, budgets, rules, accounts, goals, holdings and settings all work the same.
+- **Backups:** the app keeps a snapshot every day (last 14) and one before any restore. **Download backup** opens the share sheet so you can save the file to Drive or Files, or email it. That file also restores on a PC (⚙ Settings → Backup & restore), and a PC backup restores here, which is how you move between phone-only and a server.
+- **Not in phone-only mode:** sharing between dashboards (needs a server) and, for now, market, economy and live price data.
+- **Switching:** *Connect to a server instead* (top right) goes to the start screen; your phone data stays put and is there when you come back.
+- **Uninstalling the app deletes phone-only data.** Make a backup file first.
+
 ## How it's built
-- [Capacitor](https://capacitorjs.com) wraps a tiny local start screen (`apps/connect.html`); after connecting, the app shows your server's own pages, so sign-in and every feature work exactly like the browser.
+- [Capacitor](https://capacitorjs.com) ships the dashboard (`public/`), the start screen (`apps/connect.html` → `start.html`) and the shared core. In server mode the app opens your server's own pages; in phone-only mode `public/local.js` answers the dashboard's requests on the device (IndexedDB storage) using the shared core.
+- Plugins: Filesystem + Share (saving backup files).
 - GitHub Actions (`.github/workflows/android-release.yml`) builds and signs the APK when `main` is pushed to the `release` branch and `version` in `mobile/package.json` is new, and publishes it as `android-v<version>` in the releases repo. No Android Studio needed.
 - Plain `http://` home servers are allowed (`usesCleartextTraffic`), since most home servers don't have HTTPS.
 

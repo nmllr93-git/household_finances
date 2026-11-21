@@ -15,6 +15,7 @@ A private budgeting and net-worth dashboard for a household, run on your own com
 | **Desktop app (Windows installer)** | Easiest. One install; a tray icon starts and stops it. | [A](#a-desktop-app-windows) |
 | **Self-hosted server (Node.js)** | An always-on PC or home server; full control from the command line. | [B](#b-self-hosted-server-windows-linux-macos) |
 | **Phone / other devices** | Opening the dashboard from phones and laptops once A or B is running. | [C](#c-using-it-from-phones-and-other-devices) |
+| **Android app, phone-only** | One person, no PC: everything stays on the phone. | [mobile/README.md](mobile/README.md) |
 | **Old Android phone as the server** | Experimental, low-power hosting. | [D](#d-hosting-on-an-old-android-phone-optional) |
 
 Both A and B use the same data format, so you can switch between them later (see [Moving between setups](#moving-between-the-desktop-app-and-the-self-hosted-server)).
@@ -517,7 +518,8 @@ Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`,
 | Path | What it is |
 |---|---|
 | `server.js` | Web server, logins, SQLite database (`node:sqlite`), API, backups, market/economy data. Node built-ins only. |
-| `core/books.js` | Shared dashboard data rules (validation, load, save, export, restore) used by the server and, later, the phone's on-device mode. No Node or browser APIs; storage is passed in. |
+| `public/local.js` | Phone-only mode: answers the dashboard's `/api` requests on the device (IndexedDB) using the shared core. Does nothing unless the phone app turned it on. |
+| `core/books.js` | Shared dashboard data rules (validation, load, save, export, restore) used by the server and the phone's on-device mode. No Node or browser APIs; storage is passed in. |
 | `public/` | The web app: `page.js` (all views), `calcs.js` (data calculations), `charts.js`, `import.js` (CSV/OFX), `pdfstatement.js`, `runtime.js` (data loading and drawing), `store.js` (single data connector), `app.js`, `login.js`, `sw.js` (offline cache). |
 | `seed/` | *Optional*, git-ignored. `books.json` plus spreadsheet exports, loaded the first time a new database is created. Without it, you get two empty dashboards. |
 | `scripts/` | Windows setup, start and autostart scripts, and the Termux starter |

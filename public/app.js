@@ -43,7 +43,14 @@
     try { await FDStore.fetch('/api/logout', { method: 'POST' }); } finally { location.href = '/login.html'; }
   });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // Phone-only mode: the app ships its own files, so no offline cache (it could serve old files after an app update).
+  if (window.FD_LOCAL) { try { navigator.serviceWorker && navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())); } catch (e) {}
+    $('#fd-logout').hidden = true;
+    const sw = document.createElement('button'); sw.type = 'button'; sw.className = 'fd-link'; sw.textContent = 'Connect to a server instead';
+    sw.title = 'Your data stays on this phone; you can come back to it any time';
+    sw.addEventListener('click', () => { try { localStorage.setItem('fd-mode', ''); } catch (e) {} location.href = 'start.html?pick=1'; });
+    $('.fd-account').append(sw);
+  } else if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   boot();
 })();
 

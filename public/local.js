@@ -1,0 +1,120 @@
+// Phone-only ("local") mode: the dashboard runs entirely on this device with no server.
+// Only active when the phone app has set localStorage 'fd-mode' = 'local'; on a server it does nothing.
+// Data lives in this app's own IndexedDB database. The dashboard rules come from the same shared core
+// the PC server uses (core-books.js), so validation, export and restore behave identically, and a backup
+// made here restores on a PC (and the other way round).
+(function () {
+  let mode = ''; try { mode = localStorage.getItem('fd-mode') || ''; } catch (e) {}
+  if (mode !== 'local') return;
+  window.FD_LOCAL = true;
+
+  // ---------- IndexedDB storage ----------
+  const DBNAME = 'household-finances', VER = 1;
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open(DBNAME, VER);
+    r.onupgradeneeded = () => { const d = r.result;
+      if (!d.objectStoreNames.contains('books')) d.createObjectStore('books', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('docs')) d.createObjectStore('docs', { keyPath: 'id' }).createIndex('bookColl', ['bookId', 'coll']);
+      if (!d.objectStoreNames.contains('seed')) d.createObjectStore('seed', { keyPath: ['bookId', 'dataset'] });
+      if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv');
+      if (!d.objectStoreNames.contains('backups')) d.createObjectStore('backups', { keyPath: 'id' }); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = async (stores, mode, fn) => { const d = await open(); return new Promise((res, rej) => { const t = d.transaction(stores, mode); let out; Promise.resolve(fn(t)).then((v) => { out = v; }); t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); }); };
+  const req2p = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const all = (store, idx, key) => tx([store], 'readonly', (t) => { const s = t.objectStore(store); return req2p(idx ? s.index(idx).getAll(key) : s.getAll()); });
+  const kvGet = (k) => tx(['kv'], 'readonly', (t) => req2p(t.objectStore('kv').get(k)));
+  const kvSet = (k, v) => tx(['kv'], 'readwrite', (t) => { t.objectStore('kv').put(v, k); });
+  const newId = () => { const a = new Uint8Array(10); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+
+  const store = {
+    seedRows: async (bookId) => (await all('seed')).filter((r) => r.bookId === bookId).map((r) => ({ dataset: r.dataset, json: r.json })),
+    listDocs: async (bookId, coll) => (await all('docs', 'bookColl', [bookId, coll])).sort((a, b) => String(a.created).localeCompare(String(b.created))).map((r) => ({ id: r.id, json: r.json, created: r.created, created_by: r.createdBy })),
+    insertDoc: (r) => tx(['docs'], 'readwrite', (t) => { t.objectStore('docs').put(r); }),
+    deleteDoc: (bookId, coll, id) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const d = await req2p(s.get(id)); if (d && d.bookId === bookId && d.coll === coll) s.delete(id); }),
+    replaceBookDocs: (bookId, rows) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const keys = (await req2p(s.getAll())).filter((d) => d.bookId === bookId).map((d) => d.id); keys.forEach((k) => s.delete(k)); rows.forEach((r) => s.put({ ...r, bookId })); }),
+    newId,
+    backup: () => snapshot('before-restore'),
+  };
+
+  // ---------- dashboards on this phone ----------
+  const books = async () => { let b = await all('books'); if (!b.length) { b = [{ id: 'personal', name: 'Personal', label: 'Personal', sort: 0 }]; await tx(['books'], 'readwrite', (t) => { b.forEach((x) => t.objectStore('books').put(x)); }); } return b.sort((x, y) => x.sort - y.sort); };
+
+  // ---------- automatic backups: one snapshot a day, keep the last 14 (inside the app) ----------
+  async function snapshot(why) {
+    const core = await coreReady, api = core.createBookApi(store), list = [];
+    for (const b of await books()) list.push(await api.exportBook(b));
+    const id = new Date().toISOString().replace(/[:.]/g, '-') + (why ? '-' + why : '');
+    await tx(['backups'], 'readwrite', (t) => { t.objectStore('backups').put({ id, at: Date.now(), why: why || 'daily', books: list }); });
+    const old = (await all('backups')).sort((a, b) => b.at - a.at).slice(14);
+    if (old.length) await tx(['backups'], 'readwrite', (t) => old.forEach((o) => t.objectStore('backups').delete(o.id)));
+    return id;
+  }
+  async function dailyBackup() { const last = (await all('backups')).filter((b) => b.why === 'daily').sort((a, b) => b.at - a.at)[0]; if (!last || Date.now() - last.at > 864e5) await snapshot(''); }
+
+  // ---------- the shared core ----------
+  const coreReady = new Promise((res, rej) => {
+    if (window.FDCore) return res(window.FDCore);
+    const s = document.createElement('script'); s.src = 'core-books.js'; s.onload = () => res(window.FDCore); s.onerror = () => rej(new Error('core-books.js is missing')); document.head.append(s);
+  });
+
+  // ---------- API keys (kept on this phone only) ----------
+  const KEYS = ['finnhub', 'fmp', 'fred', 'bls', 'eia'];
+  const mask = (v) => (v ? '••••' + String(v).slice(-4) : '');
+
+  // ---------- answer the same /api/... requests the server does ----------
+  const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...(headers || {}) } });
+  const NOT_YET = 'Market and economy data aren’t available in phone-only mode yet.';
+  async function handle(path, opts) {
+    const o = opts || {}, method = (o.method || 'GET').toUpperCase(), url = new URL(path, 'https://local.app'), parts = url.pathname.split('/').filter(Boolean);
+    const body = async () => { try { return o.body ? JSON.parse(o.body) : {}; } catch (e) { const err = new Error('Bad request'); err.code = 400; throw err; } };
+    if (parts[0] !== 'api') return json(404, { error: 'Not found' });
+    switch (parts[1]) {
+      case 'ping': return json(200, { app: 'household-finances', local: true });
+      case 'login': case 'logout': return json(200, { ok: true });
+      case 'me': return json(200, { username: 'On this phone', books: (await books()).map(({ id, name, label }) => ({ id, name, label })), local: true });
+      case 'keys': {
+        const cur = (await kvGet('apikeys')) || {};
+        if (method === 'GET') return json(200, { canEdit: true, owner: 'you', set: Object.fromEntries(KEYS.map((k) => [k, mask(cur[k])])), fromEnv: {} });
+        const b = await body(); for (const k of KEYS) if (typeof b[k] === 'string') { const v = b[k].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[k] = v; else delete cur[k]; }
+        await kvSet('apikeys', cur); return json(200, { ok: true });
+      }
+      case 'quotes': return json(200, { sources: [], quotes: {} });
+      case 'dividends': return json(200, { dividends: {} });
+      case 'markets': case 'econ': case 'stock': return json(503, { error: NOT_YET, errors: [NOT_YET] });
+      case 'vehicle': return json(503, { error: NOT_YET });
+      case 'books': {
+        const book = (await books()).find((b) => b.id === parts[2]);
+        if (!book) return json(403, { error: 'No such budget on this phone' });
+        if (parts[3] === 'shares-list') return json(200, []);
+        const core = await coreReady, api = core.createBookApi(store);
+        const r = await api.handle(method, parts.slice(3), book, body, 'me');
+        if (parts[3] === 'data' && r.status === 200) dailyBackup().catch(() => {});
+        return json(r.status, r.body);
+      }
+    }
+    return json(404, { error: 'Not found' });
+  }
+  const backend = { name: 'local', fetch: (path, opts) => handle(path, opts).catch((e) => json(e.code || 500, { error: e.message || 'Error' })) };
+  if (window.FDStore) window.FDStore.use(backend); else document.addEventListener('DOMContentLoaded', () => window.FDStore && window.FDStore.use(backend));
+
+  // ---------- backup files: save/share a JSON file that also restores on a PC ----------
+  async function exportFile(bookId) {
+    const core = await coreReady, b = (await books()).find((x) => x.id === bookId) || (await books())[0];
+    const data = JSON.stringify(await core.createBookApi(store).exportBook(b), null, 1), name = `${b.id}-${new Date().toISOString().slice(0, 10)}.json`;
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    if (P && P.Filesystem && P.Share) { // phone app: write to the app's cache folder, then open the share sheet (Drive, email, Files…)
+      const w = await P.Filesystem.writeFile({ path: name, data, directory: 'CACHE', encoding: 'utf8' });
+      await P.Share.share({ title: 'Household Finances backup', url: w.uri, dialogTitle: 'Save or send your backup' }); return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  window.FDLocal = { exportFile, snapshot, backups: async () => (await all('backups')).sort((a, b) => b.at - a.at).map(({ id, at, why }) => ({ id, at, why })) };
+  // "Download backup" links point at /api/.../export, which a phone can't open directly: handle them here.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href*="/api/books/"][href$="/export"]'); if (!a) return;
+    e.preventDefault(); const id = decodeURIComponent(a.getAttribute('href').split('/api/books/')[1].split('/')[0]);
+    exportFile(id).catch((err) => alert('Backup failed: ' + err.message));
+  }, true);
+})();

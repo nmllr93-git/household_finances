@@ -1,16 +1,28 @@
-// Builds www/ (the app's own screens): the shared connect screen as index.html, plus the icon.
-// On launch it reopens the last server automatically; "?pick=1" shows the connect screen instead.
+// Builds www/ (everything the phone app ships with):
+//   index.html … the full dashboard (from public/), used in phone-only mode
+//   start.html … the first screen: connect to a server, or keep data on this phone (apps/connect.html)
+//   core-books.js … the shared data rules (core/books.js), same as the PC server
+// index.html sends you to start.html unless phone-only mode is on; start.html reopens your last server automatically.
 'use strict';
 const fs = require('node:fs'), path = require('node:path');
 const M = path.join(__dirname, '..'), ROOT = path.join(M, '..'), W = path.join(M, 'www');
-fs.rmSync(W, { recursive: true, force: true }); fs.mkdirSync(path.join(W, 'icons'), { recursive: true });
-let html = fs.readFileSync(path.join(ROOT, 'apps', 'connect.html'), 'utf8');
-const auto = `<script>
-  // Phone app: reopen the last server unless the user asked to pick one (or it just failed).
-  (function () { try { var q = new URLSearchParams(location.search); var h = JSON.parse(localStorage.getItem('fd-hosts') || '[]')[0];
-    if (h && !q.has('pick') && !q.has('failed')) { document.documentElement.style.visibility = 'hidden'; location.replace(h + '/'); } } catch (e) {} })();
+fs.rmSync(W, { recursive: true, force: true });
+fs.cpSync(path.join(ROOT, 'public'), W, { recursive: true });
+fs.copyFileSync(path.join(ROOT, 'core', 'books.js'), path.join(W, 'core-books.js'));
+fs.rmSync(path.join(W, 'sw.js'), { force: true }); // the app ships its own files; no offline cache needed
+
+const router = `<script>
+  // Phone app: the dashboard runs here only in phone-only mode; otherwise show the start screen.
+  (function () { var m = ''; try { m = localStorage.getItem('fd-mode') || ''; } catch (e) {} if (m !== 'local') { document.documentElement.style.visibility = 'hidden'; location.replace('start.html' + location.search); } })();
 </script>`;
-html = html.replace('<head>', '<head>\n' + auto);
-fs.writeFileSync(path.join(W, 'index.html'), html);
-fs.copyFileSync(path.join(ROOT, 'apps', 'icons', 'icon-192.png'), path.join(W, 'icons', 'icon-192.png'));
-console.log('www ready');
+let idx = fs.readFileSync(path.join(W, 'index.html'), 'utf8');
+fs.writeFileSync(path.join(W, 'index.html'), idx.replace('<head>', '<head>\n' + router));
+
+const reopen = `<script>
+  // Reopen the last server automatically (remote mode), unless the user asked to pick (or it just failed).
+  (function () { try { var q = new URLSearchParams(location.search), m = localStorage.getItem('fd-mode'), h = JSON.parse(localStorage.getItem('fd-hosts') || '[]')[0];
+    if (m === 'remote' && h && !q.has('pick') && !q.has('failed')) { document.documentElement.style.visibility = 'hidden'; location.replace(h + '/?app=phone'); } } catch (e) {} })();
+</script>`;
+let start = fs.readFileSync(path.join(ROOT, 'apps', 'connect.html'), 'utf8').replace('<head>', '<head>\n' + reopen).replace('src="icons/icon-192.png"', 'src="icons/icon-192.png"');
+fs.writeFileSync(path.join(W, 'start.html'), start);
+console.log('www ready (dashboard + start screen + shared core)');

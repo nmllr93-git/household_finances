@@ -35,6 +35,10 @@
     <button type="submit">Connect</button>
   </form>
   <div id="msg" role="status"></div>
+  <div id="localbox" hidden>
+    <p style="margin:18px 0 8px">No server? Keep everything on this phone instead. Nothing is sent anywhere, and you can make a backup file any time.</p>
+    <button type="button" class="q" id="golocal">Keep my data on this phone</button>
+  </div>
   <ul id="recent"></ul>
   <small>Away from home? Turn on Tailscale on this device and use your computer's Tailscale name or 100.x address.</small>
 </main>
@@ -56,6 +60,7 @@
       const j = await r.json().catch(() => ({}));
       if (j.app !== 'household-finances') { say("Something answered at that address, but it isn't Household Finances. Check the port.", 'bad'); return; }
       save(u); say('Connected. Opening…', 'ok');
+      try { if (window.Capacitor) localStorage.setItem('fd-mode', 'remote'); } catch (e) {}
       if (window.FDApp && FDApp.openHost) FDApp.openHost(u); else location.href = u + (window.Capacitor ? '/?app=phone' : '/');
     } catch (e) {
       clearTimeout(t);
@@ -63,6 +68,8 @@
     }
   }
   $('f').addEventListener('submit', (e) => { e.preventDefault(); go($('u').value); });
+  // phone app only: phone-only mode
+  if (window.Capacitor) { $('localbox').hidden = false; $('golocal').addEventListener('click', () => { try { localStorage.setItem('fd-mode', 'local'); } catch (e) {} location.href = 'index.html'; }); }
   const failed = new URLSearchParams(location.search).get('failed'); if (failed) say("Couldn't reach " + failed.replace(/\/+$/, '') + '. Is that computer on and running in host mode?', 'bad');
   if (window.FDApp && FDApp.setupAgain && location.protocol === 'file:') { const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = 'Run this computer as the server instead'; b.addEventListener('click', () => FDApp.setupAgain()); document.querySelector('main').append(b); }
   const r = list(); if (r.length) { $('u').value = r[0].replace(/^http:\/\//, '');
