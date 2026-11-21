@@ -61,11 +61,31 @@
 
   // ---------- API keys (kept on this phone only) ----------
   const KEYS = ['finnhub', 'fmp', 'fred', 'bls', 'eia'];
+  let KEYMEM = {}; const keysReady = kvGet('apikeys').then((k) => { KEYMEM = k || {}; }).catch(() => {});
+
+  // ---------- market, economy, price and vehicle data: same shared code and pacing as the PC server ----------
+  // In the phone app requests go through Capacitor's native HTTP (several services don't allow in-page requests).
+  const http = async (method, url, body, text) => {
+    const P = window.Capacitor && window.Capacitor.Plugins, H = P && P.CapacitorHttp;
+    if (H) { const r = await H.request({ method, url, headers: body ? { 'Content-Type': 'application/json' } : {}, data: body, responseType: text ? 'text' : 'json', connectTimeout: 10000, readTimeout: 15000 });
+      if (r.status >= 400) throw new Error('HTTP ' + r.status); return typeof r.data === 'string' && !text ? JSON.parse(r.data) : r.data; }
+    const r = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    if (!r.ok) throw new Error('HTTP ' + r.status); return text ? r.text() : r.json();
+  };
+  const marketReady = new Promise((res, rej) => {
+    if (window.FDMarket) return res(window.FDMarket);
+    const s = document.createElement('script'); s.src = 'core-market.js'; s.onload = () => res(window.FDMarket); s.onerror = () => rej(new Error('core-market.js is missing')); document.head.append(s);
+  }).then(async (M) => { await keysReady; return M.createMarketData({
+    getJson: (u) => http('GET', u), getText: (u) => http('GET', u, null, true), postJson: (u, b) => http('POST', u, b),
+    keys: () => ({ finnhub: KEYMEM.finnhub || '', fmp: KEYMEM.fmp || '', fred: KEYMEM.fred || '', bls: KEYMEM.bls || '', eia: KEYMEM.eia || '' }),
+    keyNote: () => 'Add keys under \u2699 Settings \u2192 Data sources.',
+    load: (name) => kvGet('mc-' + name), save: (name, o) => kvSet('mc-' + name, o) }); });
+  const SYM = /^[A-Z0-9.\-^]{1,12}$/;
+  const symList = (url, max) => [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => SYM.test(x)))].slice(0, max);
   const mask = (v) => (v ? '••••' + String(v).slice(-4) : '');
 
   // ---------- answer the same /api/... requests the server does ----------
   const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...(headers || {}) } });
-  const NOT_YET = 'Market and economy data aren’t available in phone-only mode yet.';
   async function handle(path, opts) {
     const o = opts || {}, method = (o.method || 'GET').toUpperCase(), url = new URL(path, 'https://local.app'), parts = url.pathname.split('/').filter(Boolean);
     const body = async () => { try { return o.body ? JSON.parse(o.body) : {}; } catch (e) { const err = new Error('Bad request'); err.code = 400; throw err; } };
@@ -78,12 +98,14 @@
         const cur = (await kvGet('apikeys')) || {};
         if (method === 'GET') return json(200, { canEdit: true, owner: 'you', set: Object.fromEntries(KEYS.map((k) => [k, mask(cur[k])])), fromEnv: {} });
         const b = await body(); for (const k of KEYS) if (typeof b[k] === 'string') { const v = b[k].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[k] = v; else delete cur[k]; }
-        await kvSet('apikeys', cur); return json(200, { ok: true });
+        await kvSet('apikeys', cur); KEYMEM = cur; (await marketReady).resetKeys(); return json(200, { ok: true });
       }
-      case 'quotes': return json(200, { sources: [], quotes: {} });
-      case 'dividends': return json(200, { dividends: {} });
-      case 'markets': case 'econ': case 'stock': return json(503, { error: NOT_YET, errors: [NOT_YET] });
-      case 'vehicle': return json(503, { error: NOT_YET });
+      case 'quotes': { const m = await marketReady; return json(200, { sources: m.sources(), quotes: await m.quotes(symList(url, 60)) }); }
+      case 'dividends': return json(200, { dividends: await (await marketReady).dividends(symList(url, 40)) });
+      case 'stock': { const sym = symList(url, 1)[0]; if (!sym) return json(400, { error: 'symbol?' }); return json(200, await (await marketReady).stock(sym)); }
+      case 'econ': return json(200, await (await marketReady).econ(url.searchParams.get('refresh') === '1'));
+      case 'vehicle': try { return json(200, await (await marketReady).vehicle(url.searchParams.get('vin'))); } catch (e) { return json(502, { error: 'Couldn\u2019t reach NHTSA: ' + e.message }); }
+      case 'markets': { const m = await marketReady, d = await m.markets(url.searchParams.get('refresh') === '1'), open = m.marketOpen(); return json(200, { ...d, hist: undefined, open, nextRefresh: open ? d.at + 3600e3 : null }); }
       case 'books': {
         const book = (await books()).find((b) => b.id === parts[2]);
         if (!book) return json(403, { error: 'No such budget on this phone' });

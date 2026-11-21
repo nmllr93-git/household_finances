@@ -9,6 +9,7 @@ const M = path.join(__dirname, '..'), ROOT = path.join(M, '..'), W = path.join(M
 fs.rmSync(W, { recursive: true, force: true });
 fs.cpSync(path.join(ROOT, 'public'), W, { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'core', 'books.js'), path.join(W, 'core-books.js'));
+fs.copyFileSync(path.join(ROOT, 'core', 'market.js'), path.join(W, 'core-market.js'));
 fs.rmSync(path.join(W, 'sw.js'), { force: true }); // the app ships its own files; no offline cache needed
 
 const router = `<script>

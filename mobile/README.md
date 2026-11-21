@@ -1,7 +1,7 @@
 # Household Finances — Android app
 
 Two ways to use it, chosen on the first screen:
-- **Keep my data on this phone** (phone-only mode): no PC or server at all. Everything is stored privately inside the app on this phone. Nothing is sent anywhere (market data in this mode comes later).
+- **Keep my data on this phone** (phone-only mode): no PC or server at all. Everything is stored privately inside the app on this phone. Nothing is sent anywhere except the stock symbols and data requests to the market services whose keys you add.
 - **Connect to a server:** the desktop app in host mode, or the self-hosted server, the same way the phone browser does.
 
 ## Install on a phone
@@ -20,7 +20,8 @@ Away from home: turn on the Tailscale app on the phone first.
 - **Your data** lives in the app's private storage on the phone, kept until the app is uninstalled or its data is cleared in Android settings.
 - **Same rules as the PC:** it runs the same shared core (`core/books.js`) as the server, so imports, budgets, rules, accounts, goals, holdings and settings all work the same.
 - **Backups:** the app keeps a snapshot every day (last 14) and one before any restore. **Download backup** opens the share sheet so you can save the file to Drive or Files, or email it. That file also restores on a PC (⚙ Settings → Backup & restore), and a PC backup restores here, which is how you move between phone-only and a server.
-- **Not in phone-only mode:** sharing between dashboards (needs a server) and, for now, market, economy and live price data.
+- **Market, economy and live prices work too:** add your keys under ⚙ Settings → Data sources on the phone. They're stored on the phone only. The same pacing as the PC applies (markets at most hourly during trading hours, economy daily), and results are kept between app launches so reopening the app doesn't spend extra calls.
+- **Not in phone-only mode:** sharing between dashboards (needs a server).
 - **Switching:** *Connect to a server instead* (top right) goes to the start screen; your phone data stays put and is there when you come back.
 - **Uninstalling the app deletes phone-only data.** Make a backup file first.
 

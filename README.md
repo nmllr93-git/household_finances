@@ -519,11 +519,12 @@ Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`,
 |---|---|
 | `server.js` | Web server, logins, SQLite database (`node:sqlite`), API, backups, market/economy data. Node built-ins only. |
 | `public/local.js` | Phone-only mode: answers the dashboard's `/api` requests on the device (IndexedDB) using the shared core. Does nothing unless the phone app turned it on. |
+| `core/market.js` | Shared market, economy, price and vehicle data with its pacing and caching rules, used by the server and phone-only mode. Data services and storage are passed in. |
 | `core/books.js` | Shared dashboard data rules (validation, load, save, export, restore) used by the server and the phone's on-device mode. No Node or browser APIs; storage is passed in. |
 | `public/` | The web app: `page.js` (all views), `calcs.js` (data calculations), `charts.js`, `import.js` (CSV/OFX), `pdfstatement.js`, `runtime.js` (data loading and drawing), `store.js` (single data connector), `app.js`, `login.js`, `sw.js` (offline cache). |
 | `seed/` | *Optional*, git-ignored. `books.json` plus spreadsheet exports, loaded the first time a new database is created. Without it, you get two empty dashboards. |
 | `scripts/` | Windows setup, start and autostart scripts, and the Termux starter |
-| `test/` | `npm test`: calculations (rules, transfer matching, balances, totals), the server's data API end to end (sign-in, access rules, save/load/delete, export/restore) and the shared core on its own |
+| `test/` | `npm test`: calculations (rules, transfer matching, balances, totals), the server's data API end to end (sign-in, access rules, save/load/delete, export/restore), the shared core on its own, and market/economy data with fake services (answers, caching, pacing, persistence) |
 | `desktop/` | Electron desktop app ([desktop/README.md](desktop/README.md)) |
 | `apps/` | Shared icons and the connect screen for the desktop and Android apps ([apps/README.md](apps/README.md)) |
 | `.github/workflows/` | Builds and publishes the desktop installer when `desktop/package.json`'s version changes |
