@@ -5,8 +5,7 @@
 name: Desktop release
 on:
   push:
-    branches: [main]
-    paths: ['desktop/package.json']
+    branches: [release]   # releases happen only when main is pushed to the release branch (when you ask)
   workflow_dispatch:
 permissions:
   contents: read

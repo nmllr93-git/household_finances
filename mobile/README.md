@@ -16,7 +16,7 @@ Away from home: turn on the Tailscale app on the phone first.
 
 ## How it's built
 - [Capacitor](https://capacitorjs.com) wraps a tiny local start screen (`apps/connect.html`); after connecting, the app shows your server's own pages, so sign-in and every feature work exactly like the browser.
-- GitHub Actions (`.github/workflows/android-release.yml`) builds and signs the APK whenever `version` in `mobile/package.json` goes up, and publishes it as `android-v<version>` in the releases repo. No Android Studio needed.
+- GitHub Actions (`.github/workflows/android-release.yml`) builds and signs the APK when `main` is pushed to the `release` branch and `version` in `mobile/package.json` is new, and publishes it as `android-v<version>` in the releases repo. No Android Studio needed.
 - Plain `http://` home servers are allowed (`usesCleartextTraffic`), since most home servers don't have HTTPS.
 
 ## Signing key (one-time setup)
