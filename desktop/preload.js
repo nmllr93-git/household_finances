@@ -11,6 +11,7 @@ if (local) Object.assign(api, {
   defaults: () => ipcRenderer.invoke('fd:defaults'),
   pickFolder: () => ipcRenderer.invoke('fd:pickFolder'),
   hasData: (dir) => ipcRenderer.invoke('fd:hasData', dir),
+  canWrite: (dir) => ipcRenderer.invoke('fd:canWrite', dir),
   startHost: (o) => ipcRenderer.invoke('fd:startHost', o),
   addUser: (o) => ipcRenderer.invoke('fd:addUser', o),
   openDashboard: () => ipcRenderer.invoke('fd:openDashboard'),

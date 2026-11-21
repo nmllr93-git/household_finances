@@ -87,6 +87,7 @@
   $('m-host').addEventListener('click', () => setMode('host'));
   $('pick').addEventListener('click', async () => { const f = await A.pickFolder(); if (f) { $('dir').value = f; $('dirnote').textContent = 'A new database is created here if none exists.'; dirNote(); } });
   $('go2').addEventListener('click', async () => {
+    if (A.canWrite && !(await A.canWrite($('dir').value))) { say("Windows won't let this app change files in that folder (it may be read-only or belong to another account). Right-click the folder → Properties → untick Read-only, and on the Security tab give your user Modify. Or copy it to a folder you create in Documents and choose that.", 'bad'); return; }
     $('go2').disabled = true; say('Starting the server…');
     try {
       info = await A.startHost({ mode, port: $('port').value, dataDir: $('dir').value, startWithWindows: $('sww').checked });

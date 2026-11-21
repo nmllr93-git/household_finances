@@ -53,9 +53,19 @@ const SESSION_DAYS = 60;
 const MAX_BODY = 1024 * 1024; // 1 MB
 const COLLECTIONS = new Set(['imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares']);
 
-fs.mkdirSync(BACKUP_DIR, { recursive: true });
-const db = new DatabaseSync(path.join(DATA_DIR, 'finance.db'));
-db.exec(`
+try { fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch (e) { console.error(`Can't create ${BACKUP_DIR}: ${e.code || e.message}`); }
+// "attempt to write a readonly database" means Windows won't let this user change the database files:
+// usually a Read-only flag (from copying/restoring) or the folder being created by another account / as Administrator.
+// Clear the Read-only flag where we're allowed to, then check that writing works and explain if not.
+const DB_FILE = path.join(DATA_DIR, 'finance.db');
+for (const f of [DB_FILE, DB_FILE + '-wal', DB_FILE + '-shm']) {
+  try { if (fs.existsSync(f)) { try { fs.accessSync(f, fs.constants.W_OK); } catch { fs.chmodSync(f, 0o666); } } } catch {}
+}
+const WRITE_HELP = `The server can't save to ${DATA_DIR}. Windows is blocking changes to the database files. Fix: in File Explorer right-click that folder → Properties → untick "Read-only" → Apply to all files; then Security tab → make sure your Windows user has "Modify". If the folder was made by an Administrator terminal or another account, either fix the permissions there or copy the folder to a new one you create (e.g. in Documents) and choose that folder instead.`;
+let DB_WRITABLE = true;
+try { fs.accessSync(DATA_DIR, fs.constants.W_OK); } catch { DB_WRITABLE = false; }
+const db = new DatabaseSync(DB_FILE);
+const SCHEMA = `
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
   CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, name TEXT NOT NULL, label TEXT NOT NULL, sort INTEGER DEFAULT 0);
@@ -68,7 +78,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS docs (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
     coll TEXT NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL, created_by TEXT);
   CREATE INDEX IF NOT EXISTS docs_book ON docs (book_id, coll);
-`);
+`;
+try { db.exec(SCHEMA); } catch (e) { if (!/readonly/i.test(e.message)) throw e; DB_WRITABLE = false; try { db.exec('PRAGMA foreign_keys = ON;'); } catch {} }
 
 // ---------- first run: create the three budgets and load the sheet history ----------
 function seedIfEmpty() {
@@ -88,7 +99,9 @@ function seedIfEmpty() {
   });
   console.log(`Created ${cfg.books.length} budgets: ${cfg.books.map((b) => b.name).join(', ')}`);
 }
-seedIfEmpty();
+if (DB_WRITABLE) { try { db.exec('CREATE TABLE IF NOT EXISTS _write_check (x INTEGER); DELETE FROM _write_check;'); } catch (e) { DB_WRITABLE = false; } }
+if (!DB_WRITABLE) console.error('\n*** ' + WRITE_HELP + '\n');
+try { seedIfEmpty(); } catch (e) { if (!/readonly/i.test(e.message)) throw e; }
 
 // ---------- passwords and sessions ----------
 const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 64).toString('hex');
@@ -569,7 +582,8 @@ const lanAddrs = () => Object.values(os.networkInterfaces()).flat().filter((n) =
 function start(opts = {}) {
   if (SERVER) return Promise.resolve(info());
   const mode = opts.mode || CFG.mode, port = Number(opts.port || PORT), host = opts.host || (process.env.HOST && !opts.mode ? process.env.HOST : mode === 'local' ? '127.0.0.1' : '0.0.0.0'), log = opts.quiet ? () => {} : console.log;
-  if (db.prepare('SELECT COUNT(*) n FROM users').get().n === 0) {
+  let nUsers = 0; try { nUsers = db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch (e) { if (/readonly/i.test(e.message)) return Promise.reject(new Error(WRITE_HELP)); throw e; }
+  if (nUsers === 0) {
     log('\nNo logins yet. Stop the server and run setup first (see README):\n  node server.js add-user nate nate,shared\n  node server.js add-user mckenna mckenna,shared\n');
   }
   const server = http.createServer(async (req, res) => {
@@ -579,7 +593,9 @@ function start(opts = {}) {
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
       return serveStatic(req, res, url.pathname);
     } catch (e) {
-      if (!res.headersSent) send(res, e.code >= 400 && e.code < 600 ? e.code : 500, { error: e.code ? e.message : 'Server error' });
+      const ro = /readonly database|SQLITE_READONLY|attempt to write/i.test(String(e && e.message));
+      if (ro) console.error(WRITE_HELP);
+      if (!res.headersSent) send(res, ro ? 503 : e.code >= 400 && e.code < 600 ? e.code : 500, { error: ro ? WRITE_HELP : e.code ? e.message : 'Server error' });
       if (!e.code) console.error(e);
     }
   });
@@ -594,9 +610,9 @@ function start(opts = {}) {
     });
   });
   SERVER = server;
-  db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
-  const last = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort().pop();
-  if (!last || Date.now() - fs.statSync(path.join(BACKUP_DIR, last)).mtimeMs > 864e5) backup();
+  try { db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now()); } catch {}
+  try { const last = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort().pop();
+    if (!last || Date.now() - fs.statSync(path.join(BACKUP_DIR, last)).mtimeMs > 864e5) backup(); } catch (e) { console.error('Backup skipped:', e.code || e.message); }
   if (!BTIMER) BTIMER = setInterval(() => { try { backup(); } catch (e) { console.error('Backup failed', e); } }, 864e5);
   return ready;
 }
@@ -610,7 +626,7 @@ function stop() {
 // info(): what the tray/settings screen shows.
 function info() {
   const lan = RUN && RUN.host !== '127.0.0.1' ? lanAddrs() : [];
-  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `http://${a}:${RUN.port}`), dataDir: DATA_DIR, users: db.prepare('SELECT COUNT(*) n FROM users').get().n, since: RUN ? RUN.since : null };
+  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `http://${a}:${RUN.port}`), dataDir: DATA_DIR, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null };
 }
 // setMode('local'|'host'): saves it and restarts if running, so the change takes effect immediately.
 async function setMode(mode, port) {

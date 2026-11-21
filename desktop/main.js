@@ -59,7 +59,12 @@ async function call(cmd, extra = {}) {
   return new Promise((res, rej) => { const id = ++seq; pending.set(id, { res, rej }); child.send({ cmd, id, ...extra }); });
 }
 const refresh = async () => { try { INFO = await call('info'); } catch { INFO = { running: false }; } buildTray(); return INFO; };
-async function startServer() { INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray(); return INFO; }
+let roWarned = false;
+async function startServer() {
+  INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray();
+  if (INFO.writable === false && !roWarned) { roWarned = true; dialog.showMessageBox({ type: 'warning', message: "Household Finances can't save to its data folder", detail: INFO.writeHelp + '\n\nYou can also pick a different folder: tray → Change setup.', buttons: ['Open data folder', 'OK'] }).then((r) => { if (r.response === 0) shell.openPath(S.dataDir || defaultDataDir()); }); }
+  return INFO;
+}
 async function stopServer() { if (child) { INFO = await call('stop'); buildTray(); } return INFO; }
 
 // ---------- Tailscale (status only; turning it on/off is done in Tailscale itself) ----------
@@ -140,6 +145,14 @@ const loginItem = () => { try { app.setLoginItemSettings({ openAtLogin: !!S.star
 ipcMain.handle('fd:defaults', () => ({ ...S, defaultDataDir: defaultDataDir(), dataDir: S.dataDir || defaultDataDir() }));
 ipcMain.handle('fd:pickFolder', async () => { const r = await dialog.showOpenDialog(win, { title: 'Choose the data folder', properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? '' : r.filePaths[0]; });
 ipcMain.handle('fd:hasData', (_e, dir) => fs.existsSync(path.join(dir || defaultDataDir(), 'finance.db')));
+// can this Windows user change files in the folder (and the database, if there is one)?
+ipcMain.handle('fd:canWrite', (_e, dir) => {
+  const d = dir || defaultDataDir(), probe = path.join(d, '.write-test-' + process.pid);
+  try { fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(probe, 'ok'); fs.unlinkSync(probe); } catch { return false; }
+  const db = path.join(d, 'finance.db');
+  try { if (fs.existsSync(db)) { try { fs.accessSync(db, fs.constants.W_OK); } catch { fs.chmodSync(db, 0o666); fs.accessSync(db, fs.constants.W_OK); } } } catch { return false; }
+  return true;
+});
 ipcMain.handle('fd:startHost', async (_e, o) => {
   const dir = o.dataDir || defaultDataDir(), restart = child && (dir !== (S.dataDir || defaultDataDir()));
   S = { ...S, role: 'host', mode: o.mode === 'host' ? 'host' : 'local', port: Number(o.port) || 8080, dataDir: dir === defaultDataDir() ? '' : dir, startWithWindows: !!o.startWithWindows };
