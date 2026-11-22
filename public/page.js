@@ -71,8 +71,12 @@
     setTimeout(() => document.addEventListener('pointerdown', function off(e) { if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); document.removeEventListener('pointerdown', off); } }), 0);
   };
   const addGear = (host, chart, items, title) => {
+    if (!host.isConnected) { setTimeout(() => { if (host.isConnected) addGear(host, chart, items, title); }, 0); return; } // placed once it's on the page, so it can find its tile
     host.querySelectorAll(':scope > .fd-gear').forEach((g) => g.remove());
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-gear'; b.textContent = '⚙'; b.title = 'Change chart colors'; b.setAttribute('aria-label', 'Change chart colors');
+    // Put the gear in the tile's top-right corner (clear of the chart), unless another chart in the same tile already uses that spot.
+    const card = host.closest('.fd-card'); if (card) card.querySelectorAll(':scope > .fd-gear').forEach((g) => { if (g.__host === host || !document.contains(g.__host)) g.remove(); });
+    if (card && !card.querySelector(':scope > .fd-gear')) { const h0 = host; host = card; host.__gearFor = h0; }
+    const b = document.createElement('button'); b.__host = host.__gearFor || host; b.type = 'button'; b.className = 'fd-gear'; b.textContent = '⚙'; b.title = 'Change chart colors'; b.setAttribute('aria-label', 'Change chart colors');
     b.addEventListener('click', (e) => { e.stopPropagation(); openColors(b, chart, items, title); });
     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
     host.append(b);
@@ -286,7 +290,7 @@
     NP.group = g; npSave();
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id); }));
-    document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); });
+    document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   let lastTab = 'all';
   document.querySelectorAll('.fd-navb').forEach((b) => b.addEventListener('click', () => { const g = b.dataset.group; if (g === 'settings' && NP.group === 'settings') return showGroup(lastTab || 'all'); if (g === 'settings' && NP.group) lastTab = NP.group; showGroup(g); }));
@@ -2742,9 +2746,10 @@
     if (!KEYS) return;
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis'; box.append(rhead('Data sources (API keys)'));
     const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Each is free. Click a name to create an account and get a key; hover it to see what it adds. Keys are stored on this server only and apply to every dashboard.' + (KEYS.canEdit ? '' : ` Only ${KEYS.owner} can change them.`); box.append(n);
-    const vals = {}, t = document.createElement('table'); t.className = 'fd-table'; const tb = document.createElement('tbody');
+    const vals = {}, t = document.createElement('table'); t.className = 'fd-table fd-apitable'; const tb = document.createElement('tbody');
     APIS.forEach(([id, name, link, desc]) => {
       const tr = document.createElement('tr'); const c1 = td('', 'fd-l'); const a = document.createElement('a'); a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.textContent = name; a.title = desc; c1.append(a); const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = desc; c1.append(sub);
+      { const info = document.createElement('button'); info.type = 'button'; info.className = 'fd-api-info'; info.textContent = 'What’s this?'; info.addEventListener('click', () => { tr.classList.toggle('fd-open'); info.textContent = tr.classList.contains('fd-open') ? 'Hide' : 'What’s this?'; }); c1.append(info); }
       const st0 = td(KEYS.set[id] ? `✓ set (${KEYS.set[id]})` : 'not set', KEYS.set[id] ? 'fd-good' : 'fd-zero');
       const c3 = td(''); if (KEYS.canEdit && !KEYS.fromEnv[id]) { const i = document.createElement('input'); i.type = 'password'; i.autocomplete = 'off'; i.placeholder = KEYS.set[id] ? 'paste a new key to replace' : 'paste key'; i.addEventListener('input', () => { vals[id] = i.value; }); c3.append(i);
         if (KEYS.set[id]) { const rm = rbtn('Remove', () => { vals[id] = ''; i.value = ''; i.placeholder = 'will be removed on Save'; }); c3.append(' ', rm); } } else if (KEYS.fromEnv[id]) c3.textContent = 'set by environment variable';
@@ -2795,7 +2800,7 @@
         const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = gl; det.append(h); const w = document.createElement('div'); w.className = 'fd-chkgrid';
         ids.forEach((id) => w.append(chk(secTitle(id), !(s.hideSec || []).includes(id), (on) => { const x = new Set(s.hideSec || []); on ? x.delete(id) : x.add(id); s.hideSec = [...x]; }))); det.append(w); });
       const h2 = document.createElement('div'); h2.className = 'fd-rb-h'; h2.textContent = 'Details inside sections'; det.append(h2); const w2 = document.createElement('div'); w2.className = 'fd-chkgrid';
-      [['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-treas', 'Economy: Treasury savings options'], ['e-fx', 'Economy: exchange rates'], ['e-cal', 'Economy: economic calendar'], ['m-scr', 'Markets: stock screener'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-rings', 'Holdings: allocation rings'], ['h-det', 'Holdings: news & analyst details']]
+      [['b-mtg', 'Budgets: mortgage payments (shown under Mortgage)'], ['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-treas', 'Economy: Treasury savings options'], ['e-fx', 'Economy: exchange rates'], ['e-cal', 'Economy: economic calendar'], ['m-scr', 'Markets: stock screener'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-rings', 'Holdings: allocation rings'], ['h-det', 'Holdings: news & analyst details']]
         .forEach(([k, lab]) => w2.append(chk(lab, !(s.hideParts || []).includes(k), (on) => { const x = new Set(s.hideParts || []); on ? x.delete(k) : x.add(k); s.hideParts = [...x]; })));
       det.append(w2); const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(det); box.append(r); }
     const hw = document.createElement('div'); hw.className = 'fd-chkgrid';

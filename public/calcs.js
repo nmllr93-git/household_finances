@@ -343,8 +343,13 @@ dash.calc('cat_trend', {
 dash.calc('categories', {
   title: 'Budget vs actual by category',
   description: 'Per book, month and category: spending, the planned amount (your in-app budget where one is set for that month or earlier, otherwise the sheet’s plan), money rolled over from earlier months for categories set to roll over, and for the current month a projection from the pace so far.',
-  inputs: ['txns', 'sheet_budgets', 'budgets', 'period'],
-  fn: (txns, sheetBudgets, budgets, period) => {
+  inputs: ['txns', 'sheet_budgets', 'budgets', 'period', 'prefs'],
+  fn: (txns, sheetBudgets, budgets, period, prefs) => {
+    // Mortgage payments usually look like transfers (money moving to the loan), so they'd be left out of budgets.
+    // Count them under "Mortgage" unless the dashboard's settings hide "b-mtg": payments from a bank account
+    // categorized Mortgage first; if a month has none, the payments shown on an imported mortgage statement.
+    const noMtg = {};
+    for (const p of [...(prefs || [])].filter((p) => p.key === 'settings').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))) { try { const v = JSON.parse(p.value) || {}; noMtg[p.book] = (v.hideParts || []).includes('b-mtg'); } catch (e) {} }
     const add = (m, n) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
     const r2 = (x) => Math.round(x * 100) / 100;
     const rows = [];
@@ -369,7 +374,16 @@ dash.calc('categories', {
       };
       const actualFor = (m) => {
         const a = {};
-        for (const r of txns || []) if (r.book === book && r.month === m && r.type === 'expense' && !r.oneTime) { a[r.category] = (a[r.category] || 0) + r.amount; a['#' + r.category] = (a['#' + r.category] || 0) + 1; }
+        const put = (c, v) => { a[c] = (a[c] || 0) + v; a['#' + c] = (a['#' + c] || 0) + 1; };
+        let bankMtg = false; const stmtMtg = [];
+        for (const r of txns || []) {
+          if (r.book !== book || r.month !== m || r.oneTime) continue;
+          if (r.type === 'expense') { put(r.category, r.amount); if (r.category === 'Mortgage') bankMtg = true; continue; }
+          if (r.type !== 'transfer' || noMtg[book]) continue;
+          if (r.acctKind === 'mortgage') { if (Number(r.amount) < 0) stmtMtg.push(-Number(r.amount)); }
+          else if (r.acctKind !== 'credit' && Number(r.amount) > 0 && (r.category === 'Mortgage' || /mortgage|mtg pmt|loan servic/i.test(r.description || ''))) { put('Mortgage', r.amount); bankMtg = true; }
+        }
+        if (!bankMtg && !noMtg[book]) for (const v of stmtMtg) put('Mortgage', v);
         return a;
       };
       for (const mo of period || []) {

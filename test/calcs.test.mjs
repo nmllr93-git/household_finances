@@ -103,3 +103,13 @@ test('a vendor marked "Not recurring" drops out of subscriptions and recurring b
   const hidden = engine({ ...base, prefs: [{ book: 'Personal', key: 'notRecurring', value: JSON.stringify(['Venmo Payment']), createdAt: '2026-11-01' }] })('subs');
   assert.ok(!hidden.some((x) => /venmo/i.test(x.vendor)));
 });
+
+test('mortgage payments count in budgets once, and the setting can leave them out', () => {
+  const data = { imports: [imp('c', 'Checking', 'deposit', [tx('2026-10-01', 'ONLINE PAYMENT', 1850)]), imp('m', 'Home loan', 'mortgage', [tx('2026-10-02', 'PAYMENT RECEIVED', -1850)])] };
+  const mtg = (get) => get('categories').filter((r) => r.category === 'Mortgage' && r.month === '2026-10').reduce((s, r) => s + r.actual, 0);
+  assert.equal(mtg(engine(data)), 1850);
+  const off = { ...data, prefs: [{ book: 'Personal', key: 'settings', value: JSON.stringify({ hideParts: ['b-mtg'] }), createdAt: '2026-11-01' }] };
+  assert.equal(mtg(engine(off)), 0);
+  const bank = { imports: [imp('c', 'Checking', 'deposit', [tx('2026-10-01', 'ONLINE TRANSFER TO MORTGAGE', 1850)]), imp('m', 'Home loan', 'mortgage', [tx('2026-10-02', 'PAYMENT RECEIVED', -1850)])] };
+  assert.equal(mtg(engine(bank)), 1850);
+});
