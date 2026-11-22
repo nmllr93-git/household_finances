@@ -241,14 +241,31 @@ function readSleep() {
 const openSleepSettings = () => shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.Lock-Screen-Settings.extension' : 'ms-settings:powersleep');
 
 // ---------- host options tab (same controls as the tray, for remote desktops / virtual displays) ----------
+// ---------- backups to a cloud folder: find the folders that OneDrive, iCloud Drive, Google Drive or Dropbox keep in sync ----------
+let CLOUD = { dir: '', last: '', error: '' };
+function cloudFolders() {
+  const h = require('node:os').homedir(), out = [], add = (name, p) => { try { if (p && fs.statSync(p).isDirectory() && !out.some((x) => x.path === p)) out.push({ name, path: p }); } catch {} };
+  if (process.platform === 'win32') {
+    add('OneDrive', process.env.OneDrive); add('OneDrive', path.join(h, 'OneDrive')); add('iCloud Drive', path.join(h, 'iCloudDrive')); add('Dropbox', path.join(h, 'Dropbox'));
+    for (const d of 'DEFGHIJKLMNOPQRSTUVWXYZ') add('Google Drive', `${d}:\\My Drive`);
+    add('Google Drive', path.join(h, 'Google Drive', 'My Drive')); add('Google Drive', path.join(h, 'My Drive'));
+  } else if (process.platform === 'darwin') {
+    add('iCloud Drive', path.join(h, 'Library', 'Mobile Documents', 'com~apple~CloudDocs'));
+    try { for (const f of fs.readdirSync(path.join(h, 'Library', 'CloudStorage'))) { const p = path.join(h, 'Library', 'CloudStorage', f);
+      if (/^GoogleDrive/i.test(f)) add('Google Drive', fs.existsSync(path.join(p, 'My Drive')) ? path.join(p, 'My Drive') : p); else if (/^OneDrive/i.test(f)) add('OneDrive', p); else if (/^Dropbox/i.test(f)) add('Dropbox', p); } } catch {}
+    add('Dropbox', path.join(h, 'Dropbox'));
+  }
+  return out;
+}
+const refreshCloud = async () => { if (child) { try { CLOUD = await call('cloudInfo'); } catch {} } };
 const hostState = () => {
   const on = !!INFO.running, others = on && INFO.mode === 'host';
-  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
+  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, cloud: CLOUD, cloudFolders: cloudFolders(), tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
     addrs: others ? [...new Set([...(INFO.lan || []).filter((u) => !/\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(u)), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])])] : [],
     addrLabels: Object.fromEntries([...(INFO.lan || []).map((u) => [u, 'On your home network']), ...(TS.name ? [[`http://${TS.name}:${INFO.port}`, 'Away from home (Tailscale name)']] : []), ...(TS.ip ? [[`http://${TS.ip}:${INFO.port}`, 'Away from home (Tailscale number, same as the name)']] : [])]), ts: TS };
 };
 const notifyHost = () => { try { if (win && !win.isDestroyed()) win.webContents.send('fd:hostChanged', hostState()); } catch {} };
-ipcMain.handle('fd:hostState', async () => { readSleep(); if (child) await refresh().catch(() => {}); return hostState(); });
+ipcMain.handle('fd:hostState', async () => { readSleep(); if (child) { await refresh().catch(() => {}); await refreshCloud(); } return hostState(); });
 ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
   switch (act) {
     case 'start': await startServer(); break;
@@ -257,7 +274,10 @@ ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
     case 'startWithWindows': S.startWithWindows = !!arg; saveSet(); loginItem(); buildTray(); break;
     case 'keepAwake': S.keepAwake = !!arg; saveSet(); keepAwake(); break;
     case 'sleepSettings': openSleepSettings(); setTimeout(readSleep, 15000); break;
-    case 'backup': return call('backup');
+    case 'backup': { const r = await call('backup'); await refreshCloud(); notifyHost(); return r; }
+    case 'cloudSet': { CLOUD = await call('setCloud', { dir: arg || '' }); notifyHost(); return hostState(); }
+    case 'cloudPick': { const r = await dialog.showOpenDialog(win, { title: 'Choose a folder your cloud app keeps in sync', properties: ['openDirectory', 'createDirectory'] }); if (r.canceled || !r.filePaths[0]) return hostState(); CLOUD = await call('setCloud', { dir: r.filePaths[0] }); notifyHost(); return hostState(); }
+    case 'cloudOpen': if (CLOUD.target) shell.openPath(CLOUD.target); break;
     case 'openData': shell.openPath(S.dataDir || defaultDataDir()); break;
     case 'copy': clipboard.writeText(String(arg || '')); break;
     case 'tailscale': shell.openExternal(TS.installed ? 'https://login.tailscale.com/admin/machines' : 'https://tailscale.com/download'); break;

@@ -75,6 +75,8 @@
     </div>
     <div class="card">
       <h2>Data &amp; backups</h2>
+      <div class="row" style="flex-wrap:wrap"><div style="flex:1 1 260px">Also keep backups in a cloud folder<small id="cloudSub">Each daily backup is also copied to a folder that OneDrive, iCloud Drive, Google Drive or Dropbox syncs, so a copy is safe if this computer fails. Your cloud app does the uploading; nothing goes through us.</small></div>
+        <span style="display:flex;gap:6px;flex-wrap:wrap"><select id="cloudSel" class="q" style="max-width:220px"></select><button class="q" id="cloudOpen" type="button" hidden>Open</button></span></div>
       <div class="row"><div>Data folder<small><code id="dir"></code></small></div><button class="q" id="openData" type="button">Open</button></div>
       <div class="row"><div>Back up now<small>A full copy goes in the data folder's <i>backups</i> folder. One is also made automatically every day.</small></div><button class="q" id="backup" type="button">Back up</button></div>
     </div>
@@ -99,6 +101,14 @@
     $('srvSub').textContent = s.running ? (others ? 'Other devices can connect.' : 'Only this computer can open it.') : 'Nobody can open the dashboard until you start it.';
     $('startStop').textContent = s.running ? 'Stop server' : 'Start server';
     $('mode').checked = s.mode === 'host'; $('sww').checked = s.startWithWindows;
+    { const c = s.cloud || {}, sel = $('cloudSel'), fl = s.cloudFolders || [];
+      sel.replaceChildren(new Option('Off', ''), ...fl.map((f) => new Option(f.name, f.path)), new Option('Choose a folder…', '__pick'));
+      if (c.dir && !fl.some((f) => f.path === c.dir)) sel.add(new Option(c.dir.split(/[\\/]/).pop() || c.dir, c.dir), sel.options.length - 1);
+      sel.value = c.dir || ''; $('cloudOpen').hidden = !c.dir;
+      $('cloudSub').textContent = c.error ? 'Problem: ' + c.error : c.dir ? `Backups are copied to ${c.target}${c.last ? ' · last copy ' + new Date(c.last).toLocaleString() : ''}. The newest 14 are kept there.`
+        : fl.length ? 'Each daily backup can also go to a folder your cloud app keeps in sync, so a copy is safe if this computer fails. Your cloud app does the uploading; nothing goes through us.'
+        : 'No OneDrive, iCloud Drive, Google Drive or Dropbox folder found on this computer. Install one of those apps, or choose any folder (a USB drive works too).';
+      $('cloudSub').className = c.error ? 'bad' : ''; }
     $('awake').checked = s.keepAwake; if (s.platform === 'darwin') $('swwLabel').textContent = 'Open at login';
     { const sl = s.sleep || {}, mins = sl.pluggedMin, never = mins === 0;
       $('sleepState').textContent = !sl.known || mins == null ? 'Sleep setting' : never ? 'Sleep: never (good for hosting)' : `Sleep: after ${mins} minute${mins === 1 ? '' : 's'}${s.platform === 'win32' ? ' when plugged in' : ''}`;
@@ -140,6 +150,8 @@
   $('mode').addEventListener('change', (e) => act('mode', e.target.checked));
   $('sww').addEventListener('change', (e) => act('startWithWindows', e.target.checked));
   $('awake').addEventListener('change', (e) => act('keepAwake', e.target.checked));
+  $('cloudSel').addEventListener('change', (e) => act(e.target.value === '__pick' ? 'cloudPick' : 'cloudSet', e.target.value === '__pick' ? '' : e.target.value));
+  $('cloudOpen').addEventListener('click', () => act('cloudOpen'));
   $('sleepOpen').addEventListener('click', () => act('sleepSettings'));
   $('openData').addEventListener('click', () => act('openData'));
   $('backup').addEventListener('click', async () => { say('Backing up…'); try { const f = await A.hostAction('backup'); say('Backup saved: ' + f, 'ok'); } catch (e) { say('Backup failed: ' + (e.message || e), 'bad'); } });

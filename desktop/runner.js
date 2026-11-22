@@ -19,6 +19,8 @@ process.on('message', async (m) => {
       case 'addUser': v = srv.addUser(m.name, m.password, m.books); break;
       case 'books': v = srv.books(); break;
       case 'backup': v = srv.backup(); break;
+      case 'setCloud': v = srv.setCloudDir(m.dir); break;
+      case 'cloudInfo': v = srv.cloudInfo(); break;
       case 'quit': await srv.stop(); process.exit(0); break;
       default: throw new Error('unknown command ' + m.cmd);
     }

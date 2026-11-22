@@ -448,8 +448,30 @@ function backup() {
   db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
   const all = fs.readdirSync(BACKUP_DIR).filter((f) => /^finance-.*\.db$/.test(f)).sort();
   for (const f of all.slice(0, Math.max(0, all.length - 30))) fs.unlinkSync(path.join(BACKUP_DIR, f));
+  cloudCopy(file);
   return file;
 }
+// Optional: also keep backups in a cloud-synced folder (OneDrive, iCloud Drive, Google Drive, Dropbox…), so a copy
+// leaves this computer without any service of ours. Keeps the newest 14 there.
+const cloudTarget = () => (CFG.cloudDir ? path.join(CFG.cloudDir, 'Larenest backups') : '');
+function cloudCopy(file) {
+  const dir = cloudTarget(); if (!dir) return null;
+  try {
+    if (!fs.existsSync(CFG.cloudDir)) throw new Error('The cloud folder isn\u2019t there any more. Is that app still installed and signed in?');
+    fs.mkdirSync(dir, { recursive: true }); fs.copyFileSync(file, path.join(dir, path.basename(file)));
+    const all = fs.readdirSync(dir).filter((f) => /^finance-.*\.db$/.test(f)).sort();
+    for (const f of all.slice(0, Math.max(0, all.length - 14))) { try { fs.unlinkSync(path.join(dir, f)); } catch {} }
+    saveCfg({ cloudLast: new Date().toISOString(), cloudError: '' }); return path.join(dir, path.basename(file));
+  } catch (e) { try { saveCfg({ cloudError: e.message }); } catch {} return null; }
+}
+function setCloudDir(dir) {
+  dir = dir ? String(dir) : '';
+  if (dir && !fs.existsSync(dir)) throw new Error('That folder doesn\u2019t exist.');
+  saveCfg({ cloudDir: dir, cloudError: '' });
+  if (dir) { const latest = fs.readdirSync(BACKUP_DIR).filter((f) => /^finance-.*\.db$/.test(f)).sort().pop(); cloudCopy(latest ? path.join(BACKUP_DIR, latest) : backup()); }
+  return cloudInfo();
+}
+const cloudInfo = () => ({ dir: CFG.cloudDir || '', target: cloudTarget(), last: CFG.cloudLast || '', error: CFG.cloudError || '' });
 
 let SERVER = null, BTIMER = null, DTIMER = null, RUN = null, TS_SEEN = 0;
 const lanAddrs = () => Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => n.address);
@@ -620,5 +642,5 @@ if (require.main === module) {
   const quit = () => stop().then(() => { try { db.close(); } catch {} process.exit(0); });
   process.on('SIGINT', quit); process.on('SIGTERM', quit);
 } else {
-  module.exports = { start, stop, info, setMode, addUser, backup, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
+  module.exports = { start, stop, info, setMode, addUser, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
 }
