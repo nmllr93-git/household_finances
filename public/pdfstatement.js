@@ -30,8 +30,9 @@
 
   // Turns the PDF into lines of positioned text items.
   async function readLines(buffer) {
+    await import('/vendor/pdfjs/compat.mjs'); // Safari (iPhone) stand-ins for newer features pdf.js uses
     const pdfjs = await import('/vendor/pdfjs/pdf.min.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+    pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.compat.mjs';
     const doc = await pdfjs.getDocument({ data: buffer, isEvalSupported: false }).promise;
     return linesFrom(doc);
   }
