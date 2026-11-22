@@ -214,7 +214,8 @@ function setupUpdates() {
   autoUpdater.on('update-downloaded', async (i) => {
     updBusy = false;
     const r = await dialog.showMessageBox({ type: 'info', buttons: ['Restart now', 'When I quit'], defaultId: 0, message: `Version ${i.version} is ready`, detail: 'Restarting briefly stops the server; it starts again right after.' });
-    if (r.response === 0) { quitting = true; setImmediate(() => autoUpdater.quitAndInstall()); }
+    // stop the built-in server first and wait for it to exit: a running server keeps files locked and the installer then fails
+    if (r.response === 0) { quitting = true; await stopChild(); setImmediate(() => autoUpdater.quitAndInstall()); }
   });
   setTimeout(() => checkUpdates(false), 30e3); setInterval(() => checkUpdates(false), 24 * 3600e3);
 }
@@ -272,7 +273,17 @@ ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
 // ---------- app lifecycle ----------
 app.on('second-instance', () => openDashboard());
 app.on('window-all-closed', () => { if (S.role !== 'host') app.quit(); });
-app.on('before-quit', () => { quitting = true; if (child) { try { child.send({ cmd: 'quit', id: 0 }); } catch {} } });
+// Wait for the server process to really end (up to 5 s, then force it), so nothing is left holding files open.
+function stopChild() {
+  return new Promise((resolve) => {
+    const c = child; if (!c || c.exitCode !== null) return resolve();
+    const t = setTimeout(() => { try { c.kill('SIGKILL'); } catch {} resolve(); }, 5000);
+    c.once('exit', () => { clearTimeout(t); resolve(); });
+    try { c.send({ cmd: 'quit', id: 0 }); } catch { try { c.kill(); } catch {} }
+  });
+}
+let stopped = false;
+app.on('before-quit', (e) => { quitting = true; if (child && !stopped) { e.preventDefault(); stopChild().then(() => { stopped = true; app.quit(); }); } });
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Help', submenu: [{ label: 'Check for updates…', click: () => checkUpdates(true) }, { label: 'Change setup…', click: async () => { show(); await win.loadFile(path.join(__dirname, 'ui', 'setup.html')); } }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }] }]));
   app.setAppUserModelId('com.householdfinances.desktop');

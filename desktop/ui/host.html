@@ -16,11 +16,11 @@
   nav .st { margin-left:auto; color:#cfd6de; font-size:12.5px; display:flex; align-items:center; gap:6px; }
   .dot { width:9px; height:9px; border-radius:50%; background:#8a939d; display:inline-block; } .dot.on { background:#4cc38a; } .dot.warn { background:#e0a43a; }
   #dash { flex:1; border:0; width:100%; }
-  #opts { flex:1; overflow:auto; padding:20px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; max-width:1100px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  #opts { flex:1; overflow:auto; padding:14px 16px; }
+  .grid { columns: 2 360px; column-gap:14px; max-width:1100px; } .grid > .card { break-inside: avoid; margin:0 0 14px; display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
   .card h2 { font-size:1rem; margin:0 0 10px; }
-  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--line); }
   .row:first-of-type { border-top:0; }
   .row small { display:block; color:var(--mut); }
   .mut { color:var(--mut); } .bad { color:var(--bad); } .ok { color:var(--ok); }
@@ -50,6 +50,12 @@
   <div class="warnbox" id="warn" hidden></div>
   <div class="grid">
     <div class="card">
+      <h2>App</h2>
+      <div class="row"><div>Version <b id="ver"></b><small>Checks automatically once a day.</small></div><button class="q" id="updates" type="button">Check for updates</button></div>
+      <div class="row"><div>Change setup<small>Port, data folder, add logins, or switch this PC to connecting to another server.</small></div><button class="q" id="setup" type="button">Change setup…</button></div>
+      <div class="row"><div>Quit<small>Stops the server and closes the app. Other devices can't connect until it's started again.</small></div><button class="q" id="quit" type="button">Quit</button></div>
+    </div>
+    <div class="card">
       <h2>Server</h2>
       <div class="row"><div><b id="srvState">…</b><small id="srvSub"></small></div><button class="b" id="startStop" type="button">…</button></div>
       <div class="row"><div>Allow other devices<small>Phones and other PCs on your network or Tailscale can sign in. Off = this computer only.</small></div><label class="sw"><input type="checkbox" id="mode"><span></span></label></div>
@@ -71,12 +77,6 @@
       <h2>Data &amp; backups</h2>
       <div class="row"><div>Data folder<small><code id="dir"></code></small></div><button class="q" id="openData" type="button">Open</button></div>
       <div class="row"><div>Back up now<small>A full copy goes in the data folder's <i>backups</i> folder. One is also made automatically every day.</small></div><button class="q" id="backup" type="button">Back up</button></div>
-    </div>
-    <div class="card">
-      <h2>App</h2>
-      <div class="row"><div>Version <b id="ver"></b><small>Checks automatically once a day.</small></div><button class="q" id="updates" type="button">Check for updates</button></div>
-      <div class="row"><div>Change setup<small>Port, data folder, add logins, or switch this PC to connecting to another server.</small></div><button class="q" id="setup" type="button">Change setup…</button></div>
-      <div class="row"><div>Quit<small>Stops the server and closes the app. Other devices can't connect until it's started again.</small></div><button class="q" id="quit" type="button">Quit</button></div>
     </div>
   </div>
   <div id="msg" role="status"></div>
