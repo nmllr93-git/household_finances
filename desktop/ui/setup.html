@@ -33,7 +33,8 @@
   <section id="s1">
     <h2>Who will use this?</h2>
     <button class="choice" id="c-me" type="button"><b>Just me, on this computer</b><span>Everything stays on this computer. Nothing else on your network can connect.</span></button>
-    <button class="choice" id="c-house" type="button"><b>Me and my household, from our phones and computers</b><span>This computer keeps the data, and everyone opens it from their own phone or computer at home. Best on a computer that stays on.</span></button>
+    <button class="choice" id="c-mine" type="button"><b>Just me, on this computer and my phone or other devices</b><span>This computer keeps your data, and you open it from your own phone, tablet or laptop too. Nobody else gets a login unless you add one.</span></button>
+    <button class="choice" id="c-house" type="button"><b>Me and others in my household</b><span>This computer keeps the data. Everyone gets their own login and dashboard, plus a shared one if you like, on their own phone or computer.</span></button>
     <button class="choice" id="c-remote" type="button"><b>Someone already set it up on another computer</b><span>Connect to that computer. Your finances stay there; this app just opens them.</span></button>
   </section>
 
@@ -85,12 +86,13 @@
   const dirNote = async () => { if (await A.hasData($('dir').value)) { $('dirnote').innerHTML = '<span class="ok">Found existing finance data in this folder. It will be used as-is.</span>'; } };
   dirNote();
   document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => step(b.dataset.back)));
-  const who = (m) => { setMode(m); $('sww').checked = m === 'host';
-    $('s2note').textContent = m === 'host' ? 'This computer will host your household\u2019s finances. Next you\u2019ll create your login, then you can connect phones by scanning a QR code. Tip: keep this computer plugged in and on; the app keeps it awake while hosting.' : 'Your finances will stay on this computer only. You can let other devices connect later from Host options.';
+  const who = (m, house) => { setMode(m); $('sww').checked = m === 'host';
+    $('s2note').textContent = m === 'host' && !house ? 'This computer will host your finances for your own devices. Next you\u2019ll create your login, then connect your phone by scanning a QR code. Only people you give a login to can sign in. Tip: keep this computer plugged in and on; the app keeps it awake while hosting.' : m === 'host' ? 'This computer will host your household\u2019s finances. Next you\u2019ll create your login; afterwards, invite the others from \u2699 Settings \u2192 Invite someone, and connect phones by scanning a QR code. Tip: keep this computer plugged in and on; the app keeps it awake while hosting.' : 'Your finances will stay on this computer only. You can let other devices connect later from Host options.';
     step('s2'); };
   if (navigator.platform && /mac/i.test(navigator.platform)) $('swwLbl').textContent = 'Open at login (runs quietly in the menu bar)';
   $('c-me').addEventListener('click', () => who('local'));
-  $('c-house').addEventListener('click', () => who('host'));
+  $('c-mine').addEventListener('click', () => who('host', false));
+  $('c-house').addEventListener('click', () => who('host', true));
   $('c-remote').addEventListener('click', () => A.useRemote());
   $('m-local').addEventListener('click', () => setMode('local'));
   $('m-host').addEventListener('click', () => setMode('host'));

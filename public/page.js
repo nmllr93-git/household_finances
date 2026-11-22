@@ -2572,14 +2572,65 @@
     el.append(box);
   });
 
+  // addresses other devices can use to reach this server (the one in the address bar, unless that's this computer's own name)
+  const hostAddrs = async () => {
+    const here = (FDStore.base || location.origin).replace(/\/+$/, '');
+    if (!/\/\/(localhost|127\.0\.0\.1)(:|$)/.test(here)) return [here];
+    try { const j = await FDStore.json('GET', '/api/connect-info'); return j.addrs || []; } catch (e) { return []; }
+  };
+  // ⚙ Settings → Invite someone (server owner only): a one-time link + QR code; they choose their own login and password
+  const inviteBox = async (host) => {
+    if (window.FD_LOCAL || host.querySelector('.fd-invbox')) return;
+    const tok = {}; host.__inv = tok;
+    let info; try { info = await FDStore.json('GET', '/api/invites'); } catch (e) { return; } // not the owner: no box
+    const addrs = await hostAddrs();
+    if (host.__inv !== tok || host.querySelector('.fd-invbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-invbox'; host.append(box);
+    const draw = () => {
+      box.textContent = ''; box.append(rhead('Invite someone'));
+      if (!addrs.length) { box.append(phMsg('To invite someone, first let other devices connect: on the host computer, turn on “Allow other devices” in Host options.')); return; }
+      box.append(phMsg('Make a one-time link for a partner or family member. They open it (or scan the QR code) on their phone or computer and choose their own login and password. The link works once and expires after 7 days.'));
+      const r1 = document.createElement('div'); r1.className = 'fd-rb-row'; const nm = document.createElement('input'); nm.className = 'fd-in'; nm.placeholder = 'Their name (optional), e.g. McKenna'; nm.maxLength = 40; r1.append(nm); box.append(r1);
+      const pick = {};
+      box.append(phMsg('Which dashboards can they open?'));
+      for (const b of info.books) {
+        const r = document.createElement('div'); r.className = 'fd-rb-row'; const lab = document.createElement('label'); lab.className = 'fd-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; lab.append(cb, ' ' + b.name);
+        const role = document.createElement('select'); role.className = 'dash-select'; role.append(new Option('Can edit', 'edit'), new Option('View only', 'view'));
+        cb.addEventListener('change', () => { if (cb.checked) pick[b.id] = role.value; else delete pick[b.id]; }); role.addEventListener('change', () => { if (cb.checked) pick[b.id] = role.value; });
+        r.append(lab, role); box.append(r);
+      }
+      const r2 = document.createElement('div'); r2.className = 'fd-rb-row'; const lab2 = document.createElement('label'); lab2.className = 'fd-check'; const own = document.createElement('input'); own.type = 'checkbox'; own.checked = true; lab2.append(own, ' Also give them a new dashboard of their own:');
+      const ownName = document.createElement('input'); ownName.className = 'fd-in'; ownName.placeholder = 'e.g. McKenna – Personal'; ownName.maxLength = 40;
+      nm.addEventListener('input', () => { if (!ownName.dataset.touched) ownName.value = nm.value.trim() ? `${nm.value.trim()} – Personal` : ''; }); ownName.addEventListener('input', () => { ownName.dataset.touched = '1'; });
+      r2.append(lab2, ownName); box.append(r2);
+      const msg = phMsg(''); const out = document.createElement('div');
+      const mk = rbtn('Create invite link', async () => {
+        msg.className = 'fd-note'; msg.textContent = '';
+        try {
+          const j = await FDStore.json('POST', '/api/invites', { name: nm.value.trim(), books: Object.entries(pick).map(([id, role]) => ({ id, role })), newBook: own.checked && ownName.value.trim() ? { name: ownName.value.trim() } : null });
+          const link = `${addrs[0]}/join.html#${j.token}`;
+          out.innerHTML = window.FDQR ? FDQR.svg(link, 200) : ''; out.className = 'fd-qr';
+          const c = document.createElement('code'); c.textContent = link; c.style.wordBreak = 'break-all';
+          const cp = rbtn('Copy link', async () => { try { await navigator.clipboard.writeText(link); cp.textContent = 'Copied'; } catch (e) { cp.textContent = 'Select the link and copy it'; } }, false);
+          out.append(c, cp, phMsg(`Send this link to ${nm.value.trim() || 'them'} (a text message is fine), or let them scan the code. It works once and expires in 7 days. They need to be on your home Wi-Fi (or Tailscale) to use it.`));
+          info = await FDStore.json('GET', '/api/invites'); drawPending();
+        } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; }
+      }, false);
+      const r3 = document.createElement('div'); r3.className = 'fd-rb-row'; r3.append(mk); box.append(r3, msg, out);
+      const pend = document.createElement('div'); box.append(pend);
+      const drawPending = () => { pend.textContent = ''; if (!info.pending.length) return; pend.append(phMsg('Invites not used yet:'));
+        for (const p of info.pending) { const r = document.createElement('div'); r.className = 'fd-rb-row'; const t = document.createElement('span'); t.textContent = `${p.name || 'Invite'} · expires ${new Date(p.expires).toLocaleDateString()}`;
+          r.append(t, rbtn('Cancel', async () => { await FDStore.json('DELETE', '/api/invites/' + encodeURIComponent(p.token)); info = await FDStore.json('GET', '/api/invites'); drawPending(); })); pend.append(r); } };
+      drawPending();
+    };
+    draw();
+  };
+
   // ⚙ Settings → Connect a phone: a QR code of this server's address (scan it in the phone app, or with the phone's camera to open it in the browser)
   const connectBox = async (host) => {
     if (window.FD_LOCAL || !window.FDQR || host.querySelector('.fd-qrbox')) return;
     const tok = {}; host.__qr = tok;
-    let addrs = [];
-    const here = (FDStore.base || location.origin).replace(/\/+$/, '');
-    if (!/\/\/(localhost|127\.0\.0\.1)(:|$)/.test(here)) addrs = [here];
-    else { try { const j = await FDStore.json('GET', '/api/connect-info'); addrs = j.addrs || []; } catch (e) {} }
+    const addrs = await hostAddrs();
     if (host.__qr !== tok || host.querySelector('.fd-qrbox')) return;
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-qrbox'; host.append(box);
     box.append(rhead('Connect a phone'));
@@ -2951,6 +3002,7 @@
     emailBox(el).catch(() => {});
     syncBox(el).catch(() => {});
     connectBox(el).catch(() => {});
+    inviteBox(el).catch(() => {});
     navMenuBox(el);
     activityBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {

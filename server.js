@@ -78,6 +78,7 @@ const SCHEMA = `
     coll TEXT NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL, created_by TEXT);
   CREATE INDEX IF NOT EXISTS docs_book ON docs (book_id, coll);
   CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE, mime TEXT NOT NULL, data BLOB NOT NULL, created TEXT NOT NULL, created_by TEXT);
+  CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, data TEXT NOT NULL, created_by TEXT, created TEXT NOT NULL, expires INTEGER NOT NULL, used_by TEXT);
   CREATE TABLE IF NOT EXISTS activity (at TEXT NOT NULL, username TEXT, book_id TEXT NOT NULL, action TEXT NOT NULL, coll TEXT, summary TEXT);
   CREATE INDEX IF NOT EXISTS activity_book ON activity (book_id, at);
 `;
@@ -328,6 +329,25 @@ async function api(req, res, url) {
     return send(res, 200, { ok: true }, { 'Set-Cookie': cookie(req, '', 0) });
   }
 
+  // Invite links: see what the invite gives, then choose a login and password (no sign-in needed; the link is the permission)
+  if (parts[1] === 'join' && parts[2]) {
+    const inv = inviteInfo(parts[2]);
+    if (!inv) return send(res, 404, { error: 'This invite link has expired or was already used. Ask for a new one.' });
+    if (req.method === 'GET') return send(res, 200, inv.view);
+    if (req.method === 'POST') {
+      if (tooMany(ip)) return send(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });
+      const b = await readJson(req), u = String(b.username || '').trim().toLowerCase();
+      if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(u)) return send(res, 400, { error: 'That login name is taken. Pick another.' });
+      try {
+        const ids = (inv.data.books || []).filter((x) => db.prepare('SELECT 1 FROM books WHERE id = ?').get(x.id)).map((x) => x.id + (x.role === 'view' ? ':view' : ''));
+        if (inv.data.newBook) { const nb = createBook(inv.data.newBook.name, false); ids.unshift(nb.id); }
+        addUser(u, String(b.password || ''), ids);
+      } catch (e) { noteFail(ip); return send(res, 400, { error: e.message }); }
+      db.prepare('UPDATE invites SET used_by = ? WHERE token = ?').run(u, inv.row.token);
+      return send(res, 200, { ok: true }, { 'Set-Cookie': cookie(req, newSession(u), SESSION_DAYS * 86400) });
+    }
+  }
+
   const user = sessionUser(req);
   if (!user) return send(res, 401, { error: 'Not signed in' });
   // Writes must come from this site's own pages.
@@ -382,6 +402,21 @@ async function api(req, res, url) {
   }
   if (parts[1] === 'me' && req.method === 'GET') return send(res, 200, { username: user, books: userBooks(user) });
   // addresses other devices can use (for the "Connect a phone" QR code); empty when the server only listens on this computer
+  if (parts[1] === 'invites') {
+    if (user !== ownerName()) return send(res, 403, { error: `Only ${ownerName()} (who set up this server) can invite people.` });
+    if (req.method === 'GET') { const names = new Map(db.prepare('SELECT id, name FROM books').all().map((b) => [b.id, b.name]));
+      return send(res, 200, { books: [...names].map(([id, name]) => ({ id, name })), pending: db.prepare('SELECT token, data, expires FROM invites WHERE used_by IS NULL AND expires > ? ORDER BY created DESC').all(Date.now()).map((r) => { let d = {}; try { d = JSON.parse(r.data); } catch {} return { token: r.token, name: d.name || '', expires: r.expires }; }) }); }
+    if (req.method === 'DELETE' && parts[2]) { db.prepare('DELETE FROM invites WHERE token = ? AND used_by IS NULL').run(parts[2]); return send(res, 200, { ok: true }); }
+    if (req.method === 'POST') {
+      const b = await readJson(req), all = new Set(db.prepare('SELECT id FROM books').all().map((x) => x.id));
+      const books = (Array.isArray(b.books) ? b.books : []).filter((x) => x && all.has(String(x.id))).map((x) => ({ id: String(x.id), role: x.role === 'view' ? 'view' : 'edit' }));
+      const newBook = b.newBook && String(b.newBook.name || '').trim() ? { name: String(b.newBook.name).trim().slice(0, 40) } : null;
+      if (!books.length && !newBook) return send(res, 400, { error: 'Choose at least one dashboard for them, or give them a new one of their own.' });
+      const token = crypto.randomBytes(18).toString('base64url'), days = Math.min(Math.max(Number(b.days) || 7, 1), 30);
+      db.prepare('INSERT INTO invites (token, data, created_by, created, expires, used_by) VALUES (?, ?, ?, ?, ?, NULL)').run(token, JSON.stringify({ name: String(b.name || '').slice(0, 40), books, newBook }), user, new Date().toISOString(), Date.now() + days * 864e5);
+      return send(res, 200, { token, expires: Date.now() + days * 864e5 });
+    }
+  }
   if (parts[1] === 'connect-info' && req.method === 'GET') return send(res, 200, { addrs: RUN && RUN.host !== '127.0.0.1' ? lanAddrs().map((a) => `http://${a}:${RUN.port}`) : [], hostOnly: !RUN || RUN.host === '127.0.0.1' });
 
   if (parts[1] === 'books' && parts[2]) {
@@ -475,6 +510,27 @@ async function setMode(mode, port) {
   return info();
 }
 // addUser(name, password, books): first-run setup screen in the apps (same rules as the add-user command).
+// A new dashboard (also used by "Invite someone" when the invite includes a dashboard of their own).
+function createBook(name, shared) {
+  const nm = String(name || '').trim().slice(0, 40); if (!nm) throw new Error('Give the dashboard a name.');
+  let base = nm.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'book', id = base, n = 2;
+  if (base.length < 2) id = base = 'book';
+  while (db.prepare('SELECT 1 FROM books WHERE id = ?').get(id)) id = `${base.slice(0, 20)}-${n++}`;
+  const sort = db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 n FROM books').get().n;
+  db.prepare('INSERT INTO books (id, name, label, sort) VALUES (?, ?, ?, ?)').run(id, nm, shared ? 'Shared' : 'Personal', sort);
+  for (const ds of ['sheet_history', 'sheet_balances', 'sheet_budgets']) db.prepare('INSERT INTO seed (book_id, dataset, json) VALUES (?, ?, ?)').run(id, ds, '[]');
+  return { id, name: nm };
+}
+// "Invite someone": a one-time link (good for 7 days) that lets a new person choose their own login and password.
+function inviteInfo(token) {
+  const r = db.prepare('SELECT * FROM invites WHERE token = ?').get(String(token || ''));
+  if (!r || r.used_by || r.expires < Date.now()) return null;
+  let d = {}; try { d = JSON.parse(r.data); } catch {}
+  const names = new Map(db.prepare('SELECT id, name FROM books').all().map((b) => [b.id, b.name]));
+  return { row: r, data: d, view: { from: r.created_by, name: d.name || '', expires: r.expires,
+    books: (d.books || []).filter((b) => names.has(b.id)).map((b) => ({ name: names.get(b.id), role: b.role === 'view' ? 'view' : 'edit' })), newBook: d.newBook ? d.newBook.name : '' } };
+}
+
 function addUser(name, pw, ids) {
   const u = String(name || '').toLowerCase();
   if (!/^[a-z0-9_.-]{2,32}$/.test(u)) throw new Error('Login names are 2–32 letters, numbers, dots, dashes or underscores.');

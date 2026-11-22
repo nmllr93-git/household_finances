@@ -129,3 +129,16 @@ test('SimpleFIN: status, access rules and friendly token errors', async () => {
   assert.equal((await req('GET', `/api/books/${books()[0]}/simplefin`, null, cookieB)).status, 403, 'other people\'s dashboards stay private');
   const bad = await req('POST', `/api/books/${b2}/simplefin`, { token: 'not-a-token' }); assert.equal(bad.status, 400); assert.match(bad.json.error, /setup token/);
 });
+
+test('invites: owner makes a one-time link; the new person picks a login and gets the right dashboards', async () => {
+  assert.equal((await req('POST', '/api/invites', { books: [{ id: books()[1] }] }, cookieB)).status, 403, 'only the owner can invite');
+  const mk = await req('POST', '/api/invites', { name: 'Sam', books: [{ id: books()[1], role: 'view' }], newBook: { name: 'Sam – Personal' } });
+  assert.equal(mk.status, 200); const t = mk.json.token;
+  const g = await req('GET', `/api/join/${t}`, null, ''); assert.equal(g.status, 200); assert.equal(g.json.newBook, 'Sam – Personal'); assert.equal(g.json.books[0].role, 'view');
+  assert.equal((await req('POST', `/api/join/${t}`, { username: 'sam', password: 'short' }, '')).status, 400);
+  const j = await req('POST', `/api/join/${t}`, { username: 'sam', password: 'longenough1' }, ''); assert.equal(j.status, 200);
+  const ck = String(j.headers.get('set-cookie') || '').split(';')[0];
+  const me = await req('GET', '/api/me', null, ck); assert.equal(me.status, 200);
+  assert.deepEqual(me.json.books.map((b) => b.name).sort(), ['Sam – Personal', me.json.books.find((b) => b.readOnly).name].sort());
+  assert.equal((await req('GET', `/api/join/${t}`, null, '')).status, 404, 'links work once');
+});
