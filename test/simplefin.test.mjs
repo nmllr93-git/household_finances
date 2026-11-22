@@ -17,7 +17,7 @@ function fake() {
       if (url.startsWith('https://claim.example/')) return { status: 200, text: ACCESS };
       return { status: 200, text: JSON.stringify({ errors: [], accounts: [
         { id: 'a1', name: 'Everyday Checking', org: { name: 'Hills Bank' }, currency: 'USD', balance: '2100.25', 'balance-date': 1767355200, transactions: txns },
-        { id: 'a2', name: 'Rewards Visa', org: { name: 'Card Co' }, currency: 'USD', balance: '-340.10', 'balance-date': 1767355200, transactions: [] } ] }) };
+        { id: 'a2', name: 'Rewards VISA\uFFFD\uFFFD Card', org: { name: 'Card Co' }, currency: 'USD', balance: '-340.10', 'balance-date': 1767355200, transactions: [] } ] }) };
     },
     load: (id) => state[id] || null, save: (id, st) => { if (st) state[id] = JSON.parse(JSON.stringify(st)); else delete state[id]; },
     bookData: () => docs, addDoc: (id, coll, doc) => { docs[coll].push(doc); },
@@ -39,13 +39,14 @@ test('connect, sync posted only, no duplicates, owed balances positive', async (
   const f = fake();
   const c = await f.sf.handle('POST', [], 'b1', body({ token }));
   assert.equal(c.status, 200); assert.equal(c.body.connected, true); assert.equal(c.body.accounts.length, 2);
+  assert.ok(c.body.accounts.some((a) => a.name === 'Rewards VISA Card' && a.map === 'Rewards VISA Card'), 'broken symbols are dropped from names');
   assert.ok(!JSON.stringify(c.body).includes('p%402'), 'access URL is never sent to the page');
   const s = await f.sf.handle('POST', ['sync'], 'b1', body({}));
   assert.equal(s.status, 200); assert.equal(s.body.added, 2);
   const chk = f.docs.imports.find((d) => d.accountName === 'Everyday Checking');
   assert.deepEqual(chk.txns.map((t) => t.amount), [12.5, -1500]);
   assert.equal(chk.balance, 2100.25);
-  assert.equal(f.docs.imports.find((d) => d.accountName === 'Rewards Visa').balance, 340.1);
+  assert.equal(f.docs.imports.find((d) => d.accountName === 'Rewards VISA Card').balance, 340.1);
   assert.equal(f.docs.accounts.length, 2);
   // too soon for another manual sync
   assert.equal((await f.sf.handle('POST', ['sync'], 'b1', body({}))).status, 429);

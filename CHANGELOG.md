@@ -3,6 +3,25 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.17
+
+### New
+- **The app is now called Larenest**, with a new icon. Your settings, logins and data carry over; nothing to move. Website: [larenest.app](https://larenest.app).
+- **Automatic bank sync (SimpleFIN Bridge):** ⚙ Settings → **Automatic bank sync**. Connect your banks once in SimpleFIN Bridge (about $1.50/month, paid to them), paste a setup token, and new posted transactions arrive about every 6 hours, using your categories, rules and duplicate checks. Includes a step-by-step guide with pictures.
+- **Cloud backups:** Host options can also keep the daily backups in OneDrive, iCloud Drive, Google Drive or Dropbox (found automatically), or any folder you choose; the newest 14 are kept there.
+- **Download page:** [larenest.app/download](https://larenest.app/download/) picks the right installer for your device.
+
+### Fixes
+- Updates no longer fail on Windows: the app stops its built-in server and waits for it to close before installing.
+- SimpleFIN: the connection is kept as soon as the setup token is accepted, so a problem fetching accounts no longer wastes the one-time token; SimpleFIN's own error message is shown; broken symbols in bank account names (like "VISA��") are removed.
+- Host options are more compact, with App and updates first.
+
+## Android 1.5.0
+
+### New
+- **The app is now called Larenest**, with a new icon. This is a new app ID: uninstall the old "Household Finances" app and install this one, then connect again (scan the QR code in Host options). Your data lives on your computer, so nothing is lost.
+- Automatic bank sync settings and the picture guide work on the phone too.
+
 ## Desktop 1.0.16
 
 ### Fixes

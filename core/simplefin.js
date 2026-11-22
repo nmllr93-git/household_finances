@@ -23,6 +23,8 @@
   const b64 = (s) => (typeof Buffer !== 'undefined' ? Buffer.from(s, 'utf8').toString('base64') : btoa(unescape(encodeURIComponent(s))));
   const unb64 = (s) => (typeof Buffer !== 'undefined' ? Buffer.from(s, 'base64').toString('utf8') : decodeURIComponent(escape(atob(s))));
   const day = (unix) => { const d = new Date(Number(unix) * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  // banks sometimes send symbols like (R) as broken bytes; drop them
+  const clean = (v) => String(v == null ? '' : v).replace(/[\uFFFD\u0000-\u001f]+/g, '').replace(/\s+/g, ' ').trim();
   function guessKind(name) {
     const n = String(name || '').toLowerCase();
     if (/credit|card|visa|mastercard|amex|discover/.test(n)) return 'credit:card';
@@ -72,8 +74,9 @@
       st.accounts = st.accounts || {};
       for (const a of accounts) {
         const id = String(a.id || ''); if (!id) continue;
-        const org = String((a.org && (a.org.name || a.org.domain)) || '').slice(0, 60), name = String(a.name || 'Account').slice(0, 60);
+        const org = clean((a.org && (a.org.name || a.org.domain)) || '').slice(0, 60), name = (clean(a.name) || 'Account').slice(0, 60);
         const cur = st.accounts[id] || { map: name.slice(0, 60), kind: guessKind(name), skip: false, seen: [], lastBal: null };
+        if (/\uFFFD/.test(cur.map)) cur.map = clean(cur.map);
         st.accounts[id] = { ...cur, name, org, currency: String(a.currency || 'USD').slice(0, 10) };
       }
     }

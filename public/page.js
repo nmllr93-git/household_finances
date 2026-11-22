@@ -2543,7 +2543,10 @@
         [['Open SimpleFIN Bridge and press Get started.'], ['Enter your email and press Send sign-in email. Open the link in that email and press Finish signing in. (Check your spam folder if it doesn’t arrive.)'],
           ['Read and accept the Terms of Use.'], ['Go to Billing → Subscribe and choose monthly ($1.50) or yearly ($15). SimpleFIN suggests monthly first, until you’re sure your banks work.'],
           ['On My account, press New connection and link each bank or card. Banks can take a day or two to show transactions.'], ['Under Apps, press New app connection, name it “Larenest” and press Create Setup Token.'],
-          ['Copy the setup token (it’s shown only once and works only once), paste it below and press Connect.']].forEach(([t], i) => {
+          ['Copy the setup token (it’s shown only once and works only once), paste it below and press Connect.'],
+          ['Linking a bank (step 5 in detail): press New connection and search for your bank.'], ['Sign in on your bank’s own page. SimpleFIN never sees your bank password; your bank may text you a code.'],
+          ['Choose which accounts to share, then press Allow. Only balances and transactions are used here.'], ['Back on My account the bank shows “OK” and your app shows as Active. Transactions can take a few days to appear.'],
+          ['In this app, check each account’s name and type, press Save accounts, then Sync now. Use the same name as an account you already import statements for.']].forEach(([t], i) => {
           const f = document.createElement('figure'); const im = document.createElement('img'); im.src = `help/simplefin/step${i + 1}.webp`; im.alt = `SimpleFIN Bridge, step ${i + 1}`; im.loading = 'lazy';
           const c = document.createElement('figcaption'); c.textContent = `${i + 1}. ${t}`; f.append(c, im); guide.append(f); });
         const a = document.createElement('a'); a.href = 'https://beta-bridge.simplefin.org/'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open SimpleFIN Bridge ↗';
