@@ -25,7 +25,7 @@ Away from home: turn on the Tailscale app on the phone first.
 - **Same rules as the PC:** it runs the same shared core (`core/books.js`) as the server, so imports, budgets, rules, accounts, goals, holdings and settings all work the same.
 - **Backups:** the app keeps a snapshot every day (last 14) and one before any restore. **Download backup** opens the share sheet so you can save the file to Drive or Files, or email it. That file also restores on a PC (⚙ Settings → Backup & restore), and a PC backup restores here, which is how you move between phone-only and a server.
 - **Market, economy and live prices work too:** add your keys under ⚙ Settings → Data sources on the phone. They're stored on the phone only. The same pacing as the PC applies (markets at most hourly during trading hours, economy daily), and results are kept between app launches so reopening the app doesn't spend extra calls.
-- **Not in phone-only mode:** sharing between dashboards (needs a server).
+- **Sharing between dashboards** works on the phone too (for example, share an account from your personal dashboard into the shared one).
 - **Switching:** *Connect to a server instead* (top right) goes to the start screen; your phone data stays put and is there when you come back.
 - **Uninstalling the app deletes phone-only data.** Make a backup file first.
 

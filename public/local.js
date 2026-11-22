@@ -131,7 +131,6 @@
       case 'books': {
         const book = (await books()).find((b) => b.id === parts[2]);
         if (!book) return json(403, { error: 'No such budget on this phone' });
-        if (parts[3] === 'shares-list') return json(200, []);
         if (parts[3] === 'simplefin') { const r = await (await sfReady).handle(method, parts.slice(4), book.id, body); return json(r.status, r.body); }
         const core = await coreReady, api = core.createBookApi(store);
         const r = await api.handle(method, parts.slice(3), book, body, 'me');
