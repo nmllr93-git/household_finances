@@ -27,6 +27,16 @@ const defaultDataDir = () => {
 
 // ---------- where things are (packaged vs. running from source) ----------
 const RES = app.isPackaged ? process.resourcesPath : __dirname;
+// The install folder is deleted and rebuilt on every update, so data must never live inside it.
+const INSTALL_DIR = path.dirname(app.getPath('exe'));
+const insideInstall = (d) => { if (!app.isPackaged || !d) return false; const rel = path.relative(INSTALL_DIR.toLowerCase(), path.resolve(d).toLowerCase()); return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
+function rescueDataDir() { // older setups could pick a folder inside the app; move it out before anything else runs
+  if (!insideInstall(S.dataDir)) return;
+  const from = S.dataDir, to = defaultDataDir();
+  try { if (fs.existsSync(path.join(from, 'finance.db')) && !fs.existsSync(path.join(to, 'finance.db'))) fs.cpSync(from, to, { recursive: true }); } catch {}
+  S.dataDir = ''; saveSet();
+  dialog.showMessageBox({ type: 'warning', message: 'Your data folder was moved', detail: `It was inside the app's own folder (${from}), which updates replace. From now on your data is kept in ${to}.` }).catch(() => {});
+}
 const nodeBin = () => { const f = path.join(RES, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'); return fs.existsSync(f) ? f : (process.env.FD_NODE || 'node'); };
 const serverFile = () => { const f = path.join(RES, 'app-server', 'server.js'); return fs.existsSync(f) ? f : path.join(__dirname, '..', 'server.js'); };
 const ICON = path.join(__dirname, 'icons', process.platform === 'win32' ? 'app.ico' : 'icon-512.png');
@@ -158,6 +168,7 @@ ipcMain.handle('fd:canWrite', (_e, dir) => {
   return true;
 });
 ipcMain.handle('fd:startHost', async (_e, o) => {
+  if (insideInstall(o.dataDir)) throw new Error('Pick a folder outside the app\u2019s own folder (' + INSTALL_DIR + '). Updates replace everything in there, including your data.');
   const dir = o.dataDir || defaultDataDir(), restart = child && (dir !== (S.dataDir || defaultDataDir()));
   S = { ...S, role: 'host', mode: o.mode === 'host' ? 'host' : 'local', port: Number(o.port) || 8080, dataDir: dir === defaultDataDir() ? '' : dir, startWithWindows: !!o.startWithWindows };
   saveSet(); loginItem();
@@ -236,7 +247,7 @@ app.on('before-quit', () => { quitting = true; if (child) { try { child.send({ c
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Help', submenu: [{ label: 'Check for updates…', click: () => checkUpdates(true) }, { label: 'Change setup…', click: async () => { show(); await win.loadFile(path.join(__dirname, 'ui', 'setup.html')); } }, { type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' }] }]));
   app.setAppUserModelId('com.householdfinances.desktop');
-  loadSet(); loginItem(); setupUpdates();
+  loadSet(); rescueDataDir(); loginItem(); setupUpdates();
   if (S.role === 'host') { try { await startServer(); } catch {} tailscale(); setInterval(() => { tailscale(); refresh(); }, 60e3); }
   await openDashboard();
 });
