@@ -607,6 +607,53 @@
       f.elements.amount.focus();
     });
   };
+  // Budget starter: suggest a budget for each everyday category from what was actually spent in the last 3 full months.
+  let starterOpen = false, starterSkip = new Set(), starterAmt = {};
+  dash.draw('budgetStarter', (el) => {
+    el.replaceChildren(); if (st('txns', 'budgets') !== 'ok' || document.body.classList.contains('fd-readonly')) return;
+    const bk = book(), now = new Date(), months = [1, 2, 3].map((k) => { const d = new Date(now.getFullYear(), now.getMonth() - k, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
+    const have = new Set((dash.data('budgets').data || []).filter((b) => b.book === bk).map((b) => String(b.category).toLowerCase()));
+    const sum = {}, seen = {};
+    for (const t of dash.data('txns').data || []) {
+      if (t.book !== bk || t.type !== 'expense' || t.oneTime || t.ignored || !months.includes(t.month)) continue;
+      const c = t.category || 'Uncategorized'; if (/^(uncategorized|transfer)$/i.test(c)) continue;
+      sum[c] = (sum[c] || 0) + Number(t.amount || 0); (seen[c] = seen[c] || new Set()).add(t.month);
+    }
+    const round = (v) => (v >= 500 ? Math.ceil(v / 50) * 50 : v >= 100 ? Math.ceil(v / 10) * 10 : Math.ceil(v / 5) * 5);
+    const sug = Object.entries(sum).map(([c, v]) => ({ c, avg: v / 3, months: seen[c].size })).filter((x) => !have.has(x.c.toLowerCase()) && x.avg >= 20 && x.months >= 2)
+      .sort((a, b) => b.avg - a.avg).slice(0, 12).map((x) => ({ ...x, amt: starterAmt[x.c] ?? round(x.avg) }));
+    if (!sug.length) return;
+    const box = document.createElement('div'); box.className = 'fd-card fd-starter';
+    const h = document.createElement('h3'); h.textContent = have.size ? 'More budget ideas from your spending' : 'Start with budgets from your spending'; box.append(h);
+    if (!starterOpen) {
+      const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Based on your last 3 months, here ${sug.length === 1 ? "is 1 suggested monthly budget" : `are ${sug.length} suggested monthly budgets`}, about what you usually spend in each category, rounded up. Categorize your spending first to get more.`;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-btn'; b.textContent = 'See suggestions'; b.addEventListener('click', () => { starterOpen = true; dash.draw('budgetStarter'); });
+      box.append(p, b); el.append(box); return;
+    }
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Untick any you don’t want and adjust the amounts, then add them all at once. They start this month; you can change any of them later.'; box.append(p);
+    const tb = document.createElement('table'); tb.className = 'fd-table';
+    const hr = document.createElement('tr'); for (const x of ['', 'Category', 'Usual month', 'Budget']) { const th = document.createElement('th'); th.textContent = x; hr.append(th); } tb.append(hr);
+    for (const x of sug) {
+      const tr = document.createElement('tr'); const c0 = document.createElement('td'), cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !starterSkip.has(x.c); cb.setAttribute('aria-label', 'Add ' + x.c);
+      cb.addEventListener('change', () => { if (cb.checked) starterSkip.delete(x.c); else starterSkip.add(x.c); }); c0.append(cb);
+      const c3 = document.createElement('td'), inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.step = '5'; inp.value = x.amt; inp.className = 'fd-in'; inp.style.width = '7em'; inp.setAttribute('aria-label', 'Budget for ' + x.c);
+      inp.addEventListener('input', () => { starterAmt[x.c] = Number(inp.value) || 0; }); c3.append(inp);
+      tr.append(c0, td(x.c), td(money0(x.avg)), c3); tb.append(tr);
+    }
+    const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); box.append(sc);
+    const msg = document.createElement('p'); msg.className = 'fd-note';
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'fd-btn'; add.textContent = 'Add these budgets';
+    add.addEventListener('click', async () => {
+      const pick = sug.filter((x) => !starterSkip.has(x.c) && (starterAmt[x.c] ?? x.amt) > 0); if (!pick.length) return;
+      add.disabled = true; const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      try { const d = await db(); if (!d) throw new Error('no db');
+        for (const x of pick) await d.collection('data/household/budgets').add({ book: bk, category: x.c.slice(0, 40), amount: Math.round((starterAmt[x.c] ?? x.amt) * 100) / 100, from, rollover: false, createdAt: new Date().toISOString() });
+        starterOpen = false; starterAmt = {}; msg.textContent = `Added ${pick.length} budgets.`; }
+      catch (e) { add.disabled = false; msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t add them: ' + ((e && e.message) || e); }
+    });
+    const later = document.createElement('button'); later.type = 'button'; later.className = 'fd-btn fd-quiet'; later.textContent = 'Not now'; later.addEventListener('click', () => { starterOpen = false; dash.draw('budgetStarter'); });
+    const row = document.createElement('div'); row.className = 'fd-row'; row.append(add, later); box.append(row, msg); el.append(box);
+  });
   const BUD = ['fd-bud-ok', 'fd-bud-err', 'fd-bud-miss'];
   const show = (ids, on) => ids.forEach((id) => q(id).forEach((p) => { p.hidden = id !== on; }));
   q('fd-budget-form').forEach((f) => {
