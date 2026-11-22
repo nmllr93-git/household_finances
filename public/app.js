@@ -42,6 +42,7 @@
     pick(saved);
   }
 
+  $('#fd-export').addEventListener('click', () => { try { localStorage.setItem('fd-gs-backup', '1'); } catch {} });
   $('#fd-logout').addEventListener('click', async () => {
     try { await FDStore.fetch('/api/logout', { method: 'POST' }); } finally { location.href = '/login.html'; }
   });

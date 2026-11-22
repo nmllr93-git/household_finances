@@ -22,6 +22,7 @@
   li button { margin:0; text-align:left; background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:500; }
   #msg { margin-top:12px; min-height:1.3em; font-size:.92rem; } .bad { color:var(--bad); } .ok { color:var(--ok); }
   small { display:block; margin-top:16px; color:var(--mut); }
+#scanbox{margin:12px 0}#scanbox video{width:100%;max-width:360px;border-radius:12px;background:#000;display:block;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -34,6 +35,9 @@
     <input id="u" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false" placeholder="e.g. 192.168.1.20:8080 or my-pc.tailnet.ts.net:8080">
     <button type="submit">Connect</button>
   </form>
+  <button type="button" class="q" id="scan" hidden>Scan QR code</button>
+  <div id="scanbox" hidden><video id="cam" playsinline muted></video><button type="button" class="q" id="scanStop">Cancel</button></div>
+  <p id="scanHint" style="font-size:14px;opacity:.8;margin:8px 0 0">On your computer, open Household Finances → Host options (or ⚙ Settings → Connect a phone) to see a QR code.</p>
   <div id="msg" role="status"></div>
   <div id="localbox" hidden>
     <p style="margin:18px 0 8px">No server? Keep everything on this phone instead. Nothing is sent anywhere, and you can make a backup file any time.</p>
@@ -68,6 +72,22 @@
     }
   }
   $('f').addEventListener('submit', (e) => { e.preventDefault(); go($('u').value); });
+  // Scan the QR code shown on the host computer (uses the phone's camera; nothing leaves the phone)
+  (function () {
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    $('scan').hidden = false; let stream = null, live = false;
+    const stop = () => { live = false; if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; $('scanbox').hidden = true; $('scan').hidden = false; };
+    $('scanStop').addEventListener('click', stop);
+    $('scan').addEventListener('click', async () => {
+      try {
+        const det = new BarcodeDetector({ formats: ['qr_code'] });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const v = $('cam'); v.srcObject = stream; await v.play(); $('scanbox').hidden = false; $('scan').hidden = true; live = true;
+        const tick = async () => { if (!live) return; try { const c = await det.detect(v); const hit = c.find((x) => /^https?:\/\//i.test(x.rawValue || '')); if (hit) { stop(); $('u').value = hit.rawValue; go(hit.rawValue); return; } } catch (e) {} setTimeout(tick, 250); };
+        tick();
+      } catch (e) { stop(); $('msg').textContent = 'Couldn\u2019t open the camera. Allow camera access for this app, or type the address instead.'; }
+    });
+  })();
   // phone app only: phone-only mode
   if (window.Capacitor) { $('localbox').hidden = false; $('golocal').addEventListener('click', () => { try { localStorage.setItem('fd-mode', 'local'); } catch (e) {} location.href = 'index.html'; }); }
   const failed = new URLSearchParams(location.search).get('failed'); if (failed) say("Couldn't reach " + failed.replace(/\/+$/, '') + '. Is that computer on and running in host mode?', 'bad');

@@ -257,11 +257,26 @@
       SCR.set(key, { at: Date.now(), v }); return v;
     }
 
+    // Try a key before saving it: one small request to that service. → { ok, message }
+    async function testKey(id, key) {
+      const k = encodeURIComponent(String(key || '').trim()); if (!k) return { ok: false, message: 'Paste a key first.' };
+      const bad = { ok: false, message: 'That key didn\u2019t work. Check that you copied all of it.' };
+      try {
+        if (id === 'finnhub') { const j = await getJson(`https://finnhub.io/api/v1/quote?symbol=AAPL&token=${k}`); return j && typeof j.c === 'number' ? { ok: true, message: 'Works: live prices are on.' } : bad; }
+        if (id === 'fmp') { const j = await getJson(`https://financialmodelingprep.com/stable/quote?symbol=AAPL&apikey=${k}`); return Array.isArray(j) && j.length ? { ok: true, message: 'Works: market indexes and commodities are on.' } : bad; }
+        if (id === 'fred') { const j = await getJson(`https://api.stlouisfed.org/fred/series?series_id=MORTGAGE30US&file_type=json&api_key=${k}`); return j && Array.isArray(j.seriess) ? { ok: true, message: 'Works: rates and inflation are on.' } : bad; }
+        if (id === 'eia') { const j = await getJson(`https://api.eia.gov/v2/?api_key=${k}`); return j && j.response ? { ok: true, message: 'Works: gas and electricity prices are on.' } : bad; }
+        if (id === 'bls') { const j = await postJson('https://api.bls.gov/publicAPI/v2/timeseries/data/', { seriesid: ['CUUR0200SA0'], registrationkey: decodeURIComponent(k), startyear: String(new Date().getFullYear()), endyear: String(new Date().getFullYear()) });
+          return j && j.status === 'REQUEST_SUCCEEDED' && !(j.message || []).some((m) => /key|invalid/i.test(m)) ? { ok: true, message: 'Works: Midwest category inflation is on.' } : bad; }
+        return { ok: false, message: 'Unknown service.' };
+      } catch (e) { return /40[0-3]/.test(String(e.message)) ? bad : { ok: false, message: 'Couldn\u2019t reach that service right now. Check the internet connection and try again.' }; }
+    }
+
     const started = (async () => { MKT = (await load('market')) || null; ECON = (await load('econ')) || null; await Promise.all(Object.values(caches).map((c) => c.ready)); })();
     const wrap = (f) => async (...a) => { await started; note(); return f(...a); };
     return {
       quotes: wrap(getQuotes), dividends: wrap(getDividends), screener: wrap(screener), stock: wrap(stockDetail), econ: wrap(getEcon), vehicle: wrap(vehicleInfo), markets: wrap(getMarkets),
-      sources: () => quoteSources(), marketOpen: () => marketOpen(),
+      sources: () => quoteSources(), marketOpen: () => marketOpen(), testKey,
       // call after keys change: forget cached results that depended on the old keys
       resetKeys: async () => { await started; MKT = null; ECON = null; QCACHE.clear(); PCACHE.clear(); },
     };

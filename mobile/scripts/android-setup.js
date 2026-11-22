@@ -15,6 +15,7 @@ fs.copyFileSync(path.join(I, 'ic_launcher_background.xml'), path.join(RES, 'valu
 // home servers are usually plain http on the local network or Tailscale
 const man = path.join(M, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 let x = fs.readFileSync(man, 'utf8');
+if (!x.includes('android.permission.CAMERA')) x = x.replace('<application', '<uses-permission android:name="android.permission.CAMERA" />\n    <application'); // scan the host's QR code and take receipt photos
 if (!x.includes('usesCleartextTraffic')) x = x.replace('<application', '<application android:usesCleartextTraffic="true"');
 fs.writeFileSync(man, x);
 console.log('Android project configured');

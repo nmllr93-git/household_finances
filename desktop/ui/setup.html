@@ -31,22 +31,25 @@
   <div class="top"><img src="../icons/icon-512.png" alt=""><div><h1>Household Finances</h1><p style="margin:0">Let's get this computer set up.</p></div></div>
 
   <section id="s1">
-    <h2>How will you use this computer?</h2>
-    <button class="choice" id="c-host" type="button"><b>Keep my finances on this computer</b><span>The app runs the server here. Your data stays in a folder on this PC.</span></button>
-    <button class="choice" id="c-remote" type="button"><b>Connect to another computer</b><span>Your finances already run somewhere else (your home server). This app just opens them.</span></button>
+    <h2>Who will use this?</h2>
+    <button class="choice" id="c-me" type="button"><b>Just me, on this computer</b><span>Everything stays on this computer. Nothing else on your network can connect.</span></button>
+    <button class="choice" id="c-house" type="button"><b>Me and my household, from our phones and computers</b><span>This computer keeps the data, and everyone opens it from their own phone or computer at home. Best on a computer that stays on.</span></button>
+    <button class="choice" id="c-remote" type="button"><b>Someone already set it up on another computer</b><span>Connect to that computer. Your finances stay there; this app just opens them.</span></button>
   </section>
 
   <section id="s2" hidden>
-    <h2>Who can open it?</h2>
-    <button class="choice" id="m-local" type="button"><b>Only this computer</b><span>Most private. Nothing else on your network can connect.</span></button>
-    <button class="choice" id="m-host" type="button"><b>This computer, my phone and other devices</b><span>Other devices at home (or anywhere with Tailscale) can sign in. You can change this later from the tray icon.</span></button>
+    <h2 id="s2h">Almost done</h2>
+    <p class="note" id="s2note"></p>
+    <div hidden><button class="choice" id="m-local" type="button"></button><button class="choice" id="m-host" type="button"></button></div>
+    <label class="chk"><input type="checkbox" id="sww"> <span id="swwLbl">Start with Windows (runs quietly in the tray)</span></label>
+    <details style="margin-top:14px"><summary>Advanced: port and data folder</summary>
     <label class="f" for="port">Port</label>
     <input id="port" type="number" min="1024" max="65535" value="8080">
-    <p class="note">Keep 8080 unless your existing self-hosted server is still running on this PC; then use 8081.</p>
+    <p class="note">Keep 8080 unless something else on this computer already uses it; then try 8081.</p>
     <label class="f">Data folder</label>
     <div class="row"><input id="dir" type="text" readonly><button class="q" id="pick" type="button">Choose…</button></div>
     <p class="note" id="dirnote">Already using the self-hosted version? Choose its <b>data</b> folder to keep everything you've entered.</p>
-    <label class="chk"><input type="checkbox" id="sww"> Start with Windows (runs quietly in the tray)</label>
+    </details>
     <div class="bar"><button class="q" type="button" data-back="s1">Back</button><button class="b" id="go2" type="button">Start</button></div>
   </section>
 
@@ -82,7 +85,12 @@
   const dirNote = async () => { if (await A.hasData($('dir').value)) { $('dirnote').innerHTML = '<span class="ok">Found existing finance data in this folder. It will be used as-is.</span>'; } };
   dirNote();
   document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => step(b.dataset.back)));
-  $('c-host').addEventListener('click', () => step('s2'));
+  const who = (m) => { setMode(m); $('sww').checked = m === 'host';
+    $('s2note').textContent = m === 'host' ? 'This computer will host your household\u2019s finances. Next you\u2019ll create your login, then you can connect phones by scanning a QR code. Tip: keep this computer plugged in and on; the app keeps it awake while hosting.' : 'Your finances will stay on this computer only. You can let other devices connect later from Host options.';
+    step('s2'); };
+  if (navigator.platform && /mac/i.test(navigator.platform)) $('swwLbl').textContent = 'Open at login (runs quietly in the menu bar)';
+  $('c-me').addEventListener('click', () => who('local'));
+  $('c-house').addEventListener('click', () => who('host'));
   $('c-remote').addEventListener('click', () => A.useRemote());
   $('m-local').addEventListener('click', () => setMode('local'));
   $('m-host').addEventListener('click', () => setMode('host'));
@@ -93,7 +101,7 @@
     try {
       info = await A.startHost({ mode, port: $('port').value, dataDir: $('dir').value, startWithWindows: $('sww').checked });
       if (info.users > 0) return finish(); showLogin();
-    } catch (e) { say(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'bad'); }
+    } catch (e) { if (/port|folder/i.test(String(e.message))) document.querySelector('details').open = true; say(String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), 'bad'); }
     finally { $('go2').disabled = false; }
   });
   function showLogin() {

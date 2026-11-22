@@ -2529,6 +2529,69 @@
     draw();
   };
 
+  // Getting started: a short checklist at the top of a new dashboard; it goes away when everything is done (or on Hide).
+  let gsKeys = null;
+  dash.draw('gettingStarted', (el) => {
+    el.replaceChildren();
+    const sample = window.HF && window.HF.state && window.HF.state.bookId === (window.FDSample && FDSample.id);
+    if (sample) {
+      const b = document.createElement('div'); b.className = 'fd-gs fd-gs-sample';
+      const t = document.createElement('p'); t.innerHTML = '<b>You’re looking at sample data.</b> It’s a made-up household, so you can explore every tab. Nothing here is saved.';
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'fd-btn fd-sm'; x.textContent = 'Close sample data'; x.addEventListener('click', () => FDSample.stop());
+      b.append(t, x); el.append(b); return;
+    }
+    if (st('imports') !== 'ok' || st('budgets') !== 'ok' || document.body.classList.contains('fd-readonly')) return;
+    const bk = book(), get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    if (get('fd-gs-hide-' + bk)) return;
+    if (gsKeys === null) { gsKeys = false; FDStore.fetch('/api/keys', {}).then((r) => (r.ok ? r.json() : null)).then((j) => { gsKeys = !!(j && Object.values(j.set || {}).some(Boolean)); dash.draw('gettingStarted'); }).catch(() => {}); }
+    const mine = (id) => (dash.data(id).data || []).filter((r) => r.book === bk);
+    const go = (g) => () => { const b = document.querySelector(`.fd-navb[data-group="${g}"]`); if (b) { b.click(); window.scrollTo({ top: 0, behavior: 'smooth' }); } };
+    const items = [
+      ['Add your money', 'Import a bank or card statement, or connect automatic bank sync in ⚙ Settings.', mine('imports').length > 0 || (dash.data('txns').data || []).some((t) => t.book === bk), 'Import', go('import')],
+      ['Set a few budgets', 'Pick 3 categories you want to keep an eye on, like groceries or dining.', mine('budgets').length >= 3, 'Budgets', go('budget')],
+      ['Connect your phone', window.FD_LOCAL ? 'You’re already on your phone.' : 'Scan a QR code to open your dashboard on your phone.', !!(window.FD_LOCAL || get('fd-gs-phone')), 'Show QR code', go('settings')],
+      ['Turn on free market & economy data', 'Optional. Free keys add rates, inflation, gas prices and live stock prices.', !!gsKeys, 'Set up', go('settings')],
+      ['Make a backup', 'Save a copy of your data somewhere safe, like a USB drive or cloud folder.', !!get('fd-gs-backup'), 'Back up', () => { const a = document.getElementById('fd-export'); if (window.FD_LOCAL) go('settings')(); else if (a) a.click(); }],
+    ];
+    const done = items.filter((x) => x[2]).length; if (done === items.length) return;
+    const box = document.createElement('div'); box.className = 'fd-gs';
+    const head = document.createElement('div'); head.className = 'fd-gs-head';
+    const h = document.createElement('h2'); h.textContent = `Getting started · ${done} of ${items.length} done`;
+    const hide = document.createElement('button'); hide.type = 'button'; hide.className = 'fd-link'; hide.textContent = 'Hide'; hide.addEventListener('click', () => { try { localStorage.setItem('fd-gs-hide-' + bk, '1'); } catch (e) {} dash.draw('gettingStarted'); });
+    head.append(h, hide); box.append(head);
+    const ol = document.createElement('ol');
+    for (const [t, d, ok, label, fn] of items) {
+      const li = document.createElement('li'); li.className = ok ? 'is-done' : '';
+      const tx = document.createElement('div'); const b = document.createElement('b'); b.textContent = (ok ? '✓ ' : '') + t; const p = document.createElement('span'); p.textContent = d; tx.append(b, p); li.append(tx);
+      if (!ok) { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'fd-btn fd-sm'; btn.textContent = label; btn.addEventListener('click', fn); li.append(btn); }
+      ol.append(li);
+    }
+    box.append(ol);
+    if (!mine('imports').length && !(dash.data('txns').data || []).some((t) => t.book === bk) && window.FDSample) { const s2 = document.createElement('p'); s2.className = 'fd-gs-try'; const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link'; b.textContent = 'Try it with sample data first';
+      b.addEventListener('click', () => FDSample.start()); s2.append('Not ready to import? ', b, ' to see a full dashboard with a made-up household.'); box.append(s2); }
+    el.append(box);
+  });
+
+  // ⚙ Settings → Connect a phone: a QR code of this server's address (scan it in the phone app, or with the phone's camera to open it in the browser)
+  const connectBox = async (host) => {
+    if (window.FD_LOCAL || !window.FDQR || host.querySelector('.fd-qrbox')) return;
+    const tok = {}; host.__qr = tok;
+    let addrs = [];
+    const here = (FDStore.base || location.origin).replace(/\/+$/, '');
+    if (!/\/\/(localhost|127\.0\.0\.1)(:|$)/.test(here)) addrs = [here];
+    else { try { const j = await FDStore.json('GET', '/api/connect-info'); addrs = j.addrs || []; } catch (e) {} }
+    if (host.__qr !== tok || host.querySelector('.fd-qrbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-qrbox'; host.append(box);
+    box.append(rhead('Connect a phone'));
+    if (!addrs.length) { box.append(phMsg('Other devices can’t connect yet. On the host computer, turn on “Allow other devices” in Host options, then come back here for a QR code.')); return; }
+    box.append(phMsg('In the Household Finances phone app, tap “Scan QR code” and point it at this code. On an iPhone or any other phone, scan it with the camera to open the dashboard in the browser. The phone must be on the same Wi-Fi (or on Tailscale).'));
+    let i = 0; const wrap = document.createElement('div'); wrap.className = 'fd-qr';
+    const show = () => { wrap.innerHTML = window.FDQR.svg(addrs[i], 220); const c = document.createElement('code'); c.textContent = addrs[i]; wrap.append(c); };
+    show(); box.append(wrap);
+    if (addrs.length > 1) { const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Try another address', () => { i = (i + 1) % addrs.length; show(); })); box.append(r, phMsg('This computer has more than one network address. If the phone can’t connect, try the next one.')); }
+    try { localStorage.setItem('fd-gs-phone', '1'); } catch (e) {}
+  };
+
   // ⚙ Settings → Phone menus (only on narrow screens)
   const navMenuBox = (host) => {
     if (window.innerWidth > 640 || host.querySelector('.fd-navmenubox')) return;
@@ -2623,7 +2686,7 @@
     const w = document.createElement('div'); w.className = 'fd-phonebanner';
     const t = document.createElement('div'); t.innerHTML = '<b>Your data is only on this phone.</b> Uninstalling the app or clearing its storage deletes it. Save a backup file somewhere safe (Drive, Files or email).';
     const bar = document.createElement('div'); bar.className = 'fd-rb-row';
-    bar.append(rbtn('Make a backup now', async () => { try { let id = ''; try { id = localStorage.getItem('hf-book') || ''; } catch (e) {} await L.exportFile(id); bannerHide = true; dash.draw('phoneBanner'); } catch (e) { alert('Backup failed: ' + e.message); } }, false),
+    bar.append(rbtn('Make a backup now', async () => { try { let id = ''; try { id = localStorage.getItem('hf-book') || ''; } catch (e) {} await L.exportFile(id); try { localStorage.setItem('fd-gs-backup', '1'); } catch (e) {} bannerHide = true; dash.draw('phoneBanner'); } catch (e) { alert('Backup failed: ' + e.message); } }, false),
       rbtn('Remind me in a week', async () => { await L.setKV('backupSnooze', Date.now() + 7 * 864e5); bannerHide = true; dash.draw('phoneBanner'); }));
     w.append(t, bar); el.append(w);
   });
@@ -2662,7 +2725,7 @@
     box.append(rhead('Backups'));
     const last = await L.getKV('lastExport'), snaps = await L.backups();
     box.append(phMsg(`Last backup file saved: ${last ? new Date(last).toLocaleDateString() : 'never'}. The app also keeps ${snaps.length} automatic snapshot${snaps.length === 1 ? '' : 's'} inside it (daily, last 14), but those are deleted with the app.`, !last ? 'fd-bad' : ''));
-    box.append(rbtn('Save a backup file now', async () => { let id = ''; try { id = localStorage.getItem('hf-book') || ''; } catch (e) {} try { await L.exportFile(id); dash.draw('settingsView'); } catch (e) { alert('Backup failed: ' + e.message); } }, false));
+    box.append(rbtn('Save a backup file now', async () => { let id = ''; try { id = localStorage.getItem('hf-book') || ''; } catch (e) {} try { await L.exportFile(id); try { localStorage.setItem('fd-gs-backup', '1'); } catch (e) {} dash.draw('settingsView'); } catch (e) { alert('Backup failed: ' + e.message); } }, false));
   };
 
   // first-run walkthrough (phone-only mode)
@@ -2793,28 +2856,39 @@
   };
   // ---- API keys (server-wide; only the server owner can change them) ----
   const APIS = [
+    ['fred', 'FRED (St. Louis Fed)', 'https://fredaccount.stlouisfed.org/apikeys', 'Mortgage and Treasury rates, inflation (CPI) and Iowa City home prices. Powers the refinance, savings-rate and home-value alerts and “After inflation”.'],
     ['finnhub', 'Finnhub', 'https://finnhub.io/register', 'Live stock prices, company news, earnings dates, 52-week ranges and analyst ratings for your holdings and watchlist. Free plan: 60 calls/minute.'],
     ['fmp', 'Financial Modeling Prep', 'https://site.financialmodelingprep.com/developer/docs', 'Market indexes, commodities (gold, oil), sector performance, top movers, dividend history, price targets and what ETFs hold. Free plan: 250 calls/day.'],
-    ['fred', 'FRED (St. Louis Fed)', 'https://fredaccount.stlouisfed.org/apikeys', 'Mortgage and Treasury rates, inflation (CPI) and Iowa City home prices. Powers the refinance, savings-rate and home-value alerts and “After inflation”.'],
-    ['bls', 'Bureau of Labor Statistics', 'https://data.bls.gov/registrationEngine/', 'Midwest inflation by category: groceries, restaurants, energy, gasoline and shelter.'],
     ['eia', 'U.S. Energy Information Administration', 'https://www.eia.gov/opendata/register.php', 'Weekly Midwest gas prices and monthly Iowa home electricity prices.'],
+    ['bls', 'Bureau of Labor Statistics', 'https://data.bls.gov/registrationEngine/', 'Midwest inflation by category: groceries, restaurants, energy, gasoline and shelter.'],
   ];
   let KEYS = null;
+  // "Test": tries the pasted key with that service, and saves it straight away if it works.
+  const keyTest = (id, input, status) => rbtn('Test', async (e) => {
+    const b = e && e.target; const v = input.value.trim(); if (!v) { status.textContent = 'Paste a key first'; status.className = 'fd-bad'; return; }
+    status.textContent = 'Testing…'; status.className = 'fd-zero'; if (b) b.disabled = true;
+    try { const r = await FDStore.json('POST', '/api/keys/test', { id, key: v });
+      if (!r.ok) { status.textContent = '✗ ' + r.message; status.className = 'fd-bad'; return; }
+      await FDStore.json('POST', '/api/keys', { [id]: v }); status.textContent = '✓ ' + r.message + ' Saved.'; status.className = 'fd-good';
+      setTimeout(() => { KEYS = null; ecoState = 'idle'; mkState = 'idle'; qWant = ''; dash.draw('settingsView'); }, 2500);
+    } catch (err) { status.textContent = '✗ ' + err.message; status.className = 'fd-bad'; } finally { if (b) b.disabled = false; }
+  });
   const apiBox = (host) => {
     if (KEYS === null) { KEYS = false; FDStore.fetch('/api/keys', {}).then((r) => (r.ok ? r.json() : null)).then((j) => { KEYS = j || false; dash.draw('settingsView'); }).catch(() => {}); return; }
     if (!KEYS) return;
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis'; box.append(rhead('Data sources (API keys)'));
-    const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Each is free. Click a name to create an account and get a key; hover it to see what it adds. Keys are stored on this server only and apply to every dashboard.' + (KEYS.canEdit ? '' : ` Only ${KEYS.owner} can change them.`); box.append(n);
+    const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Each is free for personal use and takes about 2 minutes: click a name to sign up and get a key, paste it, and press Test. A key that works is saved right away. Keys are stored on this server only and apply to every dashboard.' + (KEYS.canEdit ? '' : ` Only ${KEYS.owner} can change them.`); box.append(n);
     const vals = {}, t = document.createElement('table'); t.className = 'fd-table fd-apitable'; const tb = document.createElement('tbody');
     APIS.forEach(([id, name, link, desc]) => {
       const tr = document.createElement('tr'); const c1 = td('', 'fd-l'); const a = document.createElement('a'); a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.textContent = name; a.title = desc; c1.append(a); const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = desc; c1.append(sub);
       { const info = document.createElement('button'); info.type = 'button'; info.className = 'fd-api-info'; info.textContent = 'What’s this?'; info.addEventListener('click', () => { tr.classList.toggle('fd-open'); info.textContent = tr.classList.contains('fd-open') ? 'Hide' : 'What’s this?'; }); c1.append(info); }
       const st0 = td(KEYS.set[id] ? `✓ set (${KEYS.set[id]})` : 'not set', KEYS.set[id] ? 'fd-good' : 'fd-zero');
-      const c3 = td(''); if (KEYS.canEdit && !KEYS.fromEnv[id]) { const i = document.createElement('input'); i.type = 'password'; i.autocomplete = 'off'; i.placeholder = KEYS.set[id] ? 'paste a new key to replace' : 'paste key'; i.addEventListener('input', () => { vals[id] = i.value; }); c3.append(i);
+      const c3 = td(''); if (KEYS.canEdit && !KEYS.fromEnv[id]) { const i = document.createElement('input'); i.type = 'password'; i.autocomplete = 'off'; i.placeholder = KEYS.set[id] ? 'paste a new key to replace' : 'paste key'; i.addEventListener('input', () => { vals[id] = i.value; }); c3.append(i, ' ', keyTest(id, i, st0));
         if (KEYS.set[id]) { const rm = rbtn('Remove', () => { vals[id] = ''; i.value = ''; i.placeholder = 'will be removed on Save'; }); c3.append(' ', rm); } } else if (KEYS.fromEnv[id]) c3.textContent = 'set by environment variable';
       tr.append(c1, st0, c3); tb.append(tr);
     });
     t.append(tb); const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(t); box.append(sc);
+    { const k = document.createElement('p'); k.className = 'fd-note'; k.textContent = 'Everything else works without any key: Treasury and I-bond rates, exchange rates, U.S. holidays and vehicle lookups. The app is fully usable with no keys at all; each key adds extra data. Start with FRED, it adds the most.'; box.append(k); }
     if (KEYS.canEdit) { const msg = document.createElement('span'); msg.className = 'fd-zero'; const sv = rbtn('Save keys', async () => { if (!Object.keys(vals).length) return; sv.disabled = true;
         try { const r = await FDStore.fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(vals) }); if (!r.ok) throw new Error((await r.json()).error); KEYS = null; ecoState = 'idle'; mkState = 'idle'; qWant = ''; dash.draw('settingsView'); }
         catch (e) { sv.disabled = false; msg.textContent = 'Couldn’t save: ' + e.message; } }, false);
@@ -2876,6 +2950,7 @@
     phoneBox(el).catch(() => {});
     emailBox(el).catch(() => {});
     syncBox(el).catch(() => {});
+    connectBox(el).catch(() => {});
     navMenuBox(el);
     activityBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {

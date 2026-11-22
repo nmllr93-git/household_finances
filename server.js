@@ -341,6 +341,7 @@ async function api(req, res, url) {
     const syms = [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => /^[A-Z0-9.\-^]{1,12}$/.test(x)))].slice(0, 60);
     return send(res, 200, { sources: MARKET.sources(), quotes: await MARKET.quotes(syms) });
   }
+  if (parts[1] === 'keys' && parts[2] === 'test' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await MARKET.testKey(String(b.id || ''), String(b.key || ''))); }
   if (parts[1] === 'keys') {
     // API keys page: which keys are set (never the keys themselves). Only the first account created (the server owner) can change them.
     const owner = (db.prepare('SELECT username FROM users ORDER BY rowid LIMIT 1').get() || {}).username;
@@ -380,6 +381,8 @@ async function api(req, res, url) {
     }
   }
   if (parts[1] === 'me' && req.method === 'GET') return send(res, 200, { username: user, books: userBooks(user) });
+  // addresses other devices can use (for the "Connect a phone" QR code); empty when the server only listens on this computer
+  if (parts[1] === 'connect-info' && req.method === 'GET') return send(res, 200, { addrs: RUN && RUN.host !== '127.0.0.1' ? lanAddrs().map((a) => `http://${a}:${RUN.port}`) : [], hostOnly: !RUN || RUN.host === '127.0.0.1' });
 
   if (parts[1] === 'books' && parts[2]) {
     const bookId = parts[2];

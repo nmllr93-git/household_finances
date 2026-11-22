@@ -352,3 +352,19 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 @media (max-width: 640px) { .fd-pace-lab { display: none; } .fd-mkkey { display: flex; } }
 /* phones: a solid strip behind the status bar so the page doesn't show through it while scrolling */
 body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); background: var(--color-bg); z-index: 30; pointer-events: none; }
+
+.fd-qr { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 8px 0; }
+.fd-qr svg { border-radius: 8px; border: 1px solid var(--color-border-line); }
+
+/* getting started checklist + sample data banner */
+.fd-gs { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 12px; padding: 14px 16px; margin: 0 0 14px; }
+.fd-gs-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.fd-gs h2 { font-size: 16px; margin: 0; }
+.fd-gs ol { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fd-gs li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border-line); }
+.fd-gs li div { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .fd-gs li span { font-size: 13px; opacity: .8; }
+.fd-gs li.is-done b { opacity: .6; } .fd-gs li.is-done span { display: none; }
+.fd-gs li .fd-btn { flex: none; }
+.fd-gs-try { margin: 10px 0 0; font-size: 14px; }
+.fd-gs-sample { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fd-gs-sample p { margin: 0; }

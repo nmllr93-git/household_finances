@@ -115,6 +115,7 @@
       case 'login': case 'logout': return json(200, { ok: true });
       case 'me': return json(200, { username: 'On this phone', books: (await books()).map(({ id, name, label }) => ({ id, name, label })), local: true });
       case 'keys': {
+        if (parts[2] === 'test' && method === 'POST') { const b = await body(); return json(200, await (await marketReady).testKey(String(b.id || ''), String(b.key || ''))); }
         const cur = (await kvGet('apikeys')) || {};
         if (method === 'GET') return json(200, { canEdit: true, owner: 'you', set: Object.fromEntries(KEYS.map((k) => [k, mask(cur[k])])), fromEnv: {} });
         const b = await body(); for (const k of KEYS) if (typeof b[k] === 'string') { const v = b[k].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[k] = v; else delete cur[k]; }
