@@ -5,10 +5,13 @@
   "server": {
     "androidScheme": "https",
     "cleartext": true,
-    "allowNavigation": ["*"]
+    "allowNavigation": [
+      "*"
+    ]
   },
   "android": {
     "allowMixedContent": true,
-    "backgroundColor": "#1f2a37"
+    "backgroundColor": "#1f2a37",
+    "adjustMarginsForEdgeToEdge": "force"
   }
 }

@@ -415,9 +415,12 @@ dash.calc('budget_totals', {
 dash.calc('subs', {
   title: 'Subscriptions and recurring bills',
   description: 'Subscriptions: anything in the Subscriptions category or from a known streaming/software service. Recurring bills: any other vendor charged in at least 3 of the last 12 months at nearly the same amount (within 20% of its usual charge). Amounts are for the chosen range; the yearly cost is the latest charge × 12 for monthly charges.',
-  inputs: ['txns', 'period'],
-  fn: (txns, period) => {
+  inputs: ['txns', 'period', 'prefs'],
+  fn: (txns, period, prefs) => {
     const add = (m, n) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
+    // vendors the user marked "Not recurring" (per dashboard, saved setting 'notRecurring' = JSON list of vendor names)
+    const notRec = {};
+    for (const p of [...(prefs || [])].filter((p) => p.key === 'notRecurring').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))) { try { notRec[p.book] = new Set((JSON.parse(p.value) || []).map((v) => String(v).toLowerCase())); } catch (e) {} }
     const KNOWN = /YouTube TV|HBO Max|Spotify|Netflix|Paramount\+|Google TV|Google Pixel|NBA League Pass|Prime Video|Hulu|Disney\+|Peacock|Apple|Audible|ChatGPT|Claude|GitHub|Microsoft|PlayStation/;
     const all = (txns || []).filter((r) => r.type === 'expense' && !r.oneTime);
     const lastAll = all.reduce((m, r) => (r.month > m ? r.month : m), '');
@@ -444,7 +447,7 @@ dash.calc('subs', {
         const med = [...paid].sort((a, b) => a - b)[Math.floor(paid.length / 2)];
         if (paid.filter((x) => Math.abs(x - med) <= med * 0.2).length >= 3) kind = 'Recurring bill';
       }
-      if (!kind) continue;
+      if (!kind || (notRec[o.book] && notRec[o.book].has(String(o.vendor).toLowerCase()))) continue;
       const total = o.series.reduce((s, x) => s + x, 0);
       if (!total && o.lastDate.slice(0, 7) < (period[0] || {}).month) continue;
       const monthly = paid.length >= 3;

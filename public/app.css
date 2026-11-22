@@ -284,3 +284,30 @@ body > .fd-tip { position: absolute; z-index: 50; font-family: var(--font-anthro
 .fd-readonly #fd-fab,.fd-readonly .fd-navb[data-group=import],.fd-readonly #import,.fd-readonly #fd-budget-form,.fd-readonly #fd-tx-form,.fd-readonly label:has(#fd-tedit){display:none!important}
 .fd-rcpts{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0}.fd-rcpts figure{margin:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
 .fd-rcpts img{width:110px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--color-border-line,#d8dde3);cursor:zoom-in;background:#f2f4f6}
+
+/* --- phones: view toggles fit inside narrow tiles --- */
+.fd-vtog { max-width: 100%; }
+.fd-vtog button { min-width: 0; flex: 1 1 auto; white-space: nowrap; }
+@media (max-width: 640px) {
+  .fd-vtog button { font-size: 12px; padding: 3px 7px; }
+  #kpis .fd-card { min-width: 0; overflow: hidden; }
+}
+/* --- notched phones / edge-to-edge Android: keep content clear of the status bar and gesture bar --- */
+body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.fd-fab { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+/* --- phones: each transaction becomes a small card (vendor + amount, then date + category, then the rest) --- */
+@media (max-width: 640px) {
+  #transactions .fd-table thead { display: none; }
+  #transactions .fd-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 2px; border-bottom: 1px solid var(--color-border-line); }
+  #transactions .fd-table tbody td { display: block; padding: 0; border: 0; text-align: left; min-width: 0; overflow-wrap: anywhere; }
+  #transactions .fd-table td.c-vendor { order: 1; font-weight: 600; font-size: 15px; }
+  #transactions .fd-table td.c-amount { order: 2; text-align: right; font-weight: 600; font-size: 15px; white-space: nowrap; }
+  #transactions .fd-table td.c-date { order: 3; font-size: 12.5px; color: var(--color-fg-muted); }
+  #transactions .fd-table td.c-category { order: 4; font-size: 12.5px; text-align: right; color: var(--color-fg-muted); }
+  #transactions .fd-table td.c-source, #transactions .fd-table td.c-type, #transactions .fd-table td.c-tags, #transactions .fd-table td.c-description { order: 5; grid-column: 1 / -1; font-size: 12px; color: var(--color-fg-muted); }
+  #transactions .fd-table td.c-source { grid-column: 1; align-self: center; }
+  #transactions .fd-table td.c-actions { order: 5; grid-column: 2; text-align: right; }
+  #transactions .fd-table td.c-actions .fd-btn { padding: 4px 12px; }
+  #transactions .fd-table tbody tr.fd-group, #transactions .fd-table tbody tr td[colspan] { display: block; }
+  .fd-notrec { font-size: 12px; }
+}

@@ -95,3 +95,11 @@ test('balance totals add up accounts of one kind', () => {
   const inv = get('balance_totals').find((r) => r.kind === 'investment' && r.month === '2026-10');
   assert.equal(inv.total, 70000);
 });
+
+test('a vendor marked "Not recurring" drops out of subscriptions and recurring bills', () => {
+  const t = ['2026-07-03', '2026-08-03', '2026-09-03', '2026-10-03'].map((d) => tx(d, 'VENMO PAYMENT', 40));
+  const base = { imports: [imp('a', 'Checking', 'deposit', t)] };
+  assert.ok(engine(base)('subs').some((x) => /venmo/i.test(x.vendor)));
+  const hidden = engine({ ...base, prefs: [{ book: 'Personal', key: 'notRecurring', value: JSON.stringify(['Venmo Payment']), createdAt: '2026-11-01' }] })('subs');
+  assert.ok(!hidden.some((x) => /venmo/i.test(x.vendor)));
+});

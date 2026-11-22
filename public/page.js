@@ -480,6 +480,18 @@
   dash.draw('vendorMore', (el) => { const n = vendorMatches().length; el.textContent = n > 25 ? `Showing the top 25 of ${n} vendors. Search to find the rest.` : ''; });
 
   // ---- subscriptions ----
+  // vendors marked "Not recurring" (e.g. Venmo): left out of subscriptions, recurring bills, price changes, bill reminders and forecasts
+  const notRecList = () => prefGet('notRecurring', []) || [];
+  const setNotRec = async (vendor, on) => { const cur = notRecList().filter((v) => v.toLowerCase() !== vendor.toLowerCase()); await prefSet('notRecurring', on ? [...cur, vendor] : cur); };
+  const notRecBtn = (vendor) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link fd-notrec'; b.textContent = 'Not recurring'; b.title = `${vendor} isn\u2019t a subscription or regular bill: stop treating it as one`;
+    b.addEventListener('click', async (e) => { e.stopPropagation(); b.disabled = true; try { await setNotRec(vendor, true); } catch (err) { b.disabled = false; alert('Not saved: ' + err.message); } }); return b; };
+  dash.draw('notRecRows', (el) => {
+    el.replaceChildren(); const l = notRecList(); if (!l.length) return;
+    const p = document.createElement('p'); p.className = 'fd-note'; p.append('Not treated as recurring: ');
+    l.forEach((v, i) => { const sp = document.createElement('span'); sp.className = 'fd-pill'; sp.textContent = v + ' '; const x = document.createElement('button'); x.type = 'button'; x.className = 'fd-link'; x.textContent = '×'; x.title = `Treat ${v} as recurring again`; x.setAttribute('aria-label', x.title);
+      x.addEventListener('click', () => setNotRec(v, false)); sp.append(x); p.append(sp, i < l.length - 1 ? ' ' : ''); });
+    el.append(p);
+  });
   dash.draw('subsRows', (el) => {
     el.replaceChildren();
     if (st('subs') !== 'ok') return;
@@ -491,7 +503,8 @@
       const c = td(kind === 'Subscription' ? 'Subscriptions' : 'Recurring bills'); c.colSpan = 6; h.append(c); el.append(h);
       for (const x of g) {
         const tr = document.createElement('tr'); tr.dataset.key = enc(x.key);
-        tr.append(td(x.vendor), td(money2(x.lastCharge)), td(String(x.months)), td(money2(x.avg)), td(money0(x.yearly)));
+        const vc = td(x.vendor); if (!document.body.classList.contains('fd-readonly')) vc.append(' ', notRecBtn(x.vendor));
+        tr.append(vc, td(money2(x.lastCharge)), td(String(x.months)), td(money2(x.avg)), td(money0(x.yearly)));
         const sp = document.createElement('td'); window.FD.sparkline(sp, x.series); tr.append(sp);
         el.append(tr);
       }
@@ -727,7 +740,7 @@
         tr.append(...cols().map((k) => (k === 'vendor' ? cell(vi, 'fd-l') : k === 'category' ? cc : k === 'type' ? cell(ti, 'fd-l') : k === 'tags' ? cell(tgi, 'fd-l') : base[k]())));
       } else tr.append(...cols().map((k) => base[k]()));
       [...tr.children].forEach((c, i) => { const k = cols()[i]; if (k) c.classList.add('c-' + k); });
-      const c = document.createElement('td'); c.className = 'fd-nowrap'; const b = document.createElement('button');
+      const c = document.createElement('td'); c.className = 'fd-nowrap c-actions'; const b = document.createElement('button');
       b.type = 'button'; b.className = 'fd-btn fd-quiet fd-sm'; b.textContent = 'Edit';
       b.addEventListener('click', () => openEditor(t));
       const ig = document.createElement('button'); ig.type = 'button'; ig.className = 'fd-btn fd-quiet fd-sm';
@@ -1470,7 +1483,7 @@
     el.replaceChildren();
     const c = priceChanges(); if (!c.length) return;
     const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = 'Price changes'; el.append(h);
-    for (const x of c) { const p = document.createElement('p'); p.className = 'fd-note ' + (x.diff > 0 ? 'fd-bad' : 'fd-good'); p.textContent = `${x.vendor}: ${money2(x.prev)} → ${money2(x.last)} (${x.diff > 0 ? '+' : ''}${x.pct}%) on ${x.date}${x.diff > 0 ? `, about ${money0(x.diff * 12)} more a year if it's monthly` : ''}`; el.append(p); }
+    for (const x of c) { const p = document.createElement('p'); p.className = 'fd-note ' + (x.diff > 0 ? 'fd-bad' : 'fd-good'); p.textContent = `${x.vendor}: ${money2(x.prev)} → ${money2(x.last)} (${x.diff > 0 ? '+' : ''}${x.pct}%) on ${x.date}${x.diff > 0 ? `, about ${money0(x.diff * 12)} more a year if it's monthly` : ''}`; el.append(p); if (!document.body.classList.contains('fd-readonly')) p.append(' ', notRecBtn(x.vendor)); }
   });
 
   // ---- data health: things worth fixing so the numbers stay right ----
