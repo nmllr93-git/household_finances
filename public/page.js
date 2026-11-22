@@ -1476,9 +1476,11 @@
       tr.append(td(`Total ${title.toLowerCase()}`, 'fd-l'), td(''), td(''), td((debt ? '−' : '') + money2(tot)), td(''), td(intr ? `${debt ? '−' : '+'}${money2(intr)}` : ''), td('')); el.append(tr);
     }
     if (totals.deposit != null && totals.credit) { const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.append(td('Net cash after cards', 'fd-l'), td(''), td(''), td(money2(totals.deposit - totals.credit)), td(''), td(''), td('')); el.append(tr); }
-    { const nw = (totals.deposit || 0) + (totals.investment || 0) - (totals.credit || 0) - (totals.mortgage || 0) - (totals.loan || 0);
-      const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.title = 'Home and car values aren’t included';
-      tr.append(td('Net worth (cash + investments − debts)', 'fd-l'), td(''), td(''), td(money2(nw), nw >= 0 ? 'fd-good' : 'fd-bad'), td(''), td(''), td('')); el.append(tr); }
+    { const acc = (totals.deposit || 0) + (totals.investment || 0) - (totals.credit || 0) - (totals.mortgage || 0) - (totals.loan || 0);
+      const own = assetsAll().reduce((t, a) => t + assetNow(a), 0), sh = sharedSum(['deposit', 'investment', 'asset'], 'nw') - sharedSum(['credit', 'mortgage', 'loan'], 'nw');
+      const add = (l, v) => { const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.append(td(l, 'fd-l'), td(''), td(''), td(money2(v), v >= 0 ? 'fd-good' : 'fd-bad'), td(''), td(''), td('')); el.append(tr); };
+      if (own || sh) { add('Accounts only (cash + investments − debts)', acc); if (own) add('+ Home, vehicles & other', own); if (sh) add('+ Shared into this dashboard (net)', sh); }
+      add('Net worth', acc + own + sh); }
     if (nClosed) { const tr = document.createElement('tr'); const c = document.createElement('td'); c.colSpan = 7; c.append(rbtn(showClosed ? `Hide closed accounts (${nClosed})` : `Show closed accounts (${nClosed})`, () => { showClosed = !showClosed; dash.draw('acctRows'); })); tr.append(c); el.append(tr); }
   });
 
@@ -1505,11 +1507,13 @@
     const per = period(), b = rows('balances').filter((r) => r.book === book());
     if (!b.length) return placeholder(el, 'ok', 'No balances in this range yet.');
     const ASSET = { deposit: true, investment: true }, last = {}, nw = [], as = [], de = [];
+    // home, vehicles and shared values without history are counted at today's value in every month
+    const homeNow = assetsAll().reduce((t, a) => t + assetNow(a), 0) + sharedIn().filter((d) => d.kind === 'asset' && !d.history && shIncl(d).nw).reduce((t, d) => t + (Number(d.balance) || 0), 0);
     for (const m of per) {
       for (const k of ['deposit', 'investment', 'credit', 'mortgage', 'loan']) { const r = b.filter((x) => x.kind === k && x.month === m.month); if (r.length) last[k] = r; }
       let A = 0, D = 0; for (const [k, r] of Object.entries(last)) for (const x of r) { if (ASSET[k]) A += x.balance; else D += x.balance; }
       const has = Object.keys(last).length > 0;
-      A += sharedAt(['deposit', 'investment', 'asset'], 'nw', m.month); D += sharedAt(['credit', 'mortgage', 'loan'], 'nw', m.month);
+      A += sharedAt(['deposit', 'investment', 'asset'], 'nw', m.month) + homeNow; D += sharedAt(['credit', 'mortgage', 'loan'], 'nw', m.month);
       nw.push(has ? Math.round(A - D) : null); as.push(has ? Math.round(A) : null); de.push(has ? Math.round(D) : null);
     }
     const pts = (arr) => per.map((m, i) => ({ label: m.label, v: arr[i] }));
