@@ -64,7 +64,7 @@
       const r = await env.request('GET', `${base}/accounts?start-date=${Math.floor(startUnix)}`, { Authorization: auth });
       if (r.status === 402) throw err(402, 'Your SimpleFIN subscription needs attention (payment required). Check your SimpleFIN Bridge account.');
       if (r.status === 403) throw err(403, 'SimpleFIN refused this connection. It may have been revoked; disconnect and connect again with a new setup token.');
-      if (r.status >= 400) throw err(502, 'SimpleFIN returned an error (HTTP ' + r.status + ').');
+      if (r.status >= 400) throw err(502, 'SimpleFIN returned an error (HTTP ' + r.status + ')' + (String(r.text || '').trim() ? ': ' + String(r.text).trim().slice(0, 160) : '.'));
       let j; try { j = JSON.parse(r.text); } catch { throw err(502, 'SimpleFIN sent back something unexpected.'); }
       return { accounts: Array.isArray(j.accounts) ? j.accounts : [], errors: (Array.isArray(j.errors) ? j.errors : []).map(String).slice(0, 5) };
     }
@@ -146,8 +146,13 @@
         if (rest[0] === 'sync') return { status: 200, body: { ...(await sync(bookId, false)), ...view(await env.load(bookId)) } };
         const b = (await getBody()) || {};
         if (b.token) {
+          // Save the connection as soon as SimpleFIN hands it over: a setup token works only once, so a problem
+          // fetching accounts afterwards (no banks linked yet, subscription not active) must not lose it.
           const access = await claim(b.token), next = { access, accounts: {} };
-          const res = await pull(access, Date.now() / 1000 - 86400); refreshList(next, res.accounts); next.notes = res.errors;
+          await env.save(bookId, next);
+          try { const res = await pull(access, Date.now() / 1000 - 86400); refreshList(next, res.accounts); next.notes = res.errors; next.lastError = ''; }
+          catch (e) { next.lastError = e.message; }
+          if (!Object.keys(next.accounts).length && !next.lastError) next.notes = [...(next.notes || []), 'Connected, but no bank accounts yet. Add your banks in SimpleFIN Bridge (New connection), then press Sync now here.'];
           await env.save(bookId, next); return { status: 200, body: view(next) };
         }
         if (b.accounts && typeof b.accounts === 'object') {

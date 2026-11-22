@@ -2536,10 +2536,18 @@
       if (!st.connected) {
         box.append(phMsg('Pull balances and new transactions from your banks automatically, instead of importing statements. It uses SimpleFIN Bridge, a separate read-only service you subscribe to yourself (about $15 a year). Your bank passwords go to SimpleFIN, never to this app, and nothing passes through us.'));
         const ol = document.createElement('ol'); ol.className = 'fd-note';
-        for (const t of ['Sign up at SimpleFIN Bridge (link below) and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect, then check the account names and types.'])
+        for (const t of ['Sign up at SimpleFIN Bridge (link below), start a subscription and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect, then check the account names and types.'])
           { const li = document.createElement('li'); li.textContent = t; ol.append(li); }
+        // step-by-step screenshots of SimpleFIN Bridge
+        const guide = document.createElement('details'); guide.className = 'fd-sfguide'; const sm = document.createElement('summary'); sm.textContent = 'Show me step by step (with pictures)'; guide.append(sm);
+        [['Open SimpleFIN Bridge and press Get started.'], ['Enter your email and press Send sign-in email. Open the link in that email and press Finish signing in. (Check your spam folder if it doesn’t arrive.)'],
+          ['Read and accept the Terms of Use.'], ['Go to Billing → Subscribe and choose monthly ($1.50) or yearly ($15). SimpleFIN suggests monthly first, until you’re sure your banks work.'],
+          ['On My account, press New connection and link each bank or card. Banks can take a day or two to show transactions.'], ['Under Apps, press New app connection, name it “Larenest” and press Create Setup Token.'],
+          ['Copy the setup token (it’s shown only once and works only once), paste it below and press Connect.']].forEach(([t], i) => {
+          const f = document.createElement('figure'); const im = document.createElement('img'); im.src = `help/simplefin/step${i + 1}.webp`; im.alt = `SimpleFIN Bridge, step ${i + 1}`; im.loading = 'lazy';
+          const c = document.createElement('figcaption'); c.textContent = `${i + 1}. ${t}`; f.append(c, im); guide.append(f); });
         const a = document.createElement('a'); a.href = 'https://beta-bridge.simplefin.org/'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open SimpleFIN Bridge ↗';
-        box.append(ol, a);
+        box.append(ol, a, guide);
         if (ro) { box.append(phMsg('This login can view this dashboard but not connect a bank.')); return; }
         const r = document.createElement('div'); r.className = 'fd-rb-row';
         const inp = document.createElement('input'); inp.className = 'fd-in'; inp.placeholder = 'Paste the setup token'; inp.autocomplete = 'off'; inp.spellcheck = false;

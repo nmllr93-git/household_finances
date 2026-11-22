@@ -69,3 +69,13 @@ test('bad token gives a friendly error', async () => {
   const r = await f.sf.handle('POST', [], 'b1', body({ token: 'nope' }));
   assert.equal(r.status, 400); assert.match(r.body.error, /setup token/);
 });
+
+test('a problem right after connecting keeps the connection (setup tokens work only once)', async () => {
+  const state = {};
+  const sf = createSimpleFin({
+    request: async (m, url) => (url.startsWith('https://claim.example/') ? { status: 200, text: ACCESS } : { status: 402, text: 'Payment required' }),
+    load: (id) => state[id] || null, save: (id, st) => { state[id] = st ? JSON.parse(JSON.stringify(st)) : undefined; }, bookData: () => ({}), addDoc: () => {},
+  });
+  const r = await sf.handle('POST', [], 'b1', async () => ({ token }));
+  assert.equal(r.status, 200); assert.equal(r.body.connected, true); assert.match(r.body.lastError, /payment required/i);
+});
