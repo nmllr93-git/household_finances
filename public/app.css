@@ -291,7 +291,7 @@ body > .fd-tip { position: absolute; z-index: 50; font-family: var(--font-anthro
 
 /* --- phones: view toggles fit inside narrow tiles --- */
 .fd-vtog { max-width: 100%; }
-.fd-vtog button { min-width: 0; flex: 1 1 auto; white-space: nowrap; }
+.fd-vtog { flex-wrap: wrap; } .fd-vtog button { min-width: max-content; flex: 0 0 auto; white-space: nowrap; overflow: visible; }
 @media (max-width: 640px) {
   .fd-vtog button { font-size: 12px; padding: 3px 7px; }
   #kpis .fd-card { min-width: 0; overflow: hidden; }

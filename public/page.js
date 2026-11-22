@@ -1264,7 +1264,7 @@
     const byAcct = {}; // also match on the account name without the owner prefix
     for (const r of rows('balances').filter((x) => x.book === book())) { const k = nA(r.label), k2 = nA(r.account); if (!latest[k] || r.month > latest[k].month) latest[k] = r; if (!byAcct[k2] || r.month > byAcct[k2].month) byAcct[k2] = r; }
     const out = [], used = new Set();
-    for (const a of reg) { const k = keyA(a.match || a.name); used.add(k); used.add(keyA(a.name)); (a.aliases || []).forEach((x) => used.add(keyA(x))); const b = latest[keyA(a.name)] || latest[k] || byAcct[keyA(a.name)] || byAcct[k]; if (b) used.add(nA(b.label)); out.push({ reg: a, key: k, name: a.name, kind: a.kind || (b && b.kind), type: a.type || '', rate: a.rate, owner: a.owner, note: a.note, limit: a.limit, payment: a.payment, escrow: a.escrow, extra: a.extra, rateEnds: a.rateEnds || '', active: a.active !== false, bal: b }); }
+    for (const a of reg) { const k = keyA(a.match || a.name); used.add(k); used.add(keyA(a.name)); (a.aliases || []).forEach((x) => used.add(keyA(x))); const al = (a.aliases || []).map(keyA); const pick = (m) => [keyA(a.name), k, ...al].map((x) => m[x]).filter(Boolean).sort((x, y) => (y.month > x.month ? 1 : -1))[0]; const b = pick(latest) || pick(byAcct); if (b) used.add(nA(b.label)); out.push({ reg: a, key: k, name: a.name, kind: a.kind || (b && b.kind), type: a.type || '', rate: a.rate, owner: a.owner, note: a.note, limit: a.limit, payment: a.payment, escrow: a.escrow, extra: a.extra, rateEnds: a.rateEnds || '', active: a.active !== false, bal: b }); }
     for (const [k, b] of Object.entries(latest)) if (!used.has(k)) out.push({ reg: null, key: k, name: b.label, kind: b.kind, type: '', rate: null, owner: b.owner || '', note: '', bal: b });
     // Drop an old Google Sheets figure once newer balances exist for that kind of account (it has been replaced).
     const maxM = {}; for (const a of out) if (a.bal && (!maxM[a.kind] || a.bal.month > maxM[a.kind])) maxM[a.kind] = a.bal.month;
@@ -2584,7 +2584,17 @@
       if (ro) return;
       const btns = document.createElement('div'); btns.className = 'fd-rb-row';
       btns.append(
-        rbtn('Save accounts', async () => { try { st = await call('', 'POST', { accounts: draft }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
+        rbtn('Save accounts', async () => { try {
+          // renaming here: keep old and new names as one account, so history doesn't split
+          const before = Object.fromEntries((st.accounts || []).map((a) => [a.id, a.map]));
+          st = await call('', 'POST', { accounts: draft });
+          const d0 = await db(), now = new Date().toISOString();
+          for (const a of st.accounts || []) { const old = before[a.id]; if (!old || keyA(old) === keyA(a.map)) continue;
+            const has = (x) => [x.match, x.name, ...(x.aliases || [])].some((n) => keyA(n) === keyA(old));
+            const reg = rows('accounts').find((x) => x.book === book() && has(x));
+            if (reg) { if (![reg.match, reg.name, ...(reg.aliases || [])].some((n) => keyA(n) === keyA(a.map))) { await d0.collection('data/household/accounts').add({ ...strip(reg), aliases: [...new Set([...(reg.aliases || []), a.map])], createdAt: now }); await d0.doc('data/household/accounts/' + reg.id).delete(); } }
+            else if (acctList().some((x) => keyA(x.name) === keyA(old))) await d0.collection('data/household/accounts').add({ book: book(), name: a.map, match: old, kind: '', type: '', rate: null, owner: '', note: '', aliases: [a.map], active: true, createdAt: now }); }
+          draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
         rbtn('Sync now', async (e) => {
           const b = e.currentTarget || e.target; if (b.disabled) return; b.disabled = true; b.classList.add('fd-busy'); b.textContent = 'Syncing…';
           msg.className = 'fd-note fd-sync-msg'; msg.textContent = 'Syncing with SimpleFIN… this can take up to a minute.';
@@ -3321,8 +3331,10 @@
     if (st('accounts', 'balances', 'prefs') !== 'ok' || !meBooks().length || !myBookId()) return;
     const src = myBookId(), want = {};
     acctList().forEach((a) => { const to = (a.reg && a.reg.shareTo) || []; if (!to.length || !a.bal) return;
-      const hist = a.reg.shareHist ? rows('balances').filter((r) => r.book === book() && r.kind === a.kind && keyA(r.label || r.account) === keyA(a.name)).map((r) => [r.month, r.balance]) : null;
-      to.forEach((t) => { (want[t] = want[t] || []).push({ key: `${src}|acct|${keyA(a.name)}`, owner: a.owner || '', name: a.name, kind: a.kind, type: a.type || '', balance: a.bal.balance, asOf: a.bal.month || '', history: hist }); }); });
+      const names = new Set([keyA(a.name), a.key, ...(a.reg.aliases || []).map(keyA)]);
+      const hist = a.reg.shareHist ? rows('balances').filter((r) => r.book === book() && r.kind === a.kind && names.has(keyA(r.label || r.account))).map((r) => [r.month, r.balance]) : null;
+      // keyed by the account's import name, which stays the same when you rename it
+      to.forEach((t) => { (want[t] = want[t] || []).push({ key: `${src}|acct|${a.key}`, owner: a.owner || '', name: a.name, kind: a.kind, type: a.type || '', balance: a.bal.balance, asOf: a.bal.month || '', history: hist }); }); });
     (prefGet('assets', []) || []).forEach((x) => (x.shareTo || []).forEach((t) => { (want[t] = want[t] || []).push({ key: `${src}|asset|${keyA(x.name)}`, owner: '', name: x.name, kind: 'asset', type: x.type || 'other', balance: Math.round(assetNow(x)), asOf: new Date().toLocaleDateString('en-CA').slice(0, 7), history: null }); }));
     const targets = [...new Set([...Object.keys(want), ...shareTargets().map((b) => b.id)])];
     const sig = JSON.stringify([src, targets.map((t) => [t, want[t] || []])]); if (sig === pubSig) return; pubSig = sig;
@@ -3348,7 +3360,8 @@
   // receiving side: values shared into this dashboard
   const SH_VIEWS = [['cash', 'Cash & investments tile'], ['inv', 'Investments chart'], ['nw', 'Net worth (tile, ring and chart)']];
   const shIncl = (d) => ({ cash: true, inv: true, nw: true, ...((prefGet('shareIncl', {}) || {})[d.key] || {}) });
-  const sharedIn = () => { const seen = new Map(); rows('shares').filter((d) => d.book === book()).forEach((d) => { const p = seen.get(d.key); if (!p || String(d.createdAt) > String(p.createdAt)) seen.set(d.key, d); }); return [...seen.values()]; };
+  const sharedIn = () => { const seen = new Map(), nm = prefGet('shareNames', {}) || {}; rows('shares').filter((d) => d.book === book()).forEach((d) => { const p = seen.get(d.key); if (!p || String(d.createdAt) > String(p.createdAt)) seen.set(d.key, d); });
+    return [...seen.values()].map((d) => (nm[d.key] ? { ...d, srcName: d.name, name: nm[d.key] } : d)); };
   const sharedSum = (kinds, view) => sharedIn().filter((d) => kinds.includes(d.kind) && shIncl(d)[view]).reduce((t, d) => t + (Number(d.balance) || 0), 0);
   const sharedAt = (kinds, view, month) => sharedIn().filter((d) => kinds.includes(d.kind) && shIncl(d)[view] && d.history).reduce((t, d) => { const h = d.history.filter((x) => x[0] <= month).pop(); return t + (h ? h[1] : 0); }, 0);
   let shOpen = null;
@@ -3403,7 +3416,11 @@
           const er = document.createElement('tr'); const ec = document.createElement('td'); ec.colSpan = 6; const w = document.createElement('div'); w.className = 'fd-chkgrid fd-shopts';
           SH_VIEWS.forEach(([v, lab]) => { if (v === 'inv' && d.kind !== 'investment') return; const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = !!inc[v];
             i.addEventListener('change', async () => { const all = prefGet('shareIncl', {}) || {}; all[d.key] = { ...inc, [v]: i.checked }; await prefSet('shareIncl', all); }); l.append(i, ' ' + lab); w.append(l); });
-          ec.append(w); er.append(ec); tb.append(er);
+          // a name just for this dashboard; the sharing dashboard keeps its own
+          const nr = document.createElement('div'); nr.className = 'fd-rb-row'; const nl = document.createElement('span'); nl.className = 'fd-rb-lbl'; nl.textContent = 'Name on this dashboard';
+          const ni = rin(d.name, d.srcName || d.name, () => {}); const ns = rbtn('Save name', async () => { const all = { ...(prefGet('shareNames', {}) || {}) }; const v = String(ni.value || '').trim().slice(0, 60);
+            if (!v || v === (d.srcName || d.name)) delete all[d.key]; else all[d.key] = v; await prefSet('shareNames', all); }, false);
+          nr.append(nl, ni, ns); ec.append(w, nr); er.append(ec); tb.append(er);
         }
       });
     });
