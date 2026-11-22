@@ -36,6 +36,7 @@
   .warnbox { border:1px solid var(--bad); background:color-mix(in srgb, var(--bad) 8%, transparent); border-radius:10px; padding:12px 14px; margin-bottom:16px; max-width:1100px; }
   [hidden] { display:none !important; }
 #qrPop:not([hidden]){display:flex}
+.row.qr-on{background:rgba(43,108,176,.08);border-radius:8px}
 </style>
 </head>
 <body>
@@ -59,7 +60,7 @@
     <div class="card">
       <h2>Addresses for phones &amp; other devices</h2>
       <div id="addrs"></div>
-      <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>In the Household Finances phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. <code id="qrAddr"></code></small></div></div>
+      <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>For the address just above. In the Household Finances phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. Use a home-network address at home, a Tailscale one when you're away.<span id="qrAddr"></span></small></div></div>
       <details id="tsGuide"><summary>Use it away from home (optional)</summary>
         <p class="mut" style="margin:8px 0">Tailscale is a free app that links your devices privately, so your phone can reach this computer from anywhere. Nothing is opened to the internet. Each step turns green when it's done.</p>
         <ol id="tsSteps" style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px"></ol>
@@ -82,6 +83,7 @@
 </section>
 <script src="qr.js"></script>
 <script>
+  let qrSel = ''; const QRP = document.getElementById('qrPop'), QRI = document.getElementById('qrImg');
 (async function () {
   const $ = (id) => document.getElementById(id), A = window.FDApp, dash = $('dash');
   const say = (t, c) => { $('msg').textContent = t || ''; $('msg').className = c || ''; };
@@ -104,13 +106,19 @@
         : s.keepAwake && s.running && s.mode === 'host' ? 'The app keeps it awake while hosting, so this is fine. For extra safety, set it to Never.' : 'While it sleeps, phones and other devices can\u2019t connect. Set it to Never, or turn on \u201cKeep this computer awake\u201d above.'; }
     $('dir').textContent = s.dataDir; $('ver').textContent = s.version; $('backup').disabled = !s.running;
     $('warn').hidden = s.writable; $('warn').textContent = s.writeHelp || '';
-    const box = $('addrs'); box.replaceChildren();
+    const box = $('addrs'); box.after(QRP); box.replaceChildren();
     if (!s.addrs.length) { const p = document.createElement('p'); p.className = 'mut'; p.textContent = s.running ? 'Turn on "Allow other devices" to see the addresses phones can use.' : 'Start the server to see addresses.'; box.append(p); }
-    s.addrs.forEach((a) => { const r = document.createElement('div'); r.className = 'row'; const c = document.createElement('code'); c.textContent = a; const b = document.createElement('button'); b.className = 'q'; b.type = 'button'; b.textContent = 'Copy';
-      b.addEventListener('click', async () => { await A.hostAction('copy', a); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); }); const qb = document.createElement('button'); qb.className = 'q'; qb.type = 'button'; qb.textContent = 'QR code';
-      qb.addEventListener('click', () => { $('qrImg').innerHTML = window.FDQR ? FDQR.svg(a, 240) : ''; $('qrAddr').textContent = a; $('qrPop').hidden = false; });
-      const sp = document.createElement('span'); sp.append(qb, ' ', b); r.append(c, sp); box.append(r); });
-    if (s.addrs.length && window.FDQR && !$('qrPop').dataset.auto) { $('qrPop').dataset.auto = '1'; $('qrImg').innerHTML = FDQR.svg(s.addrs[0], 240); $('qrAddr').textContent = s.addrs[0]; $('qrPop').hidden = false; }
+    // one row per address; the QR code opens right under the row it belongs to, and that row is marked
+    if (!s.addrs.includes(qrSel)) qrSel = s.addrs[0] || '';
+    s.addrs.forEach((a) => { const r = document.createElement('div'); r.className = 'row' + (a === qrSel ? ' qr-on' : ''); const d = document.createElement('div'); const c = document.createElement('code'); c.textContent = a;
+      const lb = document.createElement('small'); lb.textContent = (s.addrLabels || {})[a] || ''; d.append(c, lb);
+      const b = document.createElement('button'); b.className = 'q'; b.type = 'button'; b.textContent = 'Copy';
+      b.addEventListener('click', async () => { await A.hostAction('copy', a); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); });
+      const qb = document.createElement('button'); qb.className = 'q'; qb.type = 'button'; qb.textContent = a === qrSel ? 'Showing QR' : 'QR code'; qb.disabled = a === qrSel;
+      qb.addEventListener('click', () => { qrSel = a; render(s); });
+      const sp = document.createElement('span'); sp.append(qb, ' ', b); r.append(d, sp); box.append(r);
+      if (a === qrSel && window.FDQR) { QRI.innerHTML = FDQR.svg(a, 240); box.append(QRP); QRP.hidden = false; } });
+    if (!s.addrs.length) QRP.hidden = true;
     const ts = s.ts || {};
     { const steps = [
         [!!ts.installed, 'Install Tailscale on this computer', 'Get Tailscale', () => A.hostAction('tailscale')],
