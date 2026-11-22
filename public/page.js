@@ -292,11 +292,17 @@
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id); }));
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
+  // Phone section menus: defaults below; each phone can rename, add, remove and regroup them (⚙ Settings → Phone menus). Saved on this device.
+  const NAV_DEFAULT = [['Overview', ['all', 'overview']], ['Spending', ['expenses', 'budget', 'tx']], ['Wealth', ['accounts', 'planning', 'markets']], ['More', ['review', 'import']]];
+  const NAV_ALL = ['all', 'overview', 'accounts', 'expenses', 'budget', 'tx', 'planning', 'markets', 'review', 'import'];
+  const navMenus = () => { try { const m = JSON.parse(localStorage.getItem('fd-navmenus') || 'null'); if (Array.isArray(m) && m.length) {
+    const used = new Set(m.flatMap((x) => x[1])), out = m.map(([n, gs]) => [String(n).slice(0, 14), gs.filter((g) => NAV_ALL.includes(g))]).filter((x) => x[1].length);
+    const miss = NAV_ALL.filter((g) => !used.has(g)); if (miss.length) { if (out.length) out[out.length - 1][1].push(...miss); else out.push(['More', miss]); } return out; } } catch {} return NAV_DEFAULT.map(([n, g]) => [n, [...g]]); };
   let lastTab = 'all';
   // Phones: fold the section tabs into a few menus (Overview ▾, Spending ▾, Wealth ▾, More ▾) so the bar fits without sideways scrolling.
   // Computers keep every tab visible; the menus are hidden there by CSS.
   {
-    const nav = document.getElementById('fd-nav'), MENUS = [['Overview', ['all', 'overview']], ['Spending', ['expenses', 'budget', 'tx']], ['Wealth', ['accounts', 'planning', 'markets']], ['More', ['review', 'import']]];
+    const nav = document.getElementById('fd-nav'), MENUS = navMenus();
     let open = null;
     const close = () => { if (open) { open.remove(); open = null; } };
     const navBtn = (g) => nav.querySelector(`.fd-navb[data-group="${g}"]`);
@@ -2523,6 +2529,30 @@
     draw();
   };
 
+  // ⚙ Settings → Phone menus (only on narrow screens)
+  const navMenuBox = (host) => {
+    if (window.innerWidth > 640 || host.querySelector('.fd-navmenubox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-navmenubox'; host.append(box);
+    let menus = navMenus(); const name = (g) => { const b = document.querySelector(`.fd-navb[data-group="${g}"]`); return b ? b.textContent : g; };
+    const draw = () => {
+      box.textContent = ''; box.append(rhead('Phone menus'), phMsg('Choose which menu each section is under at the top of the screen, and rename or add menus. Saved on this phone only.'));
+      menus.forEach((m, i) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const inp = document.createElement('input'); inp.className = 'fd-in'; inp.maxLength = 14; inp.value = m[0]; inp.addEventListener('input', () => { m[0] = inp.value; }); r.append(inp);
+        if (menus.length > 1) r.append(rbtn('Remove', () => { const [gone] = menus.splice(i, 1); menus[Math.max(0, i - 1)][1].push(...gone[1]); draw(); })); box.append(r); });
+      const tb = document.createElement('table'); tb.className = 'fd-table';
+      for (const g of NAV_ALL) { const tr = document.createElement('tr'); const a = td(name(g)); const sel = document.createElement('select'); sel.className = 'dash-select';
+        menus.forEach((m, i) => sel.append(new Option(m[0] || `Menu ${i + 1}`, i))); sel.value = menus.findIndex((m) => m[1].includes(g));
+        sel.addEventListener('change', () => { menus.forEach((m) => { m[1] = m[1].filter((x) => x !== g); }); menus[Number(sel.value)][1].push(g); menus[Number(sel.value)][1].sort((x, y) => NAV_ALL.indexOf(x) - NAV_ALL.indexOf(y)); });
+        const b = td(''); b.append(sel); tr.append(a, b); tb.append(tr); }
+      box.append(tb);
+      const btns = document.createElement('div'); btns.className = 'fd-rb-row';
+      btns.append(rbtn('+ Add menu', () => { if (menus.length < 6) { menus.push(['New', []]); draw(); } }),
+        rbtn('Save menus', () => { const out = menus.map(([n, gs]) => [String(n).trim() || 'Menu', gs]).filter((x) => x[1].length); try { localStorage.setItem('fd-navmenus', JSON.stringify(out)); } catch {} location.reload(); }, false),
+        rbtn('Reset to default', () => { try { localStorage.removeItem('fd-navmenus'); } catch {} location.reload(); }));
+      box.append(btns);
+    };
+    draw();
+  };
+
   // ⚙ Settings → Recent changes (who changed what on this dashboard)
   const activityBox = async (host) => {
     if (window.FD_LOCAL || host.querySelector('.fd-actbox')) return; const tok = {}; host.__act = tok;
@@ -2846,6 +2876,7 @@
     phoneBox(el).catch(() => {});
     emailBox(el).catch(() => {});
     syncBox(el).catch(() => {});
+    navMenuBox(el);
     activityBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {
       const bk = document.createElement('div'); bk.className = 'fd-rb fd-backup'; bk.append(rhead('Backup & restore'));
