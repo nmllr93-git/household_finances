@@ -60,6 +60,10 @@
       <h2>Addresses for phones &amp; other devices</h2>
       <div id="addrs"></div>
       <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>In the Household Finances phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. <code id="qrAddr"></code></small></div></div>
+      <details id="tsGuide"><summary>Use it away from home (optional)</summary>
+        <p class="mut" style="margin:8px 0">Tailscale is a free app that links your devices privately, so your phone can reach this computer from anywhere. Nothing is opened to the internet. Each step turns green when it's done.</p>
+        <ol id="tsSteps" style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px"></ol>
+      </details>
       <div class="row"><div><b id="tsState">Tailscale</b><small id="tsSub"></small></div><span><button class="q" id="tsRefresh" type="button">Refresh</button> <button class="q" id="tsOpen" type="button">Open</button></span></div>
     </div>
     <div class="card">
@@ -108,6 +112,16 @@
       const sp = document.createElement('span'); sp.append(qb, ' ', b); r.append(c, sp); box.append(r); });
     if (s.addrs.length && window.FDQR && !$('qrPop').dataset.auto) { $('qrPop').dataset.auto = '1'; $('qrImg').innerHTML = FDQR.svg(s.addrs[0], 240); $('qrAddr').textContent = s.addrs[0]; $('qrPop').hidden = false; }
     const ts = s.ts || {};
+    { const steps = [
+        [!!ts.installed, 'Install Tailscale on this computer', 'Get Tailscale', () => A.hostAction('tailscale')],
+        [!!ts.on, 'Sign in to Tailscale on this computer (a free personal account is fine)', ts.installed ? 'Open Tailscale' : '', () => A.hostAction('tailscale')],
+        [s.mode === 'host', 'Turn on “Allow other devices” above', '', null],
+        [!!(s.tsSeen && Date.now() - s.tsSeen < 30 * 864e5), 'On your phone, install Tailscale, sign in with the same account, then open this app using the Tailscale address (scan its QR code below)', '', null],
+      ];
+      const ol = $('tsSteps'); ol.replaceChildren();
+      steps.forEach(([ok, text, btn, fn]) => { const li = document.createElement('li'); li.style.color = ok ? '#1b7f4a' : ''; li.textContent = (ok ? '✓ ' : '') + text + ' ';
+        if (!ok && btn && fn) { const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = btn; b.addEventListener('click', fn); li.append(b); } ol.append(li); });
+      if (steps.every((x) => x[0])) $('tsGuide').querySelector('summary').textContent = '✓ Away from home is set up'; }
     $('tsState').textContent = !ts.installed ? 'Tailscale isn\'t installed' : ts.on ? 'Tailscale is on' : 'Tailscale is off';
     $('tsSub').textContent = !ts.installed ? 'Needed to connect from outside your home network.' : ts.on ? (ts.name || ts.ip || '') : 'Open Tailscale and sign in to connect from away.';
     $('tsOpen').textContent = ts.installed ? 'Open' : 'Get Tailscale';

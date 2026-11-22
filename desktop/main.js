@@ -240,11 +240,11 @@ const openSleepSettings = () => shell.openExternal(process.platform === 'darwin'
 // ---------- host options tab (same controls as the tray, for remote desktops / virtual displays) ----------
 const hostState = () => {
   const on = !!INFO.running, others = on && INFO.mode === 'host';
-  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
+  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
     addrs: others ? [...(INFO.lan || []), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])] : [], ts: TS };
 };
 const notifyHost = () => { try { if (win && !win.isDestroyed()) win.webContents.send('fd:hostChanged', hostState()); } catch {} };
-ipcMain.handle('fd:hostState', () => { readSleep(); return hostState(); });
+ipcMain.handle('fd:hostState', async () => { readSleep(); if (child) await refresh().catch(() => {}); return hostState(); });
 ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
   switch (act) {
     case 'start': await startServer(); break;

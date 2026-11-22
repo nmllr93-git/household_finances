@@ -311,6 +311,8 @@ const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
 async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', ...]
   const ip = req.socket.remoteAddress;
+  // Tailscale addresses are 100.64.0.0–100.127.255.255: note when another device last reached us that way (for the Host options checklist)
+  { const m = /(?:^|:)100\.(\d+)\.\d+\.\d+$/.exec(ip || ''); if (m && +m[1] >= 64 && +m[1] <= 127 && !lanAddrs().includes(ip.replace(/^::ffff:/, ''))) TS_SEEN = Date.now(); }
 
   // ping: lets the desktop/phone connect screen confirm an address really is this app (no login, no data)
   if (parts[1] === 'ping') { res.setHeader('Access-Control-Allow-Origin', '*'); if (!CFG.serverId) { try { saveCfg({ serverId: crypto.randomBytes(9).toString('base64url') }); } catch {} } return send(res, 200, { app: 'household-finances', version: require('./package.json').version, id: CFG.serverId || '', name: os.hostname() }); }
@@ -449,7 +451,7 @@ function backup() {
   return file;
 }
 
-let SERVER = null, BTIMER = null, DTIMER = null, RUN = null;
+let SERVER = null, BTIMER = null, DTIMER = null, RUN = null, TS_SEEN = 0;
 const lanAddrs = () => Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => n.address);
 // start({ mode, port, quiet }) → Promise<info>. Used by `node server.js` and by the desktop app (require('./server.js')).
 function start(opts = {}) {
@@ -500,7 +502,7 @@ function stop() {
 // info(): what the tray/settings screen shows.
 function info() {
   const lan = RUN && RUN.host !== '127.0.0.1' ? lanAddrs() : [];
-  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `http://${a}:${RUN.port}`), dataDir: DATA_DIR, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null };
+  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `http://${a}:${RUN.port}`), dataDir: DATA_DIR, tsSeen: TS_SEEN, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null };
 }
 // setMode('local'|'host'): saves it and restarts if running, so the change takes effect immediately.
 async function setMode(mode, port) {
