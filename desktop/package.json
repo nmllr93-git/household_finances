@@ -1,8 +1,8 @@
 {
   "name": "household-finances-desktop",
-  "productName": "Household Finances",
+  "productName": "Larenest",
   "version": "1.0.16",
-  "description": "Household Finances for Windows: runs your finance server and dashboard in one app.",
+  "description": "Larenest for Windows: runs your finance server and dashboard in one app.",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.householdfinances.desktop",
-    "productName": "Household Finances",
+    "productName": "Larenest",
     "directories": {
       "output": "dist"
     },
@@ -53,9 +53,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Household Finances",
+      "shortcutName": "Larenest",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "Household-Finances-Setup-${version}.${ext}"
+      "artifactName": "Larenest-Setup-${version}.${ext}"
     },
     "publish": [
       {
@@ -77,10 +77,10 @@
       "icon": "icons/icon-512.png",
       "category": "public.app-category.finance",
       "identity": null,
-      "artifactName": "Household-Finances-${version}-mac-${arch}.${ext}"
+      "artifactName": "Larenest-${version}-mac-${arch}.${ext}"
     },
     "dmg": {
-      "artifactName": "Household-Finances-${version}-mac-${arch}.${ext}"
+      "artifactName": "Larenest-${version}-mac-${arch}.${ext}"
     }
   },
   "dependencies": {

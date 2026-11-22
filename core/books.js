@@ -1,4 +1,4 @@
-// Household Finances shared core: the dashboard data rules used by BOTH the PC server (server.js)
+// Larenest shared core: the dashboard data rules used by BOTH the PC server (server.js)
 // and the phone's on-device mode. No Node or browser APIs here: storage is passed in.
 //
 //   const core = require('./core/books.js')        // Node

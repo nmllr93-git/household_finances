@@ -1,6 +1,6 @@
 {
-  "appId": "com.householdfinances.app",
-  "appName": "Household Finances",
+  "appId": "com.larenest.app",
+  "appName": "Larenest",
   "webDir": "www",
   "server": {
     "androidScheme": "https",

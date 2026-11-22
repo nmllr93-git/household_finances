@@ -1,4 +1,4 @@
-# Household Finances
+# Larenest
 
 A private budgeting and net-worth dashboard for a household, run on your own computer. Your statements, balances and budgets stay on a machine you control. Nothing goes to a cloud service unless you turn on the optional market-data features, and even those only send stock symbols, never your financial data.
 
@@ -58,7 +58,7 @@ The app bundles everything it needs. The PCs you install it on don't need Node.j
 
 ### A1. Get the installer
 1. Go to the **Releases** page of the public releases repository (`household_finances-releases`).
-2. Under the newest release, download **`Household Finances Setup x.y.z.exe`**.
+2. Under the newest release, download **`Larenest Setup x.y.z.exe`**.
 3. Run it. Windows SmartScreen may say *"Windows protected your PC"*, because the installer isn't code-signed. Click **More info → Run anyway**.
 4. Pick an install folder, or keep the default, and finish. A desktop shortcut and a Start-menu entry are created.
 
@@ -108,8 +108,8 @@ The first time you allow other devices, Windows may ask whether to let **Node.js
 | What | Where |
 |---|---|
 | Finance data (database, backups, API keys, settings) | The data folder chosen in setup, default `%APPDATA%\HouseholdFinances` |
-| App preferences (role, port, start with Windows) | `%APPDATA%\Household Finances\desktop.json` |
-| Server log | `%APPDATA%\Household Finances\server.log` |
+| App preferences (role, port, start with Windows) | `%APPDATA%\Larenest\desktop.json` |
+| Server log | `%APPDATA%\Larenest\server.log` |
 
 Uninstalling the app does **not** delete your finance data.
 
@@ -133,7 +133,7 @@ Use this for an always-on machine, or if you prefer running it yourself. It need
      ```
      powershell -ExecutionPolicy Bypass -File .\scripts\install-autostart.ps1
      ```
-     This creates a scheduled task, **Household Finances**, that starts the server at boot with no window. It also opens port 8080 to your home (Private) network only.
+     This creates a scheduled task, **Larenest**, that starts the server at boot with no window. It also opens port 8080 to your home (Private) network only.
 5. **Open it:** on the PC, go to http://localhost:8080. The server also prints *"on your network"* addresses (like `http://192.168.1.50:8080`) for other devices.
 
 Also check two Windows settings:
@@ -193,7 +193,7 @@ To make the address stable, give the host a **DHCP reservation** in your router'
 ### C2. The connect screen (desktop and Android apps)
 When an app is set to **Connect to another computer**, it shows a connect screen.
 1. Type the server address: `192.168.1.50:8080`, a Tailscale name like `my-pc.tail1234.ts.net:8080`, or a full `https://…` address. If you leave out `http://` and `:8080`, they're added.
-2. The app checks that the address really is Household Finances, then opens its sign-in page.
+2. The app checks that the address really is Larenest, then opens its sign-in page.
 3. Recent addresses are remembered on that device as one-tap buttons.
 
 If it can't connect, check that the host is on and awake and in host mode, that this device is on the same network (or Tailscale is on), and that the address and port are right.
@@ -478,10 +478,10 @@ Good to know:
 - Your data folder is never touched by an update.
 
 **Self-hosted server on Windows:**
-1. Stop it: `Stop-ScheduledTask -TaskName 'Household Finances'` in Terminal (Admin), or close the `start-windows.bat` window.
+1. Stop it: `Stop-ScheduledTask -TaskName 'Larenest'` in Terminal (Admin), or close the `start-windows.bat` window.
 2. Back up: `node server.js backup`.
 3. Unzip the new version **over** the existing folder and choose **Replace the files**. The `data` folder isn't in the zip, so it isn't touched.
-4. Start it: `Start-ScheduledTask -TaskName 'Household Finances'`, or restart the PC. Open http://localhost:8080 to check.
+4. Start it: `Start-ScheduledTask -TaskName 'Larenest'`, or restart the PC. Open http://localhost:8080 to check.
 
 **Self-hosted server on Linux, macOS or Termux:** stop the server, back up, run `unzip -o` with the new zip over the folder, and start it again.
 
@@ -498,8 +498,8 @@ Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`,
 **Self-hosted to desktop app (same PC):**
 1. Stop the self-hosted server and disable its autostart:
    ```
-   Stop-ScheduledTask -TaskName 'Household Finances'
-   Disable-ScheduledTask -TaskName 'Household Finances'
+   Stop-ScheduledTask -TaskName 'Larenest'
+   Disable-ScheduledTask -TaskName 'Larenest'
    ```
    Disabling (instead of removing) lets you switch back easily.
 2. Back up: copy the self-hosted `data` folder somewhere safe.
@@ -525,7 +525,7 @@ Both use the same data folder layout (`finance.db`, `backups/`, `api-keys.json`,
 | An investment shows up under Cash | Edit it and set the right type, or **Delete account** and record the balance again with the right type. |
 | Duplicate accounts with slightly different names | Edit one → **Same account as…** to merge them. |
 | SmartScreen blocks the installer | **More info → Run anyway**. The installer isn't code-signed. |
-| Desktop app won't start the server | Check `%APPDATA%\Household Finances\server.log`. |
+| Desktop app won't start the server | Check `%APPDATA%\Larenest\server.log`. |
 | Forgot a password | On the host: `node server.js passwd <name>`. Desktop app: tray → **Change setup…** and re-create the login with the same name, which replaces its password. |
 
 ---

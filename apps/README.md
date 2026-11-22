@@ -17,7 +17,7 @@ To regenerate after changing `public/icons/icon-512.png`, rerun the icon script 
 ## connect.html (remote mode)
 The first screen of the Android app (and the desktop app when it isn't the host).
 - You type the server address (`192.168.1.20:8080`, a Tailscale name, or `https://…`); `http://` and `:8080` are added if left off.
-- It calls `/api/ping` to confirm the address really is Household Finances, then opens the server's own pages, so sign-in works exactly like the browser.
+- It calls `/api/ping` to confirm the address really is Larenest, then opens the server's own pages, so sign-in works exactly like the browser.
 - The last 5 addresses are remembered on the device only.
 - If the app provides `window.FDApp.openHost(url)`, it's used instead of a plain page change (lets the app save the address natively).
 

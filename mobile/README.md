@@ -1,4 +1,4 @@
-# Household Finances — Android app
+# Larenest — Android app
 
 Two ways to use it, chosen on the first screen:
 - **Keep my data on this phone** (phone-only mode): no PC or server at all. Everything is stored privately inside the app on this phone. Nothing is sent anywhere except the stock symbols and data requests to the market services whose keys you add.
@@ -6,9 +6,9 @@ Two ways to use it, chosen on the first screen:
 
 ## Install on a phone
 1. On the phone, open the releases page (`household_finances-releases` → Releases) and find the newest **Android** release.
-2. Download `HouseholdFinances-x.y.z.apk`.
+2. Download `Larenest-x.y.z.apk`.
 3. Open it. Android asks to allow your browser to **install unknown apps**: allow it for that browser only, then tap **Install**. Google Play Protect may warn about an unknown developer: choose **Install anyway**.
-4. Open **Household Finances**, enter your server address (e.g. `192.168.1.50:8080` at home, or your Tailscale name/address), tap **Connect**, and sign in.
+4. Open **Larenest**, enter your server address (e.g. `192.168.1.50:8080` at home, or your Tailscale name/address), tap **Connect**, and sign in.
 
 Next time it opens straight to your dashboard. **Switch server** (top right, next to Sign out) goes back to the connect screen.
 
@@ -49,7 +49,7 @@ Needs Node.js and Android Studio: `npm install`, `npm run android:add`, then `np
 Running entirely on the phone, without a server, is a separate, larger step (an on-device database behind `public/store.js`).
 
 ## Google Play (store release)
-Every Android release also produces **`HouseholdFinances-x.y.z.aab`**, the bundle the Play Store needs. It's signed with the same key as the APK, and Play uses that key as your **upload key**.
+Every Android release also produces **`Larenest-x.y.z.aab`**, the bundle the Play Store needs. It's signed with the same key as the APK, and Play uses that key as your **upload key**.
 - Download it: private repo → **Actions → Android release →** the run → **Artifacts** → `play-store-bundle-x.y.z`. It's kept 90 days and isn't public.
 - In Play Console: **Test and release → Closed testing → Create release** → upload the `.aab`. The first time, accept **Play App Signing**: Google keeps the final signing key, and your key stays the upload key.
 - The app targets Android 16 (API 36), as Google Play requires (Capacitor 8).

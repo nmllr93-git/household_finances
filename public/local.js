@@ -187,7 +187,7 @@
     if ((await notifyPermission()) !== 'granted') return { scheduled: 0, supported: true, denied: true };
     const now = Date.now(), out = [];
     bills.forEach((b) => { const at = new Date(b.due); at.setDate(at.getDate() - (Number(opts.daysBefore) || 0)); at.setHours(Number(opts.hour) || 9, 0, 0, 0);
-      if (at.getTime() > now + 60e3 && out.length < 60) out.push({ id: 7000 + out.length, title: `${b.name} is due ${opts.daysBefore > 0 ? (opts.daysBefore === 1 ? 'tomorrow' : `in ${opts.daysBefore} days`) : 'today'}`, body: `About ${b.amount} · Household Finances`, schedule: { at, allowWhileIdle: true } }); });
+      if (at.getTime() > now + 60e3 && out.length < 60) out.push({ id: 7000 + out.length, title: `${b.name} is due ${opts.daysBefore > 0 ? (opts.daysBefore === 1 ? 'tomorrow' : `in ${opts.daysBefore} days`) : 'today'}`, body: `About ${b.amount} · Larenest`, schedule: { at, allowWhileIdle: true } }); });
     if (out.length) await N.schedule({ notifications: out });
     return { scheduled: out.length, supported: true };
   }

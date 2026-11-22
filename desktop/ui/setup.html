@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
-<title>Set up · Household Finances</title>
+<title>Set up · Larenest</title>
 <style>
   :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1f2a37; --mut:#5b6675; --card:#fff; --line:#d8dde3; --acc:#1f5f8b; --soft:#e6eff7; --bad:#b3261e; --ok:#1e7a46; }
   @media (prefers-color-scheme: dark) { :root { --bg:#12171d; --fg:#e6e9ed; --mut:#9aa4b0; --card:#1b222b; --line:#2c3540; --acc:#6fb0e0; --soft:#1f2f3d; --bad:#f08a80; --ok:#6fcf97; } }
@@ -28,7 +28,7 @@
 </head>
 <body>
 <main>
-  <div class="top"><img src="../icons/icon-512.png" alt=""><div><h1>Household Finances</h1><p style="margin:0">Let's get this computer set up.</p></div></div>
+  <div class="top"><img src="../icons/icon-512.png" alt=""><div><h1>Larenest</h1><p style="margin:0">Let's get this computer set up.</p></div></div>
 
   <section id="s1">
     <h2>Who will use this?</h2>
@@ -78,7 +78,7 @@
   const $ = (id) => document.getElementById(id), msg = $('msg'), A = window.FDApp;
   const say = (t, c) => { msg.textContent = t || ''; msg.className = c || ''; };
   const step = (id) => { ['s1', 's2', 's3', 's4'].forEach((s) => { $(s).hidden = s !== id; }); say(''); };
-  if (!A || !A.defaults) { say('Open this screen from the Household Finances app.', 'bad'); return; }
+  if (!A || !A.defaults) { say('Open this screen from the Larenest app.', 'bad'); return; }
   const d = await A.defaults(); let mode = d.mode || 'local', info = null;
   $('port').value = d.port || 8080; $('dir').value = d.dataDir; $('sww').checked = !!d.startWithWindows;
   const setMode = (m) => { mode = m; $('m-local').classList.toggle('on', m === 'local'); $('m-host').classList.toggle('on', m === 'host'); };

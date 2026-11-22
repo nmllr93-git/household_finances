@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f2a37">
-<title>Connect · Household Finances</title>
+<title>Connect · Larenest</title>
 <style>
   :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1f2a37; --mut:#5b6675; --card:#fff; --line:#d8dde3; --acc:#1f5f8b; --bad:#b3261e; --ok:#1e7a46; }
   @media (prefers-color-scheme: dark) { :root { --bg:#12171d; --fg:#e6e9ed; --mut:#9aa4b0; --card:#1b222b; --line:#2c3540; --acc:#6fb0e0; --bad:#f08a80; --ok:#6fcf97; } }
@@ -29,7 +29,7 @@
 <main>
   <img src="icons/icon-192.png" alt="">
   <h1>Connect to your server</h1>
-  <p>Enter the address of the computer running Household Finances. You'll sign in on the next screen.</p>
+  <p>Enter the address of the computer running Larenest. You'll sign in on the next screen.</p>
   <form id="f">
     <label for="u">Server address</label>
     <input id="u" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false" placeholder="e.g. 192.168.1.20:8080 or my-pc.tailnet.ts.net:8080">
@@ -37,7 +37,7 @@
   </form>
   <button type="button" class="q" id="scan" hidden>Scan QR code</button>
   <div id="scanbox" hidden><video id="cam" playsinline muted></video><button type="button" class="q" id="scanStop">Cancel</button></div>
-  <p id="scanHint" style="font-size:14px;opacity:.8;margin:8px 0 0">On your computer, open Household Finances → Host options (or ⚙ Settings → Connect a phone) to see a QR code.</p>
+  <p id="scanHint" style="font-size:14px;opacity:.8;margin:8px 0 0">On your computer, open Larenest → Host options (or ⚙ Settings → Connect a phone) to see a QR code.</p>
   <div id="msg" role="status"></div>
   <div id="localbox" hidden>
     <p style="margin:18px 0 8px">No server? Keep everything on this phone instead. Nothing is sent anywhere, and you can make a backup file any time.</p>
@@ -69,7 +69,7 @@
     await Promise.all(Array.from({ length: 32 }, worker)); finding = false;
     const hit = found.find((f) => want.id && f.j.id === want.id) || (!want.id && found.length === 1 ? found[0] : null);
     if (hit) { say(`Found ${hit.j.name || 'your computer'} at its new address. Opening…`, 'ok'); try { const l = list().filter((x) => x !== old); localStorage.setItem(KEY, JSON.stringify(l)); } catch (e) {} go(hit.u); return; }
-    if (found.length) { say('Found Household Finances on more than one computer. Pick one below.', 'bad'); found.forEach((f) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = `${f.j.name || 'Computer'} · ${f.u.replace(/^https?:\/\//, '')}`; b.addEventListener('click', () => go(f.u)); li.append(b); $('recent').prepend(li); }); return; }
+    if (found.length) { say('Found Larenest on more than one computer. Pick one below.', 'bad'); found.forEach((f) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = `${f.j.name || 'Computer'} · ${f.u.replace(/^https?:\/\//, '')}`; b.addEventListener('click', () => go(f.u)); li.append(b); $('recent').prepend(li); }); return; }
     say(`Couldn\u2019t find ${want.name || 'your computer'} on this network. Make sure it\u2019s on, the app is running with \u201cAllow other devices\u201d on, and this device is on the same Wi-Fi.`, 'bad');
   }
   window.__fdFind = find;
@@ -82,7 +82,7 @@
     try {
       const r = await fetch(u + '/api/ping', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
       const j = await r.json().catch(() => ({}));
-      if (j.app !== 'household-finances') { say("Something answered at that address, but it isn't Household Finances. Check the port.", 'bad'); return; }
+      if (j.app !== 'household-finances') { say("Something answered at that address, but it isn't Larenest. Check the port.", 'bad'); return; }
       save(u); remember(u, j); say('Connected. Opening…', 'ok');
       try { if (window.Capacitor) localStorage.setItem('fd-mode', 'remote'); } catch (e) {}
       if (window.FDApp && FDApp.openHost) FDApp.openHost(u); else location.href = u + (window.Capacitor ? '/?app=phone' : '/');

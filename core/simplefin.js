@@ -1,4 +1,4 @@
-// Household Finances: automatic bank sync through SimpleFIN Bridge (https://beta-bridge.simplefin.org).
+// Larenest: automatic bank sync through SimpleFIN Bridge (https://beta-bridge.simplefin.org).
 // The user pays SimpleFIN directly (about $15/year) and links their banks on SimpleFIN's site; this app only
 // holds the read-only access URL SimpleFIN gives back, and pulls balances and posted transactions with it.
 // Used by BOTH the PC server and the phone's phone-only mode.

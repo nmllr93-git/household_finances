@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Household Finances — self-hosted server.
+// Larenest — self-hosted server.
 // No npm packages needed: uses Node's built-in http, crypto and sqlite (Node 22.13+).
 //
 //   node server.js                         start the server
@@ -286,7 +286,7 @@ async function digestFor(username) {
   for (const b of userBooks(username)) { const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(b.id); const d = DIGEST.buildDigest(book, await BOOKS.data(book.id)); if (!d.empty) parts.push(d); }
   if (!parts.length) return null;
   total = parts.map((p) => p.subject).join(' | ');
-  return { subject: parts.length === 1 ? parts[0].subject : `Your week: ${total}`.slice(0, 180), text: parts.map((p) => p.text).join('\n\n'), html: parts.map((p) => p.html).join('<hr style="border:0;border-top:1px solid #e3e7eb;margin:22px 0">') + '<p style="font:12px sans-serif;color:#8a939d;margin-top:22px">Sent by your Household Finances server. Turn it off under ⚙ Settings → Weekly email.</p>' };
+  return { subject: parts.length === 1 ? parts[0].subject : `Your week: ${total}`.slice(0, 180), text: parts.map((p) => p.text).join('\n\n'), html: parts.map((p) => p.html).join('<hr style="border:0;border-top:1px solid #e3e7eb;margin:22px 0">') + '<p style="font:12px sans-serif;color:#8a939d;margin-top:22px">Sent by your Larenest server. Turn it off under ⚙ Settings → Weekly email.</p>' };
 }
 async function sendDigest(username) {
   const c = digestCfg(), u = (c.users || {})[username];
@@ -478,7 +478,7 @@ function start(opts = {}) {
     server.once('error', (e) => { SERVER = null; reject(e.code === 'EADDRINUSE' ? Object.assign(new Error(`Port ${port} is already in use. Close the other program or pick another port.`), { code: 'EADDRINUSE' }) : e); });
     server.listen(port, host, () => {
       RUN = { mode, port, host, since: Date.now() };
-      log(`Household Finances is running on http://localhost:${port}`);
+      log(`Larenest is running on http://localhost:${port}`);
       if (host !== '127.0.0.1') for (const a of lanAddrs()) log(`  on your network: http://${a}:${port}`);
       else log('  local only: other devices cannot connect (node server.js mode host to change)');
       resolve(info());

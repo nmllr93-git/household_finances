@@ -48,11 +48,11 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           IN=$(ls mobile/android/app/build/outputs/apk/release/*.apk | head -1)
           "$BT/zipalign" -f -p 4 "$IN" aligned.apk
-          "$BT/apksigner" sign --ks hf.keystore --ks-key-alias hf --ks-pass "pass:$PW" --key-pass "pass:$PW" --out "HouseholdFinances-${{ steps.ver.outputs.version }}.apk" aligned.apk
-          "$BT/apksigner" verify "HouseholdFinances-${{ steps.ver.outputs.version }}.apk"
+          "$BT/apksigner" sign --ks hf.keystore --ks-key-alias hf --ks-pass "pass:$PW" --key-pass "pass:$PW" --out "Larenest-${{ steps.ver.outputs.version }}.apk" aligned.apk
+          "$BT/apksigner" verify "Larenest-${{ steps.ver.outputs.version }}.apk"
           # Play Store bundle, signed with the same key (Play uses it as the upload key)
-          cp mobile/android/app/build/outputs/bundle/release/app-release.aab "HouseholdFinances-${{ steps.ver.outputs.version }}.aab"
-          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore hf.keystore -storepass "$PW" -keypass "$PW" "HouseholdFinances-${{ steps.ver.outputs.version }}.aab" hf
+          cp mobile/android/app/build/outputs/bundle/release/app-release.aab "Larenest-${{ steps.ver.outputs.version }}.aab"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore hf.keystore -storepass "$PW" -keypass "$PW" "Larenest-${{ steps.ver.outputs.version }}.aab" hf
           rm hf.keystore
       # the .aab is for uploading to Play Console: kept private as a download on this run (Actions → this run → Artifacts)
       - name: Keep the Play Store bundle
@@ -60,12 +60,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: play-store-bundle-${{ steps.ver.outputs.version }}
-          path: HouseholdFinances-${{ steps.ver.outputs.version }}.aab
+          path: Larenest-${{ steps.ver.outputs.version }}.aab
           retention-days: 90
       - name: Publish
         if: steps.ver.outputs.new == 'true'
         env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}" }
         run: |
           V=${{ steps.ver.outputs.version }}
-          gh release create "android-v$V" "HouseholdFinances-$V.apk" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" \
+          gh release create "android-v$V" "Larenest-$V.apk" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" \
             --title "Android $V" --notes-file <(node scripts/release-notes.js Android "$V") --latest=false

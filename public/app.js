@@ -8,7 +8,7 @@
     if (!b) return;
     try { localStorage.setItem('hf-book', b.id); } catch {}
     window.FD_BOOK = b.label;
-    document.title = `${b.name} · Household Finances`;
+    document.title = `${b.name} · Larenest`;
     $('#fd-title').textContent = b.name;
     // view-only logins: say so, and hide the controls that change things (the server refuses changes anyway)
     document.body.classList.toggle('fd-readonly', !!b.readOnly);

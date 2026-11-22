@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http://localhost:* http://127.0.0.1:*">
-<title>Household Finances</title>
+<title>Larenest</title>
 <style>
   :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1f2a37; --mut:#5b6675; --card:#fff; --line:#d8dde3; --acc:#1f5f8b; --soft:#e6eff7; --bad:#b3261e; --ok:#1e7a46; --bar:#1f2a37; }
   @media (prefers-color-scheme: dark) { :root { --bg:#12171d; --fg:#e6e9ed; --mut:#9aa4b0; --card:#1b222b; --line:#2c3540; --acc:#6fb0e0; --soft:#1f2f3d; --bad:#f08a80; --ok:#6fcf97; --bar:#0d1116; } }
@@ -60,7 +60,7 @@
     <div class="card">
       <h2>Addresses for phones &amp; other devices</h2>
       <div id="addrs"></div>
-      <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>For the address just above. In the Household Finances phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. Use a home-network address at home, a Tailscale one when you're away.<span id="qrAddr"></span></small></div></div>
+      <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>For the address just above. In the Larenest phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. Use a home-network address at home, a Tailscale one when you're away.<span id="qrAddr"></span></small></div></div>
       <details id="tsGuide"><summary>Use it away from home (optional)</summary>
         <p class="mut" style="margin:8px 0">Tailscale is a free app that links your devices privately, so your phone can reach this computer from anywhere. Nothing is opened to the internet. Each step turns green when it's done.</p>
         <ol id="tsSteps" style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px"></ol>
@@ -147,7 +147,7 @@
   $('tsOpen').addEventListener('click', () => act('tailscale'));
   $('updates').addEventListener('click', () => act('updates'));
   $('setup').addEventListener('click', () => A.hostAction('setup'));
-  $('quit').addEventListener('click', () => { if (confirm('Quit Household Finances? The server stops and other devices can\'t connect until you start it again.')) A.hostAction('quit'); });
+  $('quit').addEventListener('click', () => { if (confirm('Quit Larenest? The server stops and other devices can\'t connect until you start it again.')) A.hostAction('quit'); });
   A.onHostChanged((s) => render(s));
   render(st);
   let last = 'dash'; try { last = localStorage.getItem('fd-hosttab') || 'dash'; } catch (e) {}

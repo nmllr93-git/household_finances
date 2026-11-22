@@ -1,4 +1,4 @@
-// Household Finances desktop app (Electron).
+// Larenest desktop app (Electron).
 // - "This computer" role: runs the finance server in a background process and shows it in a window.
 //   Tray icon: open, allow other devices on/off, start/stop, phone addresses, Tailscale status, start with Windows.
 // - "Connect to another computer" role: opens the connect screen and then that server's pages.
@@ -9,6 +9,8 @@ const fs = require('node:fs');
 const { fork, execFile } = require('node:child_process');
 let autoUpdater = null; try { ({ autoUpdater } = require('electron-updater')); } catch {} // missing only when running from source without npm install
 
+// The app was called "Household Finances" before it became Larenest: keep using that settings folder so nothing is lost.
+{ const old = path.join(app.getPath('appData'), 'Household Finances'); try { if (fs.existsSync(path.join(old, 'desktop.json'))) app.setPath('userData', old); } catch {} }
 const HIDDEN = process.argv.includes('--hidden'); // launched at sign-in: stay in the tray
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
@@ -81,7 +83,7 @@ let awake = null; // a sleeping computer can't serve your phone, so stay awake w
 const keepAwake = () => { const want = INFO.running && S.mode === 'host' && S.keepAwake !== false; if (want && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension'); else if (!want && awake != null) { powerSaveBlocker.stop(awake); awake = null; } };
 async function startServer() {
   INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray(); keepAwake();
-  if (INFO.writable === false && !roWarned) { roWarned = true; dialog.showMessageBox({ type: 'warning', message: "Household Finances can't save to its data folder", detail: INFO.writeHelp + '\n\nYou can also pick a different folder: tray → Change setup.', buttons: ['Open data folder', 'OK'] }).then((r) => { if (r.response === 0) shell.openPath(S.dataDir || defaultDataDir()); }); }
+  if (INFO.writable === false && !roWarned) { roWarned = true; dialog.showMessageBox({ type: 'warning', message: "Larenest can't save to its data folder", detail: INFO.writeHelp + '\n\nYou can also pick a different folder: tray → Change setup.', buttons: ['Open data folder', 'OK'] }).then((r) => { if (r.response === 0) shell.openPath(S.dataDir || defaultDataDir()); }); }
   return INFO;
 }
 async function stopServer() { if (child) { INFO = await call('stop'); keepAwake(); buildTray(); } return INFO; }
@@ -104,7 +106,7 @@ function tailscale() {
 let win = null, tray = null, quitting = false;
 function makeWindow() {
   if (win) return win;
-  win = new BrowserWindow({ width: 1280, height: 860, minWidth: 380, minHeight: 500, show: false, icon: ICON, title: 'Household Finances', backgroundColor: '#1f2a37', autoHideMenuBar: true,
+  win = new BrowserWindow({ width: 1280, height: 860, minWidth: 380, minHeight: 500, show: false, icon: ICON, title: 'Larenest', backgroundColor: '#1f2a37', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true } });
   // the dashboard tab is a <webview>: only allow it to show the local server, and open outside links in the browser
   win.webContents.on('will-attach-webview', (_e, wp, params) => { delete wp.preload; wp.nodeIntegration = false; wp.contextIsolation = true; if (params.src && !/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(params.src)) _e.preventDefault(); });
@@ -122,7 +124,7 @@ async function openDashboard() {
   else if (S.role === 'remote') await (S.remoteUrl ? w.loadURL(S.remoteUrl + '/') : w.loadFile(path.join(__dirname, 'ui', 'connect.html')));
   else {
     try { if (!INFO.running) await startServer(); await w.loadFile(path.join(__dirname, 'ui', 'host.html')); }
-    catch (e) { dialog.showErrorBox('Household Finances', `${e.message}\n\nIf another copy of the server is running (for example your self-hosted one), stop it or pick a different port under Tray → Change setup.`); await w.loadFile(path.join(__dirname, 'ui', 'setup.html')); }
+    catch (e) { dialog.showErrorBox('Larenest', `${e.message}\n\nIf another copy of the server is running (for example your self-hosted one), stop it or pick a different port under Tray → Change setup.`); await w.loadFile(path.join(__dirname, 'ui', 'setup.html')); }
   }
   if (!HIDDEN || !S.role) show();
 }
@@ -131,12 +133,12 @@ async function openDashboard() {
 function buildTray() {
   notifyHost();
   if (S.role !== 'host') { if (tray) { tray.destroy(); tray = null; } return; }
-  if (!tray) { tray = new Tray(nativeImage.createFromPath(TRAY_ICON)); tray.setToolTip('Household Finances'); tray.on('click', show); }
+  if (!tray) { tray = new Tray(nativeImage.createFromPath(TRAY_ICON)); tray.setToolTip('Larenest'); tray.on('click', show); }
   const on = !!INFO.running, others = on && INFO.mode === 'host';
   const addrs = others ? [...(INFO.lan || []), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])] : [];
   const tsItem = !TS.installed ? { label: 'Get Tailscale (to connect away from home)…', click: () => shell.openExternal('https://tailscale.com/download') }
     : { label: TS.on ? `Tailscale: on${TS.name ? ' · ' + TS.name : ''}` : 'Tailscale: off — open Tailscale to turn it on', enabled: !TS.on, click: () => shell.openExternal('https://login.tailscale.com/admin/machines') };
-  tray.setToolTip(`Household Finances · ${on ? (others ? 'hosting for other devices' : 'this computer only') : 'stopped'}`);
+  tray.setToolTip(`Larenest · ${on ? (others ? 'hosting for other devices' : 'this computer only') : 'stopped'}`);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open dashboard', click: () => openDashboard() },
     { type: 'separator' },

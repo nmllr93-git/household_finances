@@ -2682,7 +2682,7 @@
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-qrbox'; host.append(box);
     box.append(rhead('Connect a phone'));
     if (!addrs.length) { box.append(phMsg('Other devices can’t connect yet. On the host computer, turn on “Allow other devices” in Host options, then come back here for a QR code.')); return; }
-    box.append(phMsg('In the Household Finances phone app, tap “Scan QR code” and point it at this code. On an iPhone or any other phone, scan it with the camera to open the dashboard in the browser. The phone must be on the same Wi-Fi (or on Tailscale).'));
+    box.append(phMsg('In the Larenest phone app, tap “Scan QR code” and point it at this code. On an iPhone or any other phone, scan it with the camera to open the dashboard in the browser. The phone must be on the same Wi-Fi (or on Tailscale).'));
     let i = 0; const wrap = document.createElement('div'); wrap.className = 'fd-qr';
     const show = () => { wrap.innerHTML = window.FDQR.svg(addrs[i], 220); const c = document.createElement('code'); c.textContent = addrs[i]; wrap.append(c); };
     show(); box.append(wrap);
@@ -2835,10 +2835,10 @@
     const st0 = { name: 'Personal', shared: false, sharedName: 'Shared household', remind: true };
     const done = async (goImport) => { await L.setKV('onboarded', Date.now()); ov.remove(); if (goImport) { const b = document.querySelector('.fd-navb[data-group=import]'); if (b) b.click(); } };
     const steps = [
-      () => ['Welcome 👋', '<p>Household Finances keeps your budget, accounts and spending <b>only on this phone</b>. No account to create, no server, and nothing is sent to us.</p><p>Let’s set up a few things. It takes about a minute.</p>'],
+      () => ['Welcome 👋', '<p>Larenest keeps your budget, accounts and spending <b>only on this phone</b>. No account to create, no server, and nothing is sent to us.</p><p>Let’s set up a few things. It takes about a minute.</p>'],
       () => ['Name your dashboard', '<p>A dashboard holds one set of accounts and budgets.</p><label class="fd-field">Your dashboard<input id="w-name" maxlength="40"></label><label class="fd-check"><input type="checkbox" id="w-sh"> Also add a shared household dashboard</label><label class="fd-field" id="w-shw" hidden>Shared dashboard name<input id="w-shn" maxlength="40"></label><p class="fd-note">You can rename or add dashboards later under ⚙ Settings.</p>'],
       () => ['Bill reminders', `<p>The app spots recurring bills (rent, phone, streaming…) in your statements. It can remind you before each one is due.</p><label class="fd-check"><input type="checkbox" id="w-rem"> Remind me the day before bills are due</label>${L.notificationsSupported() ? '' : '<p class="fd-note">Reminders work in the Android and iPhone apps.</p>'}`],
-      () => ['Keep a backup', '<p><b>Your data only lives on this phone.</b> If you uninstall the app or clear its storage, it’s gone.</p><p>Every so often, use <b>Download backup</b> (top of the page) to save a backup file to Google Drive, Files or email. You can restore it on any phone, or on a PC running Household Finances.</p>'],
+      () => ['Keep a backup', '<p><b>Your data only lives on this phone.</b> If you uninstall the app or clear its storage, it’s gone.</p><p>Every so often, use <b>Download backup</b> (top of the page) to save a backup file to Google Drive, Files or email. You can restore it on any phone, or on a PC running Larenest.</p>'],
       () => ['You’re set', '<p>Start by importing a statement from your bank (CSV, PDF, OFX or QFX). Or record account balances by hand.</p>'],
     ];
     let i = 0;

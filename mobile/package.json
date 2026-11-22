@@ -2,7 +2,7 @@
   "name": "household-finances-mobile",
   "version": "1.4.4",
   "private": true,
-  "description": "Household Finances for Android (connects to your Household Finances server).",
+  "description": "Larenest for Android (connects to your Larenest server).",
   "scripts": {
     "prepare-www": "node scripts/prepare.js",
     "android:add": "node scripts/prepare.js && npx cap add android && node scripts/android-setup.js",

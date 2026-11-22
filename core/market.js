@@ -1,4 +1,4 @@
-// Household Finances shared market & economy data: quotes, profiles, dividends, holding details,
+// Larenest shared market & economy data: quotes, profiles, dividends, holding details,
 // markets overview, economy (FRED/BLS/EIA/holidays) and vehicles (NHTSA). Used by BOTH the PC server
 // and the phone's phone-only mode, so pacing and caching rules are identical everywhere.
 //

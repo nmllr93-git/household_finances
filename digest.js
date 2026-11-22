@@ -63,7 +63,7 @@ function buildDigest(book, data, now = new Date()) {
   const more = []; if (cash) more.push(`Checking & savings: ${money(cash.total)} (as of ${cash.label})`); if (needs) more.push(`${needs} transaction${needs === 1 ? '' : 's'} still need a category`);
   sec('Also', more);
   const subject = `${book.name}: ${money(weekTotal)} spent this week${bills.length ? ` · ${bills.length} bill${bills.length === 1 ? '' : 's'} coming up` : ''}`;
-  const text = `Household Finances · ${book.name} · ${range}\n${lines.join('\n')}\n`;
+  const text = `Larenest · ${book.name} · ${range}\n${lines.join('\n')}\n`;
   const body = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1f2a37;max-width:560px"><h2 style="margin:0 0 4px;font-size:18px">${esc(book.name)}</h2><div style="color:#5b6675">Week of ${esc(range)}</div>${html.join('')}</div>`;
   return { subject, text, html: body, empty: !txns.length };
 }
@@ -98,7 +98,7 @@ function sendMail(cfg, { to, subject, text, html }) {
       for (const r of [].concat(to)) await cmd(`RCPT TO:<${r}>`, [250, 251]);
       await cmd('DATA', [354]);
       const bnd = 'hf' + Date.now().toString(36);
-      const msg = [`From: Household Finances <${from}>`, `To: ${[].concat(to).join(', ')}`, `Subject: ${hdr(subject)}`, `Date: ${new Date().toUTCString()}`, 'MIME-Version: 1.0',
+      const msg = [`From: Larenest <${from}>`, `To: ${[].concat(to).join(', ')}`, `Subject: ${hdr(subject)}`, `Date: ${new Date().toUTCString()}`, 'MIME-Version: 1.0',
         `Content-Type: multipart/alternative; boundary="${bnd}"`, '', `--${bnd}`, 'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: base64', '', b64(text).replace(/.{76}/g, '$&\r\n'),
         `--${bnd}`, 'Content-Type: text/html; charset=utf-8', 'Content-Transfer-Encoding: base64', '', b64(html).replace(/.{76}/g, '$&\r\n'), `--${bnd}--`, ''].join('\r\n');
       await cmd(msg.replace(/^\./gm, '..') + '\r\n.', [250]);

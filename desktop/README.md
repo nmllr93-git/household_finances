@@ -1,4 +1,4 @@
-# Household Finances — Windows desktop app
+# Larenest — Windows desktop app
 
 One app that runs your finance server and shows the dashboard in its own window, with a tray icon to control hosting.
 
@@ -7,7 +7,7 @@ Needs only what you already have: **Node.js 22.13 or newer** (it includes npm).
 ```
 cd desktop
 npm install        # first time only: downloads Electron + the installer builder (~250 MB, this folder only)
-npm run dist       # makes dist\Household Finances Setup 1.0.0.exe
+npm run dist       # makes dist\Larenest Setup 1.0.0.exe
 ```
 Run the .exe. Windows SmartScreen may warn because it isn't code-signed: **More info → Run anyway**.
 
@@ -43,7 +43,7 @@ The first time you allow other devices, Windows may ask about the firewall for "
 | `ui/setup.html` | First-run setup |
 | `scripts/prepare.js` | Copies the server, pages, Node runtime, connect screen and icons before each build |
 
-Logs: `%APPDATA%\Household Finances\server.log`. App settings: `%APPDATA%\Household Finances\desktop.json` (your finance data is not in there).
+Logs: `%APPDATA%\Larenest\server.log`. App settings: `%APPDATA%\Larenest\desktop.json` (your finance data is not in there).
 
 Not yet included: auto-updates (needs a place to publish releases, e.g. a private GitHub repo) and code signing.
 
