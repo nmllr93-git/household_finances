@@ -68,4 +68,4 @@ jobs:
         run: |
           V=${{ steps.ver.outputs.version }}
           gh release create "android-v$V" "HouseholdFinances-$V.apk" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" \
-            --title "Android $V" --notes "Install: open this page on your phone, download the APK and allow your browser to install apps when asked." --latest=false
+            --title "Android $V" --notes-file <(node scripts/release-notes.js Android "$V") --latest=false

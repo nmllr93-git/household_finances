@@ -1,0 +1,24 @@
+# Copies each CHANGELOG.md section into the matching release's description on the public releases page.
+# Runs when CHANGELOG.md changes on main (so fixing a typo updates the release too), or by hand.
+name: Release notes
+on:
+  push:
+    branches: [main]
+    paths: [CHANGELOG.md, scripts/release-notes.js]
+  workflow_dispatch:
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update release descriptions
+        env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}" }
+        run: |
+          REPO="${GITHUB_REPOSITORY_OWNER}/household_finances-releases"
+          node scripts/release-notes.js --list | while read -r KIND VER; do
+            if [ "$KIND" = "Android" ]; then TAG="android-v$VER"; else TAG="v$VER"; fi
+            if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+              node scripts/release-notes.js "$KIND" "$VER" > notes.md
+              gh release edit "$TAG" --repo "$REPO" --notes-file notes.md && echo "Updated $TAG"
+            else echo "No release $TAG; skipped"; fi
+          done

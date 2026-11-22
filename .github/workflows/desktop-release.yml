@@ -48,4 +48,4 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           V=$(node -p "require('../package.json').version")
-          gh release create "v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" --title "Desktop $V" --notes "Windows desktop app $V" --latest *.exe *.blockmap latest.yml
+          gh release create "v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" --title "Desktop $V" --notes-file <(node ../../scripts/release-notes.js Desktop "$V") --latest *.exe *.blockmap latest.yml
