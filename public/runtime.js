@@ -98,5 +98,9 @@
   window.claude = { use: async (name) => (name === 'db' ? dbShim : null) };
   window.HF = { load, api, schedule, state: S };
 
-  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(schedule, 150); });
+  // Redraw on width changes only: a phone keyboard opening changes the height, and redrawing then would replace the
+  // box being typed in (closing the keyboard). If something is being edited, wait until it loses focus.
+  let rt, lastW = window.innerWidth;
+  const typing = () => { const a = document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox' && a.type !== 'radio'); };
+  window.addEventListener('resize', () => { if (window.innerWidth === lastW) return; clearTimeout(rt); rt = setTimeout(function go() { if (typing()) { document.activeElement.addEventListener('blur', () => { lastW = window.innerWidth; schedule(); }, { once: true }); return; } lastW = window.innerWidth; schedule(); }, 150); });
 })();
