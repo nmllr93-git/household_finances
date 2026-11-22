@@ -8,10 +8,6 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 ### Fixes
 - Host options: each address is labelled (home network or Tailscale), the Tailscale number no longer shows twice, and the QR code opens right under the address it belongs to.
 
-## Android 1.4.5
-
-No changes for Android; released with Desktop 1.0.16.
-
 ## Desktop 1.0.15
 
 ### New
