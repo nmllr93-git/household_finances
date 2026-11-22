@@ -3,6 +3,18 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.13
+
+### Improvements
+- Phones: the section tabs fold into menus (**Overview ▾, Spending ▾, Wealth ▾, More ▾** and ⚙), so the bar fits without scrolling sideways. Computers still show every tab.
+- Phones: rename, add, remove and regroup those menus in ⚙ Settings → **Phone menus** (saved per phone; **Reset to default** restores them).
+- Phones: the budget ring's today/pace markers get a small key under the ring instead of labels that were cut off.
+- The section bar stays below the phone's status bar while scrolling.
+
+## Android 1.4.2
+
+Same changes as Desktop 1.0.13 (phone section menus you can customize, budget ring marker key, section bar below the status bar).
+
 ## Desktop 1.0.12
 
 ### Improvements
