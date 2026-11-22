@@ -1,6 +1,6 @@
 {
   "name": "household-finances-mobile",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "description": "Household Finances for Android (connects to your Household Finances server).",
   "scripts": {

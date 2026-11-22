@@ -3,6 +3,19 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.14
+
+### New
+- **Mac app (test version):** downloads for Intel Macs (`mac-x64.dmg`) and Apple Silicon (`mac-arm64.dmg`), with host, connect-to-a-server and this-Mac-only modes. Needs macOS 12 Monterey or newer. It isn't signed yet: the first time, open it from **System Settings → Privacy & Security → Open Anyway**. While hosting for other devices the Mac stays awake; **Check for updates** opens the download page.
+
+### Improvements
+- Phones: a solid strip behind the status bar, so the page no longer shows through it while scrolling.
+
+## Android 1.4.3
+
+### Improvements
+- A solid strip behind the status bar, so the page no longer shows through it while scrolling.
+
 ## Desktop 1.0.13
 
 ### Improvements
