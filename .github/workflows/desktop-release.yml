@@ -37,8 +37,15 @@ jobs:
       - run: npm install
         if: steps.ver.outputs.new == 'true'
         working-directory: desktop
-      - run: npm run release
+      - run: node scripts/prepare.js && npx electron-builder --win --publish never
         if: steps.ver.outputs.new == 'true'
         working-directory: desktop
+      - name: Publish the installer, blockmap and latest.yml in one step
+        if: steps.ver.outputs.new == 'true'
+        working-directory: desktop/dist
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          V=$(node -p "require('../package.json').version")
+          gh release create "v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" --title "Desktop $V" --notes "Windows desktop app $V" --latest *.exe *.blockmap latest.yml
