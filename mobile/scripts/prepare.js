@@ -23,7 +23,11 @@ fs.writeFileSync(path.join(W, 'index.html'), idx.replace('<head>', '<head>\n' + 
 const reopen = `<script>
   // Reopen the last server automatically (remote mode), unless the user asked to pick (or it just failed).
   (function () { try { var q = new URLSearchParams(location.search), m = localStorage.getItem('fd-mode'), h = JSON.parse(localStorage.getItem('fd-hosts') || '[]')[0];
-    if (m === 'remote' && h && !q.has('pick') && !q.has('failed')) { document.documentElement.style.visibility = 'hidden'; location.replace(h + '/?app=phone'); } } catch (e) {} })();
+    if (m === 'remote' && h && !q.has('pick') && !q.has('failed')) { document.documentElement.style.visibility = 'hidden';
+      // check it answers first; if not, stay here and let the page look for the computer at its new address
+      var c = new AbortController(), t = setTimeout(function () { c.abort(); }, 3500);
+      fetch(h + '/api/ping', { signal: c.signal, cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { clearTimeout(t); if (j && j.app === 'household-finances') location.replace(h + '/?app=phone'); else throw 0; })
+        .catch(function () { window.__fdReopenFailed = h; document.documentElement.style.visibility = ''; if (window.__fdFind) window.__fdFind(h); }); } } catch (e) {} })();
 </script>`;
 let start = fs.readFileSync(path.join(ROOT, 'apps', 'connect.html'), 'utf8').replace('<head>', '<head>\n' + reopen).replace('src="icons/icon-192.png"', 'src="icons/icon-192.png"');
 fs.writeFileSync(path.join(W, 'start.html'), start);

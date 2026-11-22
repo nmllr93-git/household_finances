@@ -313,7 +313,7 @@ async function api(req, res, url) {
   const ip = req.socket.remoteAddress;
 
   // ping: lets the desktop/phone connect screen confirm an address really is this app (no login, no data)
-  if (parts[1] === 'ping') { res.setHeader('Access-Control-Allow-Origin', '*'); return send(res, 200, { app: 'household-finances', version: require('./package.json').version }); }
+  if (parts[1] === 'ping') { res.setHeader('Access-Control-Allow-Origin', '*'); if (!CFG.serverId) { try { saveCfg({ serverId: crypto.randomBytes(9).toString('base64url') }); } catch {} } return send(res, 200, { app: 'household-finances', version: require('./package.json').version, id: CFG.serverId || '', name: os.hostname() }); }
 
   if (parts[1] === 'login' && req.method === 'POST') {
     if (tooMany(ip)) return send(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });

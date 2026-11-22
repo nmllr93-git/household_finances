@@ -53,6 +53,26 @@
   const KEY = 'fd-hosts', $ = (id) => document.getElementById(id), msg = $('msg');
   const list = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
   const save = (u) => { try { localStorage.setItem(KEY, JSON.stringify([u, ...list().filter((x) => x !== u)].slice(0, 5))); } catch {} };
+  // remember which computer each address belongs to, so it can be found again if its address changes
+  const ids = () => { try { return JSON.parse(localStorage.getItem('fd-hostids') || '{}'); } catch { return {}; } };
+  const remember = (u, j) => { try { const m = ids(); if (j && j.id) m[u] = { id: j.id, name: j.name || '' }; localStorage.setItem('fd-hostids', JSON.stringify(m)); } catch {} };
+  const ping = async (u, ms) => { const c = new AbortController(), t = setTimeout(() => c.abort(), ms); try { const r = await fetch(u + '/api/ping', { signal: c.signal, cache: 'no-store' }); const j = await r.json(); return j && j.app === 'household-finances' ? j : null; } catch { return null; } finally { clearTimeout(t); } };
+  // "Find my PC again": home routers sometimes give a computer a new address. Look through the same home network for it.
+  let finding = false;
+  async function find(old) {
+    if (finding) return; const m = /^(https?:\/\/)(\d+)\.(\d+)\.(\d+)\.(\d+)(:\d+)?$/.exec(String(old || '').replace(/\/+$/, ''));
+    if (!m || !(m[2] === '192' || m[2] === '10' || (m[2] === '172' && +m[3] >= 16 && +m[3] <= 31))) return;
+    finding = true; const want = ids()[old.replace(/\/+$/, '')] || {}, port = m[6] || ':8080', pre = `${m[1]}${m[2]}.${m[3]}.${m[4]}.`;
+    say(`Looking for ${want.name || 'your computer'} on this network…`);
+    const found = []; let next = 1;
+    const worker = async () => { while (next <= 254 && !(want.id && found.some((f) => f.j.id === want.id))) { const n = next++; const u = pre + n + port; if (u === old) continue; const j = await ping(u, 1500); if (j) found.push({ u, j }); } };
+    await Promise.all(Array.from({ length: 32 }, worker)); finding = false;
+    const hit = found.find((f) => want.id && f.j.id === want.id) || (!want.id && found.length === 1 ? found[0] : null);
+    if (hit) { say(`Found ${hit.j.name || 'your computer'} at its new address. Opening…`, 'ok'); try { const l = list().filter((x) => x !== old); localStorage.setItem(KEY, JSON.stringify(l)); } catch (e) {} go(hit.u); return; }
+    if (found.length) { say('Found Household Finances on more than one computer. Pick one below.', 'bad'); found.forEach((f) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = `${f.j.name || 'Computer'} · ${f.u.replace(/^https?:\/\//, '')}`; b.addEventListener('click', () => go(f.u)); li.append(b); $('recent').prepend(li); }); return; }
+    say(`Couldn\u2019t find ${want.name || 'your computer'} on this network. Make sure it\u2019s on, the app is running with \u201cAllow other devices\u201d on, and this device is on the same Wi-Fi.`, 'bad');
+  }
+  window.__fdFind = find;
   const norm = (v) => { v = String(v || '').trim().replace(/\/+$/, ''); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'http://' + v; if (!/:\d+$/.test(v.replace(/^https?:\/\//, '')) && !/^https:/i.test(v)) v += ':8080'; return v; };
   const say = (t, c) => { msg.textContent = t; msg.className = c || ''; };
   async function go(raw) {
@@ -63,12 +83,13 @@
       const r = await fetch(u + '/api/ping', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
       const j = await r.json().catch(() => ({}));
       if (j.app !== 'household-finances') { say("Something answered at that address, but it isn't Household Finances. Check the port.", 'bad'); return; }
-      save(u); say('Connected. Opening…', 'ok');
+      save(u); remember(u, j); say('Connected. Opening…', 'ok');
       try { if (window.Capacitor) localStorage.setItem('fd-mode', 'remote'); } catch (e) {}
       if (window.FDApp && FDApp.openHost) FDApp.openHost(u); else location.href = u + (window.Capacitor ? '/?app=phone' : '/');
     } catch (e) {
       clearTimeout(t);
       say("Couldn't reach " + u + '. Check the server is running in host mode, this device is on the same network (or Tailscale is on), and the address and port are right.', 'bad');
+      if (list().includes(u)) find(u);
     }
   }
   $('f').addEventListener('submit', (e) => { e.preventDefault(); go($('u').value); });
@@ -90,7 +111,7 @@
   })();
   // phone app only: phone-only mode
   if (window.Capacitor) { $('localbox').hidden = false; $('golocal').addEventListener('click', () => { try { localStorage.setItem('fd-mode', 'local'); } catch (e) {} location.href = 'index.html'; }); }
-  const failed = new URLSearchParams(location.search).get('failed'); if (failed) say("Couldn't reach " + failed.replace(/\/+$/, '') + '. Is that computer on and running in host mode?', 'bad');
+  const failed = new URLSearchParams(location.search).get('failed') || window.__fdReopenFailed; if (failed) { const f0 = (failed.match(/^https?:\/\/[^/]+/) || [failed])[0]; say("Couldn't reach " + f0 + '. Is that computer on and running in host mode?', 'bad'); find(f0); }
   if (window.FDApp && FDApp.setupAgain && location.protocol === 'file:') { const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = 'Run this computer as the server instead'; b.addEventListener('click', () => FDApp.setupAgain()); document.querySelector('main').append(b); }
   const r = list(); if (r.length) { $('u').value = r[0].replace(/^http:\/\//, '');
     r.forEach((u) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = u.replace(/^https?:\/\//, ''); b.addEventListener('click', () => go(u)); li.append(b); $('recent').append(li); }); }
