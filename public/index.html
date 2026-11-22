@@ -475,8 +475,9 @@
     <div class="fd-split">
       <form class="fd-card" id="fd-import-form" autocomplete="off">
         <input type="hidden" name="book" value="">
-        <h3>Import a transactions CSV</h3>
-        <p class="fd-note">Checking, savings or credit card. Download the CSV from your bank’s website.</p>
+        <h3>Import statements</h3>
+        <p class="fd-note">Checking, savings, credit card, loan or investment statements. Drag files here, or pick them below. With several files, each one is shown in turn so you can check it before saving.</p>
+        <div data-draw="impQueue"></div>
         <div class="fd-row fd-pickrow">
           <div class="fd-field"><span>Account</span><div data-draw="impAcctPick" data-source="accounts balances"></div></div>
           <button class="fd-btn fd-quiet" type="button" id="fd-imp-new" title="Add a new account" aria-label="Add a new account">+</button>
@@ -488,7 +489,7 @@
           <label class="fd-field">Account type<select class="dash-select" name="kind"><optgroup label="Cash"><option value="deposit:checking">Checking</option><option value="deposit:savings">Savings</option><option value="deposit:hysa">High-yield savings</option><option value="deposit:money_market">Money market</option><option value="deposit:cd">CD (certificate of deposit)</option><option value="deposit:cash_mgmt">Cash management</option></optgroup><optgroup label="Credit"><option value="credit:card">Credit card</option><option value="credit:loc">Line of credit</option></optgroup><optgroup label="Loans"><option value="mortgage:mortgage">Mortgage</option><option value="loan:heloc">Home equity (HELOC)</option><option value="loan:auto">Auto loan</option><option value="loan:student">Student loan</option><option value="loan:personal">Personal loan</option><option value="loan:other">Other loan</option></optgroup><optgroup label="Investments"><option value="investment:brokerage">Brokerage</option><option value="investment:401k">401(k)</option><option value="investment:403b">403(b)</option><option value="investment:457b">457(b)</option><option value="investment:roth_ira">Roth IRA</option><option value="investment:trad_ira">Traditional IRA</option><option value="investment:rollover_ira">Rollover IRA</option><option value="investment:sep_ira">SEP / SIMPLE IRA</option><option value="investment:hsa">HSA</option><option value="investment:529">529 college savings</option><option value="investment:pension">Pension</option><option value="investment:crypto">Crypto</option><option value="investment:other">Other investment</option></optgroup></select></label>
         </div>
         <div class="fd-row">
-          <label class="fd-field">Statement file (CSV, PDF, OFX or QFX)<input type="file" name="file" accept=".csv,.txt,text/csv,.pdf,application/pdf,.ofx,.qfx,application/x-ofx"></label>
+          <label class="fd-field">Statement files (CSV, PDF, OFX or QFX). Pick or drop several at once.<input type="file" name="file" multiple accept=".csv,.txt,text/csv,.pdf,application/pdf,.ofx,.qfx,application/x-ofx"></label>
         </div>
         <div data-draw="importPreview"></div>
         <div data-draw="pdfPick"></div>

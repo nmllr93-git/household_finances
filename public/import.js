@@ -254,7 +254,62 @@
   const IMP = ['fd-imp-ok', 'fd-imp-err', 'fd-imp-big', 'fd-imp-none'];
   const BAL = ['fd-bal-ok', 'fd-bal-err', 'fd-bal-miss'];
 
+  // ---- several statements at once: a queue, one file at a time through the normal preview, with the account guessed for each ----
+  const Q = { files: [], i: 0, saved: 0, loading: false, note: '' };
+  const qForm = () => document.getElementById('fd-import-form');
+  const guessAccount = (name, text) => {
+    const form = qForm(); if (!form) return null; const bk = form.elements.book.value;
+    const reg = (dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : []).filter((a) => a.book === bk);
+    const hay = (String(name) + ' ' + String(text || '').slice(0, 6000)).toLowerCase();
+    const digits = new Set((hay.match(/(?:^|[^0-9])(\d{4})(?=[^0-9]|$)/g) || []).map((x) => x.replace(/\D/g, '')));
+    let best = null, score = 0;
+    for (const a of reg) {
+      let sc = 0; const nm = String(a.name || '').toLowerCase();
+      for (const d of (nm.match(/\d{4}/g) || [])) if (digits.has(d)) sc += 5;
+      for (const w of nm.split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['the', 'and', 'account', 'card'].includes(w))) if (hay.includes(w)) sc += 1;
+      if (sc > score) { score = sc; best = a; }
+    }
+    return score >= 2 ? best : null;
+  };
+  const qLoad = (i) => {
+    const form = qForm(), inp = form && form.elements.file; if (!inp || !Q.files[i]) return;
+    Q.i = i; Q.loading = true;
+    try { const dt = new DataTransfer(); dt.items.add(Q.files[i]); inp.files = dt.files; } catch (e) {}
+    inp.dispatchEvent(new Event('change')); Q.loading = false;
+    Q.files[i].text().then((t) => {
+      const a = guessAccount(Q.files[i].name, String(t).startsWith('%PDF') ? '' : t);
+      const pick = document.getElementById('fd-imp-pick');
+      if (a && pick && [...pick.options].some((o) => o.value === a.name)) { pick.value = a.name; pick.dispatchEvent(new Event('change')); Q.note = `Matched to “${a.name}”. Change the account above if that’s wrong.`; }
+      else Q.note = 'Choose which account this file is for.';
+      dash.draw('impQueue');
+    }).catch(() => {});
+    dash.draw('impQueue');
+  };
+  const qNext = () => { if (Q.i + 1 < Q.files.length) qLoad(Q.i + 1); else { const n = Q.saved, tot = Q.files.length; Q.files = []; Q.note = `Done: saved ${n} of ${tot} files.`; dash.draw('impQueue'); } };
+  window.__fdQueueSaved = () => { if (!Q.files.length) return; Q.saved++; setTimeout(qNext, 600); };
+  dash.draw('impQueue', (el) => {
+    el.replaceChildren(); if (!Q.files.length && !Q.note) return;
+    const box = document.createElement('div'); box.className = 'fd-queue';
+    if (Q.files.length) {
+      const t = document.createElement('b'); t.textContent = `File ${Q.i + 1} of ${Q.files.length}: ${Q.files[Q.i].name}`; box.append(t);
+      const ul = document.createElement('ol'); Q.files.forEach((f, k) => { const li = document.createElement('li'); li.textContent = f.name; if (k < Q.i) li.className = 'is-done'; if (k === Q.i) li.className = 'is-on'; ul.append(li); }); box.append(ul);
+    }
+    if (Q.note) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = Q.note; box.append(p); }
+    if (Q.files.length) { const sk = document.createElement('button'); sk.type = 'button'; sk.className = 'fd-btn fd-sm fd-quiet'; sk.textContent = Q.i + 1 < Q.files.length ? 'Skip this file' : 'Skip and finish'; sk.addEventListener('click', qNext);
+      const st = document.createElement('button'); st.type = 'button'; st.className = 'fd-btn fd-sm fd-quiet'; st.textContent = 'Stop'; st.addEventListener('click', () => { Q.files = []; Q.note = ''; dash.draw('impQueue'); }); box.append(sk, ' ', st); }
+    el.append(box);
+  });
+  // drag and drop onto the import form
+  { const form = qForm(); if (form) {
+    ['dragenter', 'dragover'].forEach((ev) => form.addEventListener(ev, (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); form.classList.add('fd-drop'); } }));
+    ['dragleave', 'drop'].forEach((ev) => form.addEventListener(ev, () => form.classList.remove('fd-drop')));
+    form.addEventListener('drop', (e) => { e.preventDefault(); const fs = [...((e.dataTransfer && e.dataTransfer.files) || [])]; if (!fs.length) return;
+      if (fs.length === 1) { try { const dt = new DataTransfer(); dt.items.add(fs[0]); form.elements.file.files = dt.files; } catch (err) {} Q.files = []; Q.note = ''; form.elements.file.dispatchEvent(new Event('change')); dash.draw('impQueue'); return; }
+      Q.files = fs; Q.saved = 0; qLoad(0); });
+  } }
   document.querySelectorAll('#fd-import-form input[name=file]').forEach((inp) => inp.addEventListener('change', () => {
+    if (!Q.loading && inp.files && inp.files.length > 1) { Q.files = [...inp.files]; Q.saved = 0; qLoad(0); return; }
+    if (!Q.loading && Q.files.length && inp.files && inp.files.length === 1 && inp.files[0] !== Q.files[Q.i]) { Q.files = []; Q.note = ''; dash.draw('impQueue'); }
     const f = inp.files && inp.files[0];
     show(IMP, null);
     if (!f) return;
@@ -324,6 +379,7 @@
       await regAcct(db, doc);
       show(IMP, 'fd-imp-ok');
       S.grid = []; S.parsed = []; S.pdf = null; form.reset(); dash.draw('importPreview'); dash.draw('pdfPick');
+      if (window.__fdQueueSaved) window.__fdQueueSaved();
     } catch (e) { show(IMP, 'fd-imp-err'); if (btn) btn.disabled = false; impMsg = 'Save error: ' + String((e && e.message) || e); dash.draw('impDebug'); }
   }));
 
