@@ -350,3 +350,5 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 .fd-mk { display: inline-block; width: 0; height: 12px; border-left: 2px solid var(--color-fg); vertical-align: -1px; margin-right: 3px; }
 .fd-mk-dash { border-left-style: dashed; }
 @media (max-width: 640px) { .fd-pace-lab { display: none; } .fd-mkkey { display: flex; } }
+/* phones: a solid strip behind the status bar so the page doesn't show through it while scrolling */
+body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top, 0px); background: var(--color-bg); z-index: 30; pointer-events: none; }
