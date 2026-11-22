@@ -293,6 +293,32 @@
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   let lastTab = 'all';
+  // Phones: fold the section tabs into a few menus (Overview ▾, Spending ▾, Wealth ▾, More ▾) so the bar fits without sideways scrolling.
+  // Computers keep every tab visible; the menus are hidden there by CSS.
+  {
+    const nav = document.getElementById('fd-nav'), MENUS = [['Overview', ['all', 'overview']], ['Spending', ['expenses', 'budget', 'tx']], ['Wealth', ['accounts', 'planning', 'markets']], ['More', ['review', 'import']]];
+    let open = null;
+    const close = () => { if (open) { open.remove(); open = null; } };
+    const navBtn = (g) => nav.querySelector(`.fd-navb[data-group="${g}"]`);
+    const label = (g) => (navBtn(g) || {}).textContent || g;
+    const groupBtns = MENUS.map(([name, gs]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-navm'; b.dataset.menu = name; b.textContent = name + ' ▾'; b.setAttribute('aria-haspopup', 'menu');
+      b.addEventListener('click', (e) => {
+        e.stopPropagation(); const was = open && open.__for === b; close(); if (was) return;
+        const m = document.createElement('div'); m.className = 'fd-navpop'; m.setAttribute('role', 'menu'); m.__for = b;
+        for (const g of gs) { const src = navBtn(g); if (!src || (g === 'import' && document.body.classList.contains('fd-readonly'))) continue;
+          const it = document.createElement('button'); it.type = 'button'; it.setAttribute('role', 'menuitem'); it.textContent = label(g); if (NP.group === g) it.className = 'is-on';
+          it.addEventListener('click', () => { close(); src.click(); }); m.append(it); }
+        const r = b.getBoundingClientRect(); m.style.top = r.bottom + 'px'; m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 200)) + 'px';
+        document.body.append(m); open = m;
+      });
+      return b;
+    });
+    nav.prepend(...groupBtns);
+    document.addEventListener('click', close); window.addEventListener('scroll', close, { passive: true });
+    const mark = () => { const g = NP.group || 'all'; groupBtns.forEach((b, i) => { const hit = MENUS[i][1].includes(g); b.classList.toggle('is-on', hit); b.textContent = (hit ? label(g).replace(/^⚙\s*/, '') : MENUS[i][0]) + ' ▾'; }); };
+    const orig = showGroup; showGroup = (g) => { orig(g); mark(); }; mark();
+  }
   document.querySelectorAll('.fd-navb').forEach((b) => b.addEventListener('click', () => { const g = b.dataset.group; if (g === 'settings' && NP.group === 'settings') return showGroup(lastTab || 'all'); if (g === 'settings' && NP.group) lastTab = NP.group; showGroup(g); }));
   document.getElementById('fd-nav').addEventListener('click', (e) => {
     if (!e.target.closest('.fd-navb')) return;
@@ -1739,7 +1765,10 @@
     const svg = ring(bs,
       [over ? `${money0(-left)} over` : `${money0(left)} left`, days != null ? `${days} day${days === 1 ? '' : 's'} to go` : `of ${money0(r.available)}`], { size: 150, width: 30, marker: [PART('b-today') ? null : { at: pace, label: 'today' }, PART('b-pace') || r.projected == null ? null : { at: r.projected / r.available, label: r.projected > r.available ? 'pace ›' : 'pace', color: r.projected > r.available ? BAD : OK, dash: true }].filter(Boolean), chart: 'ring-budget', title: `Budget: ${money0(r.spent)} spent of ${money0(r.available)}` });
     const note = document.createElement('p'); note.className = 'fd-sub'; note.textContent = `${money0(r.spent)} of ${money0(r.available)}${r.projected != null && !PART('b-pace') ? ` · on pace for ${money0(r.projected)}` : ''}`;
-    el.append(ringBox(svg, null, [`Budget · ${money0(r.available)}`, bs]), note, tog);
+    const key = document.createElement('p'); key.className = 'fd-sub fd-mkkey'; // phones: a key instead of labels around the ring
+    if (!PART('b-today')) { const k = document.createElement('span'); k.innerHTML = '<i class="fd-mk"></i> today'; key.append(k); }
+    if (!PART('b-pace') && r.projected != null) { const k = document.createElement('span'); k.innerHTML = '<i class="fd-mk fd-mk-dash"></i> pace'; k.style.color = r.projected > r.available ? BAD : OK; k.querySelector('i').style.borderColor = k.style.color; key.append(k); }
+    el.append(ringBox(svg, null, [`Budget · ${money0(r.available)}`, bs]), ...(key.childNodes.length ? [key] : []), note, tog);
   });
 
   // 2. spending by category: trend lines or share ring

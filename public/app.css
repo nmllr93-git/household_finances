@@ -140,7 +140,7 @@ table[data-source="txns"] select.fd-inl { margin-top: 4px; }
 #kpi-cash, #kpi-invest, #kpi-subs { cursor: pointer; } #kpi-subs:hover { border-color: var(--color-fg-muted); }
 .fd-more { margin: 6px 0 0; font-size: 12px; color: var(--color-fg-muted); } .fd-detail { margin-top: 12px; } .fd-detail .fd-row { justify-content: space-between; align-items: center; }
 .fd-detail tr.fd-total td { font-weight: 600; border-top: 2px solid var(--color-border-line); }
-.fd-nav { display: flex; flex-wrap: nowrap; gap: 2px; margin: 0 0 12px; position: sticky; top: 0; z-index: 5; background: var(--color-bg, var(--color-panel)); padding: 0 2px;
+.fd-nav { display: flex; flex-wrap: nowrap; gap: 2px; margin: 0 0 12px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--color-bg, var(--color-panel)); padding: 0 2px;
   border-bottom: 1px solid var(--color-border-line); overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; box-shadow: 0 6px 10px -10px rgba(0,0,0,.35); }
 .fd-nav::-webkit-scrollbar { display: none; }
 .fd-navb { flex: 0 0 auto; font: inherit; font-size: 14px; padding: 11px 12px 9px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--color-fg-muted, inherit); cursor: pointer; white-space: nowrap; }
@@ -331,3 +331,22 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 .hf-login .fd-field { flex: none; }
 .fd-field input[type=password] { background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 8px; }
 .fd-card:has(> .fd-gear) { padding-right: calc(var(--cds-pad-lg) + 14px); } .fd-card > .fd-gear { right: 4px; top: 4px; }
+
+/* section menus (phones only) */
+.fd-navm { display: none; flex: 1 1 auto; font: inherit; font-size: 14px; padding: 11px 6px 9px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--color-fg-muted, inherit); cursor: pointer; white-space: nowrap; }
+.fd-navm.is-on { color: var(--color-fg, inherit); font-weight: 600; border-bottom-color: var(--color-accent, var(--color-fg, #222)); }
+.fd-navpop { position: fixed; z-index: 40; font-family: var(--font-anthropic-sans, system-ui, sans-serif); min-width: 180px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; display: flex; flex-direction: column; }
+.fd-navpop button { font: inherit; font-size: 15px; text-align: left; padding: 11px 12px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.fd-navpop button:hover, .fd-navpop button.is-on { background: color-mix(in srgb, var(--color-fg, #000) 8%, transparent); font-weight: 600; }
+@media (max-width: 640px) {
+  .fd-nav { overflow-x: visible; }
+  .fd-nav .fd-navm { display: block; }
+  .fd-nav .fd-navb:not(.fd-navset) { display: none; }
+  .fd-nav .fd-navset { font-size: 0; padding: 11px 10px 9px; margin-left: 0; } .fd-nav .fd-navset::before { content: '⚙'; font-size: 18px; }
+}
+
+/* budget ring: on phones the today/pace markers get a key under the ring instead of labels that don't fit */
+.fd-mkkey { display: none; gap: 14px; justify-content: center; margin: 2px 0 0; font-size: 12px; }
+.fd-mk { display: inline-block; width: 0; height: 12px; border-left: 2px solid var(--color-fg); vertical-align: -1px; margin-right: 3px; }
+.fd-mk-dash { border-left-style: dashed; }
+@media (max-width: 640px) { .fd-pace-lab { display: none; } .fd-mkkey { display: flex; } }
