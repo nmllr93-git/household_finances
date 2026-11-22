@@ -1,4 +1,4 @@
-# Builds the Windows installer and publishes it to the PUBLIC repo <owner>/household_finances-releases,
+# Builds the Windows installer (and the Mac apps) and publishes them to the PUBLIC repo <owner>/household_finances-releases,
 # which the desktop app's "Check for updates" reads.
 # Runs automatically when desktop/package.json changes on main, but only publishes if that version
 # hasn't been released yet, so bumping "version" is all it takes. Can also be run by hand (Actions → Run workflow).
@@ -7,11 +7,19 @@ on:
   push:
     branches: [release]   # releases happen only when main is pushed to the release branch (when you ask)
   workflow_dispatch:
+    inputs:
+      mac_test:
+        description: Build the Mac apps as a test download (not published)
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   windows:
     runs-on: windows-latest
+    outputs:
+      new: ${{ steps.ver.outputs.new }}
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,3 +58,38 @@ jobs:
           V=$(node -p "require('../package.json').version")
           node ../../scripts/release-notes.js Desktop "$V" > notes.md
           gh release create "v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" --title "Desktop $V" --notes-file notes.md --latest *.exe *.blockmap latest.yml
+
+  # Mac: unsigned for now (first open: System Settings → Privacy & Security → Open Anyway). Two downloads:
+  # Apple Silicon (arm64) and Intel (x64), each with a matching built-in Node. Added to the same release.
+  mac:
+    needs: windows
+    if: needs.windows.outputs.new == 'true' || inputs.mac_test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sed -i '' "s/GITHUB_OWNER/${GITHUB_REPOSITORY_OWNER}/" desktop/package.json
+      - run: npm install
+        working-directory: desktop
+      - name: Build for Apple Silicon
+        working-directory: desktop
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+        run: node scripts/prepare.js && npx electron-builder --mac --arm64 --publish never
+      - name: Build for Intel Macs
+        working-directory: desktop
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+        run: |
+          NV=$(node -v); curl -fsSL "https://nodejs.org/dist/$NV/node-$NV-darwin-x64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          FD_NODE_BIN="$RUNNER_TEMP/node-$NV-darwin-x64/bin/node" node scripts/prepare.js && npx electron-builder --mac --x64 --publish never
+      - name: Keep the Mac test build as a download
+        if: needs.windows.outputs.new != 'true'
+        uses: actions/upload-artifact@v4
+        with: { name: mac-test, path: desktop/dist/*.dmg, retention-days: 7 }
+      - name: Add the Mac files to the release
+        if: needs.windows.outputs.new == 'true'
+        working-directory: desktop/dist
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: gh release upload "v${{ needs.windows.outputs.version }}" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" *.dmg latest-mac.yml

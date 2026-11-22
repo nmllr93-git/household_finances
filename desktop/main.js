@@ -3,7 +3,7 @@
 //   Tray icon: open, allow other devices on/off, start/stop, phone addresses, Tailscale status, start with Windows.
 // - "Connect to another computer" role: opens the connect screen and then that server's pages.
 'use strict';
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, clipboard, powerSaveBlocker } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { fork, execFile } = require('node:child_process');
@@ -77,8 +77,10 @@ function autoRestart(wasRunning) {
   restarts = restarts.filter((t) => Date.now() - t < 60e3); if (restarts.length >= 3) return; restarts.push(Date.now());
   setTimeout(() => { startServer().catch(() => {}); }, 1500);
 }
+let awake = null; // macOS: a sleeping Mac can't serve your phone, so stay awake while other devices may connect
+const keepAwake = () => { if (process.platform !== 'darwin') return; const want = INFO.running && S.mode === 'host'; if (want && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension'); else if (!want && awake != null) { powerSaveBlocker.stop(awake); awake = null; } };
 async function startServer() {
-  INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray();
+  INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray(); keepAwake();
   if (INFO.writable === false && !roWarned) { roWarned = true; dialog.showMessageBox({ type: 'warning', message: "Household Finances can't save to its data folder", detail: INFO.writeHelp + '\n\nYou can also pick a different folder: tray → Change setup.', buttons: ['Open data folder', 'OK'] }).then((r) => { if (r.response === 0) shell.openPath(S.dataDir || defaultDataDir()); }); }
   return INFO;
 }
@@ -144,11 +146,11 @@ function buildTray() {
     { label: 'Allow other devices (phone, other PCs)', type: 'checkbox', checked: S.mode === 'host', click: async (it) => {
         S.mode = it.checked ? 'host' : 'local'; saveSet();
         try { if (child) INFO = await call('setMode', { mode: S.mode, port: S.port }); } catch (e) { dialog.showErrorBox('Change failed', e.message); }
-        buildTray(); if (it.checked) maybeFirewallNote(); } },
+        buildTray(); keepAwake(); if (it.checked) maybeFirewallNote(); } },
     { label: 'Phone & other device addresses', enabled: addrs.length > 0, submenu: addrs.length ? addrs.map((a) => ({ label: `Copy ${a}`, click: () => clipboard.writeText(a) })) : [{ label: 'none', enabled: false }] },
     tsItem,
     { type: 'separator' },
-    { label: 'Start with Windows', type: 'checkbox', checked: !!S.startWithWindows, click: (it) => { S.startWithWindows = it.checked; saveSet(); loginItem(); } },
+    { label: process.platform === 'darwin' ? 'Open at login' : 'Start with Windows', type: 'checkbox', checked: !!S.startWithWindows, click: (it) => { S.startWithWindows = it.checked; saveSet(); loginItem(); } },
     { label: 'Back up now', enabled: on, click: async () => { try { const f = await call('backup'); dialog.showMessageBox({ message: 'Backup saved', detail: f }); } catch (e) { dialog.showErrorBox('Backup failed', e.message); } } },
     { label: 'Open data folder', click: () => shell.openPath(S.dataDir || defaultDataDir()) },
     { label: `Check for updates… (v${app.getVersion()})`, click: () => checkUpdates(true) },
@@ -201,6 +203,7 @@ function setupUpdates() {
   // so an Android release published afterwards can't hide latest.yml.
   try { const pub = require('./package.json').build.publish[0]; autoUpdater.setFeedURL({ provider: 'generic', url: `https://github.com/${pub.owner}/${pub.repo}/releases/latest/download` }); } catch {}
   autoUpdater.on('update-available', async (i) => {
+    if (process.platform === 'darwin') { updBusy = false; const pub = require('./package.json').build.publish[0]; const r = await dialog.showMessageBox({ type: 'info', message: `Version ${i.version} is available`, detail: 'On a Mac, download the new version from the releases page and drag it into Applications (replace the old one). Your data stays where it is.', buttons: ['Open download page', 'Later'] }); if (r.response === 0) shell.openExternal(`https://github.com/${pub.owner}/${pub.repo}/releases/latest`); return; }
     const r = await dialog.showMessageBox({ type: 'info', buttons: ['Download now', 'Later'], defaultId: 0, message: `Version ${i.version} is available`, detail: `You have ${app.getVersion()}.${i.releaseNotes ? '\n\n' + String(i.releaseNotes).replace(/<[^>]+>/g, '').slice(0, 600) : ''}` });
     if (r.response === 0) autoUpdater.downloadUpdate(); else updBusy = false;
   });

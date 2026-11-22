@@ -14,7 +14,7 @@ for (const f of ['server.js', 'digest.js', 'package.json', 'public', 'core']) cp
 const [maj, min] = process.versions.node.split('.').map(Number);
 if (maj < 22 || (maj === 22 && min < 13)) { console.error(`Node ${process.versions.node} is too old; install Node 22.13 or newer (LTS) and run again.`); process.exit(1); }
 rm(path.join(D, 'runtime')); fs.mkdirSync(path.join(D, 'runtime'));
-fs.copyFileSync(process.execPath, path.join(D, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'));
+fs.copyFileSync(process.env.FD_NODE_BIN || process.execPath, path.join(D, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node')); // FD_NODE_BIN: another Node build, e.g. Intel for a Mac x64 package
 if (process.platform !== 'win32') fs.chmodSync(path.join(D, 'runtime', 'node'), 0o755);
 
 // 3. shared screens + icons

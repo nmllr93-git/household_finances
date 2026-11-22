@@ -64,7 +64,24 @@
         "repo": "household_finances-releases",
         "releaseType": "release"
       }
-    ]
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg"
+        },
+        {
+          "target": "zip"
+        }
+      ],
+      "icon": "icons/icon-512.png",
+      "category": "public.app-category.finance",
+      "identity": null,
+      "artifactName": "Household-Finances-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "Household-Finances-${version}-mac-${arch}.${ext}"
+    }
   },
   "dependencies": {
     "electron-updater": "^6.3.0"
