@@ -60,7 +60,7 @@ function spawnServer() {
       else if (m.type === 'reply') { const p = pending.get(m.id); if (p) { pending.delete(m.id); m.ok ? p.res(m.value) : p.rej(new Error(m.value)); } }
     });
     child.on('error', (e) => reject(new Error(`Couldn't start the server: ${e.message}`)));
-    child.on('exit', () => { child = null; ready = null; INFO = { running: false }; for (const p of pending.values()) p.rej(new Error('Server stopped')); pending.clear(); buildTray(); });
+    child.on('exit', () => { const was = INFO.running; child = null; ready = null; INFO = { running: false }; autoRestart(was); for (const p of pending.values()) p.rej(new Error('Server stopped')); pending.clear(); buildTray(); });
   });
   return ready;
 }
@@ -70,6 +70,13 @@ async function call(cmd, extra = {}) {
 }
 const refresh = async () => { try { INFO = await call('info'); } catch { INFO = { running: false }; } buildTray(); return INFO; };
 let roWarned = false;
+// If the server stops on its own (crash, or ended in Task Manager), start it again, up to 3 times a minute.
+let intentional = false, restarts = [];
+function autoRestart(wasRunning) {
+  if (intentional || quitting || !wasRunning || S.role !== 'host') { intentional = false; return; }
+  restarts = restarts.filter((t) => Date.now() - t < 60e3); if (restarts.length >= 3) return; restarts.push(Date.now());
+  setTimeout(() => { startServer().catch(() => {}); }, 1500);
+}
 async function startServer() {
   INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray();
   if (INFO.writable === false && !roWarned) { roWarned = true; dialog.showMessageBox({ type: 'warning', message: "Household Finances can't save to its data folder", detail: INFO.writeHelp + '\n\nYou can also pick a different folder: tray → Change setup.', buttons: ['Open data folder', 'OK'] }).then((r) => { if (r.response === 0) shell.openPath(S.dataDir || defaultDataDir()); }); }
@@ -172,14 +179,14 @@ ipcMain.handle('fd:startHost', async (_e, o) => {
   const dir = o.dataDir || defaultDataDir(), restart = child && (dir !== (S.dataDir || defaultDataDir()));
   S = { ...S, role: 'host', mode: o.mode === 'host' ? 'host' : 'local', port: Number(o.port) || 8080, dataDir: dir === defaultDataDir() ? '' : dir, startWithWindows: !!o.startWithWindows };
   saveSet(); loginItem();
-  if (restart) { await call('quit').catch(() => {}); await new Promise((r) => setTimeout(r, 300)); }
+  if (restart) { (intentional = true, await call('quit').catch(() => {})); await new Promise((r) => setTimeout(r, 300)); }
   if (INFO.running) await stopServer();
   await startServer(); tailscale();
   return { ...INFO, books: await call('books') };
 });
 ipcMain.handle('fd:addUser', (_e, o) => call('addUser', o));
 ipcMain.handle('fd:openDashboard', async () => { await openDashboard(); return true; });
-ipcMain.handle('fd:useRemote', async () => { if (child) await call('quit').catch(() => {}); S.role = 'remote'; saveSet(); buildTray(); await win.loadFile(path.join(__dirname, 'ui', 'connect.html')); });
+ipcMain.handle('fd:useRemote', async () => { if (child) (intentional = true, await call('quit').catch(() => {})); S.role = 'remote'; saveSet(); buildTray(); await win.loadFile(path.join(__dirname, 'ui', 'connect.html')); });
 ipcMain.handle('fd:openHost', async (_e, url) => { S.role = 'remote'; S.remoteUrl = String(url).replace(/\/+$/, ''); saveSet(); await win.loadURL(S.remoteUrl + '/'); });
 ipcMain.handle('fd:setupAgain', async () => { await win.loadFile(path.join(__dirname, 'ui', 'setup.html')); });
 
