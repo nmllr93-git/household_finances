@@ -121,3 +121,11 @@ test('activity log records who added and removed what', async () => {
   assert.equal(log[1].action, 'added a savings goal');
   assert.ok(!log.some((x) => x.coll === 'prefs'), 'settings changes are not logged');
 });
+
+test('SimpleFIN: status, access rules and friendly token errors', async () => {
+  const b2 = books()[1];
+  const g = await req('GET', `/api/books/${b2}/simplefin`); assert.equal(g.status, 200); assert.equal(g.json.connected, false);
+  assert.equal((await req('POST', `/api/books/${b2}/simplefin`, { token: 'x' }, cookieC)).status, 403, 'view-only login cannot connect');
+  assert.equal((await req('GET', `/api/books/${books()[0]}/simplefin`, null, cookieB)).status, 403, 'other people\'s dashboards stay private');
+  const bad = await req('POST', `/api/books/${b2}/simplefin`, { token: 'not-a-token' }); assert.equal(bad.status, 400); assert.match(bad.json.error, /setup token/);
+});

@@ -2431,6 +2431,65 @@
     box.append(rbtn('Save sending account', async () => { try { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp: { host: h.value, port: Number(pt.value), user: u.value, pass: pw.value, from: fr.value } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error); DIG = null; m2.className = 'fd-note fd-good'; m2.textContent = 'Saved. Use "Send me one now" to test it.'; } catch (e) { m2.className = 'fd-note fd-bad'; m2.textContent = e.message || 'Not saved'; } }), m2);
   };
 
+  // ⚙ Settings → Automatic bank sync (SimpleFIN Bridge: the user subscribes there; we only keep its read-only access link)
+  const KIND_NAMES = { 'deposit:checking': 'Checking', 'deposit:savings': 'Savings', 'deposit:hysa': 'High-yield savings', 'deposit:money_market': 'Money market', 'deposit:cd': 'CD', 'deposit:cash_mgmt': 'Cash management',
+    'credit:card': 'Credit card', 'credit:loc': 'Line of credit', 'mortgage:mortgage': 'Mortgage', 'loan:heloc': 'Home equity (HELOC)', 'loan:auto': 'Auto loan', 'loan:student': 'Student loan', 'loan:personal': 'Personal loan', 'loan:other': 'Other loan',
+    'investment:brokerage': 'Brokerage', 'investment:401k': '401(k)', 'investment:403b': '403(b)', 'investment:457b': '457(b)', 'investment:roth_ira': 'Roth IRA', 'investment:trad_ira': 'Traditional IRA', 'investment:rollover_ira': 'Rollover IRA',
+    'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment' };
+  const syncBox = async (host) => {
+    const tok = {}; host.__sync = tok; const bid = myBookId(); if (!bid) return;
+    const url = `/api/books/${encodeURIComponent(bid)}/simplefin`;
+    const call = async (path, method, body) => { const r = await FDStore.fetch(url + path, method ? { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined } : {}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; };
+    let st; try { st = await call(''); } catch (e) { return; }
+    if (host.__sync !== tok || host.querySelector('.fd-syncbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-syncbox'; host.append(box);
+    const ro = document.body.classList.contains('fd-readonly');
+    const draw = () => {
+      box.textContent = ''; box.append(rhead('Automatic bank sync (SimpleFIN)'));
+      const msg = phMsg('');
+      if (!st.connected) {
+        box.append(phMsg('Pull balances and new transactions from your banks automatically, instead of importing statements. It uses SimpleFIN Bridge, a separate read-only service you subscribe to yourself (about $15 a year). Your bank passwords go to SimpleFIN, never to this app, and nothing passes through us.'));
+        const ol = document.createElement('ol'); ol.className = 'fd-note';
+        for (const t of ['Sign up at SimpleFIN Bridge (link below) and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect, then check the account names and types.'])
+          { const li = document.createElement('li'); li.textContent = t; ol.append(li); }
+        const a = document.createElement('a'); a.href = 'https://beta-bridge.simplefin.org/'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open SimpleFIN Bridge ↗';
+        box.append(ol, a);
+        if (ro) { box.append(phMsg('This login can view this dashboard but not connect a bank.')); return; }
+        const r = document.createElement('div'); r.className = 'fd-rb-row';
+        const inp = document.createElement('input'); inp.className = 'fd-in'; inp.placeholder = 'Paste the setup token'; inp.autocomplete = 'off'; inp.spellcheck = false;
+        r.append(inp, rbtn('Connect', async () => { msg.className = 'fd-note'; msg.textContent = 'Connecting…'; try { st = await call('', 'POST', { token: inp.value.trim() }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
+        box.append(r, msg); return;
+      }
+      const when = st.lastSync ? new Date(st.lastSync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'not yet';
+      box.append(phMsg(`Connected. Last sync: ${when}. New posted transactions are added about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}; pending ones wait until they post. Rules, categories and duplicate checks work the same as for imported statements.`));
+      if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
+      for (const n of st.notes || []) box.append(phMsg('SimpleFIN: ' + n));
+      const draft = {};
+      const tb = document.createElement('table'); tb.className = 'fd-table';
+      const hr = document.createElement('tr'); for (const h of ['Bank account', 'Show it as', 'Type', 'Sync']) { const th = document.createElement('th'); th.textContent = h; hr.append(th); } tb.append(hr);
+      for (const a of st.accounts) {
+        const d = draft[a.id] = { map: a.map, kind: a.kind, skip: a.skip }, tr = document.createElement('tr');
+        const c1 = document.createElement('td'); c1.textContent = (a.org ? a.org + ' · ' : '') + a.name;
+        const nm = document.createElement('input'); nm.className = 'fd-in'; nm.value = a.map; nm.disabled = ro; nm.addEventListener('input', () => { d.map = nm.value; });
+        const kd = document.createElement('select'); kd.className = 'dash-select'; kd.disabled = ro; for (const k of st.kinds) kd.append(new Option(KIND_NAMES[k] || k, k)); kd.value = a.kind; kd.addEventListener('change', () => { d.kind = kd.value; });
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !a.skip; cb.disabled = ro; cb.addEventListener('change', () => { d.skip = !cb.checked; });
+        const c2 = document.createElement('td'), c3 = document.createElement('td'), c4 = document.createElement('td'); c2.append(nm); c3.append(kd); c4.append(cb); tr.append(c1, c2, c3, c4); tb.append(tr);
+      }
+      const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); box.append(sc);
+      box.append(phMsg('Tip: use the same name as an account you already import statements for, so its history lines up and nothing is counted twice.'));
+      if (ro) return;
+      const btns = document.createElement('div'); btns.className = 'fd-rb-row';
+      btns.append(
+        rbtn('Save accounts', async () => { try { st = await call('', 'POST', { accounts: draft }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
+        rbtn('Sync now', async () => { msg.className = 'fd-note'; msg.textContent = 'Syncing…'; try { await call('', 'POST', { accounts: draft }); const j = await call('/sync', 'POST'); st = j; draw();
+          const m = box.querySelector('.fd-sync-msg'); if (m) { m.className = 'fd-note fd-good fd-sync-msg'; m.textContent = j.added ? `Added ${j.added} new transaction${j.added === 1 ? '' : 's'}.` : 'Up to date; no new transactions.'; }
+          if (window.HF && window.HF.state && window.HF.state.bookId) window.HF.load(window.HF.state.bookId); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
+        rbtn('Disconnect', async () => { if (!confirm('Disconnect SimpleFIN from this dashboard? Transactions already added stay.')) return; try { await call('', 'DELETE'); st = await call(''); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
+      msg.classList.add('fd-sync-msg'); box.append(btns, msg);
+    };
+    draw();
+  };
+
   // ⚙ Settings → Recent changes (who changed what on this dashboard)
   const activityBox = async (host) => {
     if (window.FD_LOCAL || host.querySelector('.fd-actbox')) return; const tok = {}; host.__act = tok;
@@ -2752,6 +2811,7 @@
     apiBox(el);
     phoneBox(el).catch(() => {});
     emailBox(el).catch(() => {});
+    syncBox(el).catch(() => {});
     activityBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {
       const bk = document.createElement('div'); bk.className = 'fd-rb fd-backup'; bk.append(rhead('Backup & restore'));

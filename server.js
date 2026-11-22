@@ -182,7 +182,7 @@ const cookie = (req, v, maxAge) => `hf_session=${v}; Path=/; HttpOnly; SameSite=
 // Dashboard data rules (validation, load, save, export, restore) live in core/books.js, shared with the phone app.
 const CORE = require('./core/books.js');
 const { cleanDoc } = CORE;
-const BOOKS = CORE.createBookApi({
+const BOOKS_STORE = {
   seedRows: (bookId) => db.prepare('SELECT dataset, json FROM seed WHERE book_id = ?').all(bookId),
   listDocs: (bookId, coll) => db.prepare('SELECT id, json, created, created_by FROM docs WHERE book_id = ? AND coll = ? ORDER BY created').all(bookId, coll),
   insertDoc: (r) => db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, r.json, r.created, r.createdBy),
@@ -201,7 +201,8 @@ const BOOKS = CORE.createBookApi({
   listFiles: (bookId) => db.prepare('SELECT id, mime, data FROM files WHERE book_id = ?').all(bookId).map((r) => ({ id: r.id, mime: r.mime, data: Buffer.from(r.data).toString('base64') })),
   replaceBookFiles: (bookId, files) => { db.exec('BEGIN'); try { db.prepare('DELETE FROM files WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
     for (const f of files) ins.run(f.id, bookId, f.mime, Buffer.from(f.data, 'base64'), new Date().toISOString(), ''); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } },
-});
+};
+const BOOKS = CORE.createBookApi(BOOKS_STORE);
 
 // ---------- API ----------
 // ---- stock quotes: Finnhub and/or Financial Modeling Prep when keys are set, otherwise Stooq (no key) ----
@@ -229,6 +230,19 @@ const MARKET = require('./core/market.js').createMarketData({
   load: (name) => { try { return JSON.parse(fs.readFileSync(cacheFile(name), 'utf8')); } catch { return null; } },
   save: (name, obj) => { try { fs.writeFileSync(cacheFile(name), JSON.stringify(obj)); } catch {} },
 });
+
+// ---------- SimpleFIN bank sync (core/simplefin.js); connections live in data/simplefin.json, not in the database or backups ----------
+const SF_FILE = path.join(DATA_DIR, 'simplefin.json');
+const sfAll = () => { try { return JSON.parse(fs.readFileSync(SF_FILE, 'utf8')) || {}; } catch { return {}; } };
+const SIMPLEFIN = require('./core/simplefin.js').createSimpleFin({
+  request: async (method, url, headers) => { const r = await fetch(url, { method, headers: { 'User-Agent': 'household-finance', ...headers }, signal: AbortSignal.timeout(60000) }); return { status: r.status, text: await r.text() }; },
+  load: (id) => sfAll()[id] || null,
+  save: (id, st) => { const a = sfAll(); if (st) a[id] = st; else delete a[id]; fs.writeFileSync(SF_FILE, JSON.stringify(a)); try { fs.chmodSync(SF_FILE, 0o600); } catch {} },
+  bookData: (id) => { const p = (r) => { try { return JSON.parse(r.json); } catch { return {}; } }; return { imports: BOOKS_STORE.listDocs(id, 'imports').map(p), accounts: BOOKS_STORE.listDocs(id, 'accounts').map(p) }; },
+  addDoc: async (id, coll, doc) => { const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(id); const r = await BOOKS.handle('POST', [coll], book, async () => doc, 'SimpleFIN');
+    try { logActivity('SimpleFIN', id, 'POST', coll, r, null); } catch {} },
+});
+const sfSyncAll = () => SIMPLEFIN.syncAll(Object.keys(sfAll())).catch(() => {});
 
 // ---------- activity log: who changed what on each dashboard (settings, colors and shared balances aren't logged) ----------
 const ACT_SKIP = new Set(['prefs', 'shares', 'files']);
@@ -375,6 +389,7 @@ async function api(req, res, url) {
     if (parts[3] === 'activity' && req.method === 'GET') return send(res, 200, db.prepare('SELECT at, username, action, coll, summary FROM activity WHERE book_id = ? ORDER BY at DESC LIMIT 300').all(bookId));
     const writing = req.method !== 'GET';
     if (writing && roleOf(user, bookId) === 'view' && parts[3] !== 'shares') return send(res, 403, { error: 'This login can view this dashboard but not change it.' });
+    if (parts[3] === 'simplefin') { const r = await SIMPLEFIN.handle(req.method, parts.slice(4), bookId, getBody); return send(res, r.status, r.body); }
     const before = req.method === 'DELETE' && parts[4] ? db.prepare('SELECT json FROM docs WHERE id = ? AND book_id = ?').get(parts[4], bookId) : null;
     let r; try { r = await BOOKS.handle(req.method, parts.slice(3), book, getBody, user); } catch (e) { if (e.code >= 400 && e.code < 500) return send(res, e.code, { error: e.message }); throw e; }
     if (writing && r.status < 300) { try { logActivity(user, bookId, req.method, parts[3], r, before); } catch {} }
@@ -434,7 +449,7 @@ function start(opts = {}) {
   try { const last = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort().pop();
     if (!last || Date.now() - fs.statSync(path.join(BACKUP_DIR, last)).mtimeMs > 864e5) backup(); } catch (e) { console.error('Backup skipped:', e.code || e.message); }
   if (!BTIMER) BTIMER = setInterval(() => { try { backup(); } catch (e) { console.error('Backup failed', e); } }, 864e5);
-  if (!DTIMER) { DTIMER = setInterval(() => { checkDigests().catch(() => {}); }, 15 * 60e3); if (DTIMER.unref) DTIMER.unref(); }
+  if (!DTIMER) { DTIMER = setInterval(() => { checkDigests().catch(() => {}); sfSyncAll(); }, 15 * 60e3); setTimeout(sfSyncAll, 60e3).unref?.(); if (DTIMER.unref) DTIMER.unref(); }
   return ready;
 }
 

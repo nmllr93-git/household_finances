@@ -86,6 +86,20 @@
     keys: () => ({ finnhub: KEYMEM.finnhub || '', fmp: KEYMEM.fmp || '', fred: KEYMEM.fred || '', bls: KEYMEM.bls || '', eia: KEYMEM.eia || '' }),
     keyNote: () => 'Add keys under \u2699 Settings \u2192 Data sources.',
     load: (name) => kvGet('mc-' + name), save: (name, o) => kvSet('mc-' + name, o) }); });
+  // ---------- SimpleFIN bank sync: same shared code as the PC server; the connection stays on this phone (not in backups) ----------
+  const rawHttp = async (method, url, headers) => {
+    const P = window.Capacitor && window.Capacitor.Plugins, H = P && P.CapacitorHttp;
+    if (H) { const r = await H.request({ method, url, headers, responseType: 'text', connectTimeout: 15000, readTimeout: 60000 }); return { status: r.status, text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data) }; }
+    const r = await fetch(url, { method, headers }); return { status: r.status, text: await r.text() };
+  };
+  const sfReady = new Promise((res, rej) => {
+    if (window.FDSimpleFin) return res(window.FDSimpleFin);
+    const s = document.createElement('script'); s.src = 'core-simplefin.js'; s.onload = () => res(window.FDSimpleFin); s.onerror = () => rej(new Error('core-simplefin.js is missing')); document.head.append(s);
+  }).then(async (SF) => { const core = await coreReady, api = core.createBookApi(store), parse = (r) => { try { return JSON.parse(r.json); } catch { return {}; } };
+    return SF.createSimpleFin({ request: rawHttp, load: async (id) => (await kvGet('sf-' + id)) || null, save: (id, st) => kvSet('sf-' + id, st || null),
+      bookData: async (id) => ({ imports: (await store.listDocs(id, 'imports')).map(parse), accounts: (await store.listDocs(id, 'accounts')).map(parse) }),
+      addDoc: async (id, coll, doc) => { const b = (await books()).find((x) => x.id === id); if (b) await api.handle('POST', [coll], b, async () => doc, 'SimpleFIN'); } }); });
+  setTimeout(() => { sfReady.then(async (sf) => sf.syncAll((await books()).map((b) => b.id))).catch(() => {}); }, 5000);
   const SYM = /^[A-Z0-9.\-^]{1,12}$/;
   const symList = (url, max) => [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => SYM.test(x)))].slice(0, max);
   const mask = (v) => (v ? '••••' + String(v).slice(-4) : '');
@@ -117,6 +131,7 @@
         const book = (await books()).find((b) => b.id === parts[2]);
         if (!book) return json(403, { error: 'No such budget on this phone' });
         if (parts[3] === 'shares-list') return json(200, []);
+        if (parts[3] === 'simplefin') { const r = await (await sfReady).handle(method, parts.slice(4), book.id, body); return json(r.status, r.body); }
         const core = await coreReady, api = core.createBookApi(store);
         const r = await api.handle(method, parts.slice(3), book, body, 'me');
         if (parts[3] === 'data' && r.status === 200) dailyBackup().catch(() => {});

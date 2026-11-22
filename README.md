@@ -439,6 +439,23 @@ Keys are stored only on the host. Calls are cached and paced to stay within the 
 
 ---
 
+## Automatic bank sync (SimpleFIN, optional)
+
+Instead of importing statements you can let the app pull balances and new transactions from your banks. It uses **SimpleFIN Bridge**, a separate read-only service that you subscribe to yourself (about $15 a year, paid to SimpleFIN). Your bank logins go to SimpleFIN, never to this app.
+
+1. Sign up at https://beta-bridge.simplefin.org and connect your banks there.
+2. In SimpleFIN Bridge, create a **setup token** and copy it.
+3. In the app open **⚙ Settings → Automatic bank sync**, paste the token and press **Connect**. Each dashboard has its own connection.
+4. Check each bank account's name and type. Use the same name as an account you already import statements for, so the history lines up. Untick any account you don't want here (for example, your partner's accounts in your personal dashboard).
+5. Press **Sync now**. After that it syncs about every 6 hours (on the phone in phone-only mode: when the app is open).
+
+Good to know:
+- Only **posted** transactions are added; pending ones wait until they post, so nothing is counted twice.
+- Transactions that match a statement you already imported (same date, amount and description) are skipped.
+- Credit card, loan and mortgage balances are saved as amounts owed.
+- The connection link is stored in `simplefin.json` in the data folder (on the phone: on the phone only). It is **not** included in backups or exports. Treat that file like a password; delete the connection with **Disconnect** or revoke it in SimpleFIN Bridge.
+- SimpleFIN allows about 24 checks a day, so **Sync now** can be used once every 15 minutes.
+
 ## Maintenance
 
 ### Backups
