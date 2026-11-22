@@ -51,7 +51,9 @@
       <h2>Server</h2>
       <div class="row"><div><b id="srvState">…</b><small id="srvSub"></small></div><button class="b" id="startStop" type="button">…</button></div>
       <div class="row"><div>Allow other devices<small>Phones and other PCs on your network or Tailscale can sign in. Off = this computer only.</small></div><label class="sw"><input type="checkbox" id="mode"><span></span></label></div>
-      <div class="row"><div>Start with Windows<small>Starts quietly in the background when you sign in.</small></div><label class="sw"><input type="checkbox" id="sww"><span></span></label></div>
+      <div class="row"><div>Keep this computer awake while hosting<small id="awakeSub">Stops the computer from going to sleep while other devices can connect. Closing a laptop's lid can still put it to sleep.</small></div><label class="sw"><input type="checkbox" id="awake"><span></span></label></div>
+      <div class="row"><div><b id="sleepState">Sleep setting</b><small id="sleepSub"></small></div><button class="q" id="sleepOpen" type="button">Open sleep settings</button></div>
+      <div class="row"><div><span id="swwLabel">Start with Windows</span><small>Starts quietly in the background when you sign in.</small></div><label class="sw"><input type="checkbox" id="sww"><span></span></label></div>
     </div>
     <div class="card">
       <h2>Addresses for phones &amp; other devices</h2>
@@ -88,6 +90,11 @@
     $('srvSub').textContent = s.running ? (others ? 'Other devices can connect.' : 'Only this computer can open it.') : 'Nobody can open the dashboard until you start it.';
     $('startStop').textContent = s.running ? 'Stop server' : 'Start server';
     $('mode').checked = s.mode === 'host'; $('sww').checked = s.startWithWindows;
+    $('awake').checked = s.keepAwake; if (s.platform === 'darwin') $('swwLabel').textContent = 'Open at login';
+    { const sl = s.sleep || {}, mins = sl.pluggedMin, never = mins === 0;
+      $('sleepState').textContent = !sl.known || mins == null ? 'Sleep setting' : never ? 'Sleep: never (good for hosting)' : `Sleep: after ${mins} minute${mins === 1 ? '' : 's'}${s.platform === 'win32' ? ' when plugged in' : ''}`;
+      $('sleepSub').textContent = !sl.known || mins == null ? 'Check that this computer doesn\u2019t go to sleep, so phones can always reach it.' : never ? 'This computer stays on, so other devices can always connect.'
+        : s.keepAwake && s.running && s.mode === 'host' ? 'The app keeps it awake while hosting, so this is fine. For extra safety, set it to Never.' : 'While it sleeps, phones and other devices can\u2019t connect. Set it to Never, or turn on \u201cKeep this computer awake\u201d above.'; }
     $('dir').textContent = s.dataDir; $('ver').textContent = s.version; $('backup').disabled = !s.running;
     $('warn').hidden = s.writable; $('warn').textContent = s.writeHelp || '';
     const box = $('addrs'); box.replaceChildren();
@@ -104,6 +111,8 @@
   $('startStop').addEventListener('click', () => act(st.running ? 'stop' : 'start'));
   $('mode').addEventListener('change', (e) => act('mode', e.target.checked));
   $('sww').addEventListener('change', (e) => act('startWithWindows', e.target.checked));
+  $('awake').addEventListener('change', (e) => act('keepAwake', e.target.checked));
+  $('sleepOpen').addEventListener('click', () => act('sleepSettings'));
   $('openData').addEventListener('click', () => act('openData'));
   $('backup').addEventListener('click', async () => { say('Backing up…'); try { const f = await A.hostAction('backup'); say('Backup saved: ' + f, 'ok'); } catch (e) { say('Backup failed: ' + (e.message || e), 'bad'); } });
   $('tsRefresh').addEventListener('click', () => act('refreshTs'));

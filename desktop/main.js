@@ -60,7 +60,7 @@ function spawnServer() {
       else if (m.type === 'reply') { const p = pending.get(m.id); if (p) { pending.delete(m.id); m.ok ? p.res(m.value) : p.rej(new Error(m.value)); } }
     });
     child.on('error', (e) => reject(new Error(`Couldn't start the server: ${e.message}`)));
-    child.on('exit', () => { const was = INFO.running; child = null; ready = null; INFO = { running: false }; autoRestart(was); for (const p of pending.values()) p.rej(new Error('Server stopped')); pending.clear(); buildTray(); });
+    child.on('exit', () => { const was = INFO.running; child = null; ready = null; INFO = { running: false }; keepAwake(); autoRestart(was); for (const p of pending.values()) p.rej(new Error('Server stopped')); pending.clear(); buildTray(); });
   });
   return ready;
 }
@@ -77,14 +77,14 @@ function autoRestart(wasRunning) {
   restarts = restarts.filter((t) => Date.now() - t < 60e3); if (restarts.length >= 3) return; restarts.push(Date.now());
   setTimeout(() => { startServer().catch(() => {}); }, 1500);
 }
-let awake = null; // macOS: a sleeping Mac can't serve your phone, so stay awake while other devices may connect
-const keepAwake = () => { if (process.platform !== 'darwin') return; const want = INFO.running && S.mode === 'host'; if (want && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension'); else if (!want && awake != null) { powerSaveBlocker.stop(awake); awake = null; } };
+let awake = null; // a sleeping computer can't serve your phone, so stay awake while other devices may connect (Host options can turn this off)
+const keepAwake = () => { const want = INFO.running && S.mode === 'host' && S.keepAwake !== false; if (want && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension'); else if (!want && awake != null) { powerSaveBlocker.stop(awake); awake = null; } };
 async function startServer() {
   INFO = await call('start', { opts: { mode: S.mode, port: S.port } }); buildTray(); keepAwake();
   if (INFO.writable === false && !roWarned) { roWarned = true; dialog.showMessageBox({ type: 'warning', message: "Household Finances can't save to its data folder", detail: INFO.writeHelp + '\n\nYou can also pick a different folder: tray → Change setup.', buttons: ['Open data folder', 'OK'] }).then((r) => { if (r.response === 0) shell.openPath(S.dataDir || defaultDataDir()); }); }
   return INFO;
 }
-async function stopServer() { if (child) { INFO = await call('stop'); buildTray(); } return INFO; }
+async function stopServer() { if (child) { INFO = await call('stop'); keepAwake(); buildTray(); } return INFO; }
 
 // ---------- Tailscale (status only; turning it on/off is done in Tailscale itself) ----------
 let TS = { installed: false };
@@ -223,20 +223,36 @@ function checkUpdates(manual) {
 }
 ipcMain.handle('fd:checkUpdates', () => checkUpdates(true));
 
+// ---------- the computer's own sleep setting (shown in Host options, with a button to its settings page) ----------
+let SLEEP = { known: false };
+function readSleep() {
+  const { execFile } = require('node:child_process');
+  const done = (o) => { SLEEP = { known: true, ...o }; notifyHost(); };
+  try {
+    if (process.platform === 'win32') execFile('powercfg', ['/query', 'SCHEME_CURRENT', 'SUB_SLEEP', 'STANDBYIDLE'], { timeout: 5000, windowsHide: true }, (e, out) => {
+      if (e) return; const ac = /Current AC Power Setting Index:\s*0x([0-9a-f]+)/i.exec(out), dc = /Current DC Power Setting Index:\s*0x([0-9a-f]+)/i.exec(out);
+      done({ pluggedMin: ac ? Math.round(parseInt(ac[1], 16) / 60) : null, batteryMin: dc ? Math.round(parseInt(dc[1], 16) / 60) : null }); });
+    else if (process.platform === 'darwin') execFile('pmset', ['-g'], { timeout: 5000 }, (e, out) => { if (e) return; const m = /^\s*sleep\s+(\d+)/m.exec(out); done({ pluggedMin: m ? Number(m[1]) : null, batteryMin: null }); });
+  } catch {}
+}
+const openSleepSettings = () => shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.Lock-Screen-Settings.extension' : 'ms-settings:powersleep');
+
 // ---------- host options tab (same controls as the tray, for remote desktops / virtual displays) ----------
 const hostState = () => {
   const on = !!INFO.running, others = on && INFO.mode === 'host';
-  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
+  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
     addrs: others ? [...(INFO.lan || []), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])] : [], ts: TS };
 };
 const notifyHost = () => { try { if (win && !win.isDestroyed()) win.webContents.send('fd:hostChanged', hostState()); } catch {} };
-ipcMain.handle('fd:hostState', () => hostState());
+ipcMain.handle('fd:hostState', () => { readSleep(); return hostState(); });
 ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
   switch (act) {
     case 'start': await startServer(); break;
     case 'stop': await stopServer(); break;
     case 'mode': S.mode = arg ? 'host' : 'local'; saveSet(); if (child) INFO = await call('setMode', { mode: S.mode, port: S.port }); buildTray(); if (arg) maybeFirewallNote(); break;
     case 'startWithWindows': S.startWithWindows = !!arg; saveSet(); loginItem(); buildTray(); break;
+    case 'keepAwake': S.keepAwake = !!arg; saveSet(); keepAwake(); break;
+    case 'sleepSettings': openSleepSettings(); setTimeout(readSleep, 15000); break;
     case 'backup': return call('backup');
     case 'openData': shell.openPath(S.dataDir || defaultDataDir()); break;
     case 'copy': clipboard.writeText(String(arg || '')); break;
