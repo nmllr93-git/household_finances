@@ -3355,7 +3355,8 @@
     if (!list.length) return;
     const KN = { deposit: 'Checking & savings', investment: 'Investments & retirement', asset: 'Home, vehicles & other', credit: 'Credit cards', mortgage: 'Mortgage', loan: 'Loans' };
     const own = acctList(), ownAssets = prefGet('assets', []) || [];
-    const dups = list.filter((d) => (d.kind === 'asset' ? ownAssets.some((a) => keyA(a.name) === keyA(d.name)) : own.some((a) => keyA(a.name) === keyA(d.name))));
+    const ign = prefGet('dupIgnore', []) || [];
+    const dups = list.filter((d) => !ign.includes(d.key) && (d.kind === 'asset' ? ownAssets.some((a) => keyA(a.name) === keyA(d.name)) : own.some((a) => keyA(a.name) === keyA(d.name))));
     if (dups.length) {
       const w = document.createElement('div'); w.className = 'fd-rb fd-dup';
       const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = `Possible duplicates: ${dups.length} shared ${dups.length === 1 ? 'value is' : 'values are'} also entered on this dashboard, so ${dups.length === 1 ? 'it' : 'they'} may be counted twice.`; w.append(h);
@@ -3368,7 +3369,11 @@
             if (d.kind === 'asset') { await prefSet('assets', ownAssets.filter((a) => keyA(a.name) !== keyA(d.name))); }
             else { const a = own.find((x) => keyA(x.name) === keyA(d.name)); const k = keyA(a.reg ? a.reg.match || a.reg.name : a.name);
               for (const b of rows('imports').filter((b) => b.book === book() && keyA(b.accountName) === k && !(b.txns || []).length)) await db0.doc('data/household/imports/' + b.id).delete();
-              if (a.reg) await db0.doc('data/household/accounts/' + a.reg.id).delete(); }
+              if (a.reg) await db0.doc('data/household/accounts/' + a.reg.id).delete();
+              // transactions imported here stay (they're spending, not a balance); stop flagging this pair
+              const left = rows('imports').some((b) => b.book === book() && keyA(b.accountName) === k && (b.txns || []).length);
+              await prefSet('dupIgnore', [...(prefGet('dupIgnore', []) || []), d.key]);
+              if (left) alert('Removed this dashboard’s balances for ' + d.name + '. Its imported transactions were kept so your spending history stays; the shared balance is now the one counted.'); }
           } catch { rm.disabled = false; rm.textContent = 'Couldn’t remove'; }
         });
         const keep = rbtn('Keep both', async () => { const ig = prefGet('dupIgnore', []) || []; await prefSet('dupIgnore', [...ig, d.key]); });
