@@ -3,6 +3,21 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.18
+
+### New
+- **Sync now feedback:** the button shows "Syncing…" while it works, then "✓ Synced" with the finish time and how many transactions were added (or why it failed).
+- **Net worth shows its math:** the dashboard card reads "owned − owed", and the Accounts table breaks it down (accounts, home and vehicles, shared values). It warns if a home is counted but no mortgage is on that dashboard.
+
+### Fixes
+- Net worth now matches everywhere: the Accounts table and the net worth chart include home, vehicles and shared values like the dashboard card.
+- Possible duplicates: removing the copy on this dashboard no longer brings the warning right back (its transactions are kept), and pairs marked "Keep both" are no longer counted.
+
+## Android 1.5.1
+
+### Fixes
+- Same sync feedback, net worth and duplicate-warning fixes as Desktop 1.0.18.
+
 ## Desktop 1.0.17
 
 ### New
