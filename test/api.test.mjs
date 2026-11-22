@@ -28,7 +28,7 @@ before(async () => {
   base = `http://127.0.0.1:${i.port}`;
   cookieA = (await login('alice', 'password123')).cookie; cookieB = (await login('bob', 'password456')).cookie; cookieC = (await login('carol', 'password789')).cookie;
 });
-after(async () => { await srv.stop(); fs.rmSync(DIR, { recursive: true, force: true }); });
+after(async () => { await srv.stop(); try { fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch {} });
 
 test('ping needs no login', async () => { const r = await req('GET', '/api/ping', null, ''); assert.equal(r.status, 200); assert.equal(r.json.app, 'household-finances'); });
 test('wrong password is refused', async () => { assert.equal((await login('alice', 'nope')).status, 401); });
