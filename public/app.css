@@ -379,3 +379,5 @@ body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 
 .fd-starter { margin: 0 0 14px; }
 
 .fd-sfguide { margin: 8px 0; } .fd-sfguide summary { cursor: pointer; font-weight: 600; } .fd-sfguide figure { margin: 10px 0 16px; } .fd-sfguide figcaption { font-size: 14px; margin-bottom: 6px; } .fd-sfguide img { width: 100%; max-width: 720px; border: 1px solid var(--color-border-line); border-radius: 8px; display: block; }
+
+.fd-btn.fd-busy { opacity: .7; cursor: progress; }

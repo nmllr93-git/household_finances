@@ -1796,7 +1796,10 @@
     const h3 = card?.querySelector('h3'); if (h3) h3.textContent = av ? 'What you own' : 'Cash & investments';
     const mode = vGet('assetCard', 'num'); card?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
     const tog = vToggle('assetCard', 'num', [['num', 'Numbers'], ['ring', 'Ring']], ['kAssetViz']);
-    const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); nb.textContent = money0(cv + iv + av - debtTot() - shD); nw.append('Net worth ', nb, ' after debts'); if (shC + shI + shA) { const sn = document.createElement('span'); sn.className = 'fd-zero'; sn.textContent = ` · incl. ${money0(shC + shI + shA)} shared`; nw.append(sn); }
+    const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); nb.textContent = money0(cv + iv + av - debtTot() - shD); const dv = debtTot() + shD; nw.append('Net worth ', nb, ` = ${money0(cv + iv + av)} owned − ${money0(dv)} owed`);
+    const hasHome = assetsAll().some((x) => /home|house|real|property/i.test(String(x.type || '') + ' ' + String(x.name || ''))) || sharedIn().some((d) => d.kind === 'asset' && /home|house|real|property/i.test(String(d.type || '') + ' ' + String(d.name || '')));
+    const hasMort = (latestTotal(['mortgage'])[0]?.total || 0) + sharedSum(['mortgage'], 'nw') > 0;
+    if (hasHome && !hasMort) { const w = document.createElement('p'); w.className = 'fd-note fd-bad'; w.textContent = 'Your home’s full value is counted, but no mortgage balance is on this dashboard, so net worth is too high. Import a mortgage statement here, or share the mortgage from the dashboard that has it.'; el.append(w); } if (shC + shI + shA) { const sn = document.createElement('span'); sn.className = 'fd-zero'; sn.textContent = ` · incl. ${money0(shC + shI + shA)} shared`; nw.append(sn); }
     if (mode === 'num') { const tot = document.createElement('p'); tot.className = 'fd-sub fd-asset-tot'; const tb = document.createElement('b'); tb.textContent = money0(cv + iv + av); tot.append(av ? `Home & vehicles ${money0(av)} · total ` : 'Total ', tb); el.append(tot, nw, tog); return; }
     const s = [{ label: 'Checking & savings', value: cv, color: '#2f6fd6' }, { label: 'Investments', value: iv, color: '#0b5e31' }]; if (av) s.push({ label: 'Home & vehicles', value: av, color: '#7b5ea7' });
     const lg = legend(s, cv + iv, true); lg.querySelectorAll('li').forEach((li, k) => { li.classList.add('fd-click'); li.addEventListener('click', (e) => { e.stopPropagation(); if (k > 1) { showGroup('accounts'); return; } document.getElementById(k ? 'kpi-invest' : 'kpi-cash')?.click(); }); });
@@ -2578,9 +2581,15 @@
       const btns = document.createElement('div'); btns.className = 'fd-rb-row';
       btns.append(
         rbtn('Save accounts', async () => { try { st = await call('', 'POST', { accounts: draft }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
-        rbtn('Sync now', async () => { msg.className = 'fd-note'; msg.textContent = 'Syncing…'; try { await call('', 'POST', { accounts: draft }); const j = await call('/sync', 'POST'); st = j; draw();
-          const m = box.querySelector('.fd-sync-msg'); if (m) { m.className = 'fd-note fd-good fd-sync-msg'; m.textContent = j.added ? `Added ${j.added} new transaction${j.added === 1 ? '' : 's'}.` : 'Up to date; no new transactions.'; }
-          if (window.HF && window.HF.state && window.HF.state.bookId) window.HF.load(window.HF.state.bookId); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
+        rbtn('Sync now', async (e) => {
+          const b = e.currentTarget || e.target; if (b.disabled) return; b.disabled = true; b.classList.add('fd-busy'); b.textContent = 'Syncing…';
+          msg.className = 'fd-note fd-sync-msg'; msg.textContent = 'Syncing with SimpleFIN… this can take up to a minute.';
+          try { await call('', 'POST', { accounts: draft }); const j = await call('/sync', 'POST'); st = j; draw();
+            const at = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const m = box.querySelector('.fd-sync-msg'); if (m) { m.className = 'fd-note fd-good fd-sync-msg'; m.textContent = '✓ Finished syncing at ' + at + '. ' + (j.added ? `Added ${j.added} new transaction${j.added === 1 ? '' : 's'}.` : 'Up to date; no new transactions.'); }
+            const nb = [...box.querySelectorAll('button')].find((x) => x.textContent === 'Sync now'); if (nb) { nb.textContent = '✓ Synced'; setTimeout(() => { nb.textContent = 'Sync now'; }, 4000); }
+            if (window.HF && window.HF.state && window.HF.state.bookId) window.HF.load(window.HF.state.bookId); }
+          catch (err) { b.disabled = false; b.classList.remove('fd-busy'); b.textContent = 'Sync now'; msg.className = 'fd-note fd-bad fd-sync-msg'; msg.textContent = 'Sync failed: ' + err.message; } }, false),
         rbtn('Disconnect', async () => { if (!confirm('Disconnect SimpleFIN from this dashboard? Transactions already added stay.')) return; try { await call('', 'DELETE'); st = await call(''); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
       msg.classList.add('fd-sync-msg'); box.append(btns, msg);
     };
