@@ -23,4 +23,5 @@ fs.writeFileSync(path.join(D, 'ui', 'connect.html'), fs.readFileSync(path.join(R
 rm(path.join(D, 'icons')); fs.mkdirSync(path.join(D, 'icons'));
 const I = path.join(ROOT, 'apps', 'icons');
 for (const [a, b] of [['windows/app.ico', 'app.ico'], ['windows/tray-16.png', 'tray-16.png'], ['windows/tray-32.png', 'tray-32.png'], ['icon-512.png', 'icon-512.png']]) fs.copyFileSync(path.join(I, a), path.join(D, 'icons', b));
+fs.copyFileSync(path.join(ROOT, 'public', 'showpw.js'), path.join(D, 'ui', 'showpw.js')); // keep the setup screen's Show-password button in step
 console.log(`Prepared: server ${require(path.join(ROOT, 'package.json')).version}, Node ${process.versions.node}`);
