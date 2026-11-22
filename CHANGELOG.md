@@ -3,6 +3,29 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.15
+
+### New
+- **Easier first run:** setup asks "Who will use this?": just you on this computer, just you on this computer and your own phone or other devices, you and others in your household, or connecting to a computer someone already set up. Port and data folder are under **Advanced**.
+- **Connect a phone with a QR code:** shown in Host options and in ⚙ Settings → **Connect a phone**. In the Android app, tap **Scan QR code**; on an iPhone, scan it with the camera to open the dashboard in the browser.
+- **Invite someone:** ⚙ Settings → **Invite someone** makes a one-time link and QR code (good for 7 days). They choose their own login and password and get the dashboards you picked, can-edit or view-only, plus an optional new dashboard of their own.
+- **Find my PC again:** if the host computer gets a new address on your home network, the phone and desktop apps look for it and reconnect on their own.
+- **Use it away from home:** Host options has a step-by-step Tailscale checklist whose steps turn green as you finish them, including when your phone first connects through Tailscale.
+- **Sleep check:** Host options shows the computer's sleep setting with a button to open it, and can keep the computer awake while hosting.
+- **Try it with sample data:** explore a made-up household before importing anything (view only, never saved).
+- **Getting-started checklist** on new dashboards: add your money, set budgets, connect your phone, turn on free data, make a backup.
+- **Free data setup:** each data source has a **Test** button that checks the key and saves it if it works. FRED is listed first, and the app works fully without any keys.
+- **Import several statements at once:** pick or drag in several files; each is shown in turn with its account guessed from the file.
+- **"Where do I find my statement?"** help on the Import page for common banks, card issuers, brokerages and loans.
+- **Budget starter:** suggested monthly budgets from your last 3 months of spending; adjust and add them in one step.
+
+## Android 1.4.4
+
+### New
+- **Scan QR code** on the connect screen to connect to your computer.
+- **Find my PC again:** if your computer's address changes, the app looks for it on your Wi-Fi and reconnects. It also no longer opens to an error page when the computer is off.
+- Everything new in Desktop 1.0.15: invites, sample data, getting-started checklist, key Test button, multi-file import, statement help and budget starter.
+
 ## Desktop 1.0.14
 
 ### New
