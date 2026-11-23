@@ -11,6 +11,7 @@ fs.cpSync(path.join(ROOT, 'public'), W, { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'core', 'books.js'), path.join(W, 'core-books.js'));
 fs.copyFileSync(path.join(ROOT, 'core', 'market.js'), path.join(W, 'core-market.js'));
 fs.copyFileSync(path.join(ROOT, 'core', 'simplefin.js'), path.join(W, 'core-simplefin.js'));
+fs.copyFileSync(path.join(ROOT, 'core', 'widgetdata.js'), path.join(W, 'core-widgetdata.js'));
 fs.rmSync(path.join(W, 'sw.js'), { force: true }); // the app ships its own files; no offline cache needed
 
 const router = `<script>

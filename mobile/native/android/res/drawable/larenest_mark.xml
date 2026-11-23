@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the Larenest mark: terracotta tile, white roof, gold nest -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:fillColor="#9C4A2F" android:pathData="M10,1h12a9,9 0 0 1 9,9v12a9,9 0 0 1 -9,9h-12a9,9 0 0 1 -9,-9v-12a9,9 0 0 1 9,-9z" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M8,15.5L16,9l8,6.5" />
+    <path android:strokeColor="#E3A848" android:strokeWidth="2.4" android:strokeLineCap="round" android:pathData="M8.5,19.5c2.2,3.6 12.8,3.6 15,0" />
+    <path android:strokeColor="#E3A848" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M11,23.5c2,1.8 8,1.8 10,0" />
+</vector>

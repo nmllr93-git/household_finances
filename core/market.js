@@ -78,6 +78,26 @@
       return out;
     }
 
+    // ---- daily closes for the last ~40 trading days (widgets' 7- and 30-day lines), cached a day per symbol:
+    //      FMP when there's a key, otherwise Stooq's free daily CSV. → { SYM: [[YYYY-MM-DD, close], …] oldest first }
+    const HCACHE = cache('history');
+    async function getHistory(syms) {
+      const k = apiKeys(), out = {};
+      for (const s of syms) {
+        let c = HCACHE.get(s);
+        if (!c || Date.now() - c.at > 20 * 3600e3) {
+          let v = [];
+          if (k.fmp) { try { const j = await getJson(`https://financialmodelingprep.com/stable/historical-price-eod/light?symbol=${encodeURIComponent(s)}&apikey=${k.fmp}`); const arr = Array.isArray(j) ? j : (j && j.historical) || [];
+            v = arr.map((x) => [String(x.date).slice(0, 10), Number(x.price ?? x.close)]).filter((x) => x[1] > 0); } catch {} }
+          if (!v.length) { try { const txt = await getText(`https://stooq.com/q/d/l/?s=${encodeURIComponent(s.toLowerCase())}${s.includes('.') ? '' : '.us'}&i=d`);
+            v = String(txt).trim().split(/\r?\n/).slice(1).map((l) => l.split(',')).map((c) => [c[0], Number(c[4])]).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x[0]) && x[1] > 0); } catch {} }
+          v.sort((a, b) => (a[0] < b[0] ? -1 : 1)); c = { at: Date.now(), v: v.slice(-45) }; if (v.length || !c.v) HCACHE.set(s, c);
+        }
+        out[s] = c.v || [];
+      }
+      return out;
+    }
+
     // ---- per-holding detail (Finnhub + FMP), cached 6 hours: news, earnings, 52-week range, analyst view, ETF sectors ----
     const SCACHE = cache('stock');
     async function stockDetail(sym) {
@@ -275,7 +295,7 @@
     const started = (async () => { MKT = (await load('market')) || null; ECON = (await load('econ')) || null; await Promise.all(Object.values(caches).map((c) => c.ready)); })();
     const wrap = (f) => async (...a) => { await started; note(); return f(...a); };
     return {
-      quotes: wrap(getQuotes), dividends: wrap(getDividends), screener: wrap(screener), stock: wrap(stockDetail), econ: wrap(getEcon), vehicle: wrap(vehicleInfo), markets: wrap(getMarkets),
+      quotes: wrap(getQuotes), dividends: wrap(getDividends), history: wrap(getHistory), screener: wrap(screener), stock: wrap(stockDetail), econ: wrap(getEcon), vehicle: wrap(vehicleInfo), markets: wrap(getMarkets),
       sources: () => quoteSources(), marketOpen: () => marketOpen(), testKey,
       // call after keys change: forget cached results that depended on the old keys
       resetKeys: async () => { await started; MKT = null; ECON = null; QCACHE.clear(); PCACHE.clear(); },

@@ -123,6 +123,7 @@
       }
       case 'quotes': { const m = await marketReady; return json(200, { sources: m.sources(), quotes: await m.quotes(symList(url, 60)) }); }
       case 'dividends': return json(200, { dividends: await (await marketReady).dividends(symList(url, 40)) });
+      case 'history': return json(200, { history: await (await marketReady).history(symList(url, 30)) });
       case 'stock': { const sym = symList(url, 1)[0]; if (!sym) return json(400, { error: 'symbol?' }); return json(200, await (await marketReady).stock(sym)); }
       case 'screener': { const sp = url.searchParams; return json(200, await (await marketReady).screener({ sector: String(sp.get('sector') || '').slice(0, 40), cap: Number(sp.get('cap')) || 0, yield: Number(sp.get('yield')) || 0, maxPrice: Number(sp.get('maxPrice')) || 0 })); }
       case 'econ': return json(200, await (await marketReady).econ(url.searchParams.get('refresh') === '1'));
@@ -132,6 +133,7 @@
         const book = (await books()).find((b) => b.id === parts[2]);
         if (!book) return json(403, { error: 'No such budget on this phone' });
         if (parts[3] === 'simplefin') { const r = await (await sfReady).handle(method, parts.slice(4), book.id, body); return json(r.status, r.body); }
+        if (parts[3] === 'widgets' && method === 'GET') return json(200, await widgetSummary(book, url.searchParams));
         const core = await coreReady, api = core.createBookApi(store);
         const r = await api.handle(method, parts.slice(3), book, body, 'me');
         if (parts[3] === 'data' && r.status === 200) dailyBackup().catch(() => {});
@@ -140,6 +142,24 @@
       }
     }
     return json(404, { error: 'Not found' });
+  }
+  // home-screen widget summary: the same builder and calculations the PC server uses (core-widgetdata.js + calcs.js)
+  let wdReady = null, calcsSrc = null;
+  async function widgetSummary(book, sp) {
+    if (!wdReady) wdReady = new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'core-widgetdata.js'; s.onload = () => res(window.FDWidgetData); s.onerror = () => rej(new Error('core-widgetdata.js is missing')); document.head.append(s); });
+    const W = await wdReady; if (!calcsSrc) calcsSrc = await (await fetch('calcs.js')).text();
+    const core = await coreReady, data = (await core.createBookApi(store).handle('GET', ['data'], book, async () => ({}), 'me')).body;
+    const get = W.runCalcs(calcsSrc, data, { range: '6m' }), label = book.label, mine = (r) => (r || []).filter((x) => x.book === label);
+    const pw = mine(data.prefs).filter((p) => p.key === 'watch').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).pop();
+    let watch = []; try { watch = pw ? JSON.parse(pw.value) || [] : []; } catch (e) {}
+    const holdings = mine(data.holdings), m = await marketReady;
+    const syms = [...new Set([...holdings, ...watch].map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean))].slice(0, 30);
+    let quotes = {}, history = {}, sectors = [];
+    try { quotes = syms.length ? await m.quotes(syms) : {}; } catch (e) {}
+    try { history = holdings.length ? await m.history(holdings.map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean).slice(0, 30)) : {}; } catch (e) {}
+    try { sectors = ((await m.markets(false)) || {}).sectors || []; } catch (e) {}
+    return W.build({ name: book.name, label, budget: (get('budget_totals') || []).find((r) => r.key === label), subs: mine(get('subs')), holdings, quotes, history, watch, sectors,
+      follow: String(sp.get('follow') || '').split('|').filter(Boolean), marketOpen: m.marketOpen() });
   }
   const backend = { name: 'local', fetch: (path, opts) => handle(path, opts).catch((e) => json(e.code || 500, { error: e.message || 'Error' })) };
   if (window.FDStore) window.FDStore.use(backend); else document.addEventListener('DOMContentLoaded', () => window.FDStore && window.FDStore.use(backend));

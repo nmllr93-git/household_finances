@@ -22,10 +22,21 @@ const N = path.join(M, 'native', 'android'), JAVA = path.join(M, 'android', 'app
 fs.mkdirSync(JAVA, { recursive: true });
 for (const f of fs.readdirSync(path.join(N, 'java'))) fs.copyFileSync(path.join(N, 'java', f), path.join(JAVA, f));
 for (const d of fs.readdirSync(path.join(N, 'res'))) { fs.mkdirSync(path.join(RES, d), { recursive: true }); for (const f of fs.readdirSync(path.join(N, 'res', d))) fs.copyFileSync(path.join(N, 'res', d, f), path.join(RES, d, f)); }
-if (!x.includes('.LarenestWidget')) x = x.replace('</application>', `    <receiver android:name=".LarenestWidget" android:exported="false" android:label="Larenest">
+// four widgets (the first keeps its original class name so widgets already placed keep working), plus the refresh receiver
+const W = [['LarenestWidget', 'Larenest · Budget &amp; bills', 'larenest_widget_info'], ['InvestWidget', 'Larenest · Investments', 'invest_widget_info'],
+  ['MarketsWidget', 'Larenest · Markets', 'markets_widget_info'], ['BillsWidget', 'Larenest · Bills &amp; subscriptions', 'bills_widget_info']];
+let rx = '';
+for (const [cls, label, info] of W) if (!x.includes('.' + cls + '"')) rx += `    <receiver android:name=".${cls}" android:exported="false" android:label="${label}">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/larenest_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/${info}" />
         </receiver>
-    </application>`);
+`;
+if (!x.includes('.WidgetRefreshReceiver')) rx += `    <receiver android:name=".WidgetRefreshReceiver" android:exported="false">
+            <intent-filter><action android:name="com.larenest.app.WIDGET_REFRESH" /></intent-filter>
+            <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
+`;
+if (rx) x = x.replace('</application>', rx + '    </application>');
+if (!x.includes('RECEIVE_BOOT_COMPLETED')) x = x.replace('<application', '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <application');
 fs.writeFileSync(man, x);
 console.log('Android project configured');

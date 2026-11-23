@@ -266,6 +266,25 @@ for (const [id, make] of [['teller', BANKLINKS.createTeller], ['plaid', BANKLINK
     addDoc: async (b, coll, doc) => { const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(b); const r = await BOOKS.handle('POST', [coll], book, async () => doc, label); try { logActivity(label, b, 'POST', coll, r, null); } catch {} },
   }) };
 }
+// ---------- home-screen widget summary (core/widgetdata.js runs the dashboard's own calcs.js) ----------
+const WIDGETS = require('./core/widgetdata.js');
+let CALCS_SRC = null;
+async function widgetSummary(book, sp) {
+  if (!CALCS_SRC) CALCS_SRC = fs.readFileSync(path.join(__dirname, 'public', 'calcs.js'), 'utf8');
+  const data = (await BOOKS.handle('GET', ['data'], book, async () => ({}))).body;
+  const get = WIDGETS.runCalcs(CALCS_SRC, data, { range: '6m' });
+  const label = book.label, mine = (rows) => (rows || []).filter((r) => r.book === label);
+  const prefs = mine(data.prefs).filter((p) => p.key === 'watch').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).pop();
+  let watch = []; try { watch = prefs ? JSON.parse(prefs.value) || [] : []; } catch {}
+  const holdings = mine(data.holdings);
+  const syms = [...new Set([...holdings.map((h) => String(h.symbol || '').toUpperCase()), ...watch.map((w) => String(w.symbol || '').toUpperCase())].filter((x) => /^[A-Z0-9.\-^]{1,12}$/.test(x)))].slice(0, 30);
+  const want = String(sp.get('parts') || 'budget,bills,invest,markets').split(',');
+  const quotes = syms.length ? await MARKET.quotes(syms) : {};
+  const history = want.includes('invest') && holdings.length ? await MARKET.history(holdings.map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean).slice(0, 30)) : {};
+  let sectors = []; if (want.includes('markets')) { try { sectors = ((await MARKET.markets(false)) || {}).sectors || []; } catch {} }
+  return WIDGETS.build({ name: book.name, label, budget: (get('budget_totals') || []).find((r) => r.key === label), subs: mine(get('subs')), holdings, quotes, history, watch, sectors,
+    follow: String(sp.get('follow') || '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 12), marketOpen: MARKET.marketOpen() });
+}
 const sfSyncAll = () => { SIMPLEFIN.syncAll(Object.keys(sfAll())).catch(() => {}); for (const v of Object.values(BANKSYNC)) v.engine.syncAll(Object.keys(v.all())).catch(() => {}); };
 
 // ---------- activity log: who changed what on each dashboard (settings, colors and shared balances aren't logged) ----------
@@ -382,6 +401,10 @@ async function api(req, res, url) {
     const syms = [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => /^[A-Z0-9.\-^]{1,12}$/.test(x)))].slice(0, 40);
     return send(res, 200, { dividends: await MARKET.dividends(syms) });
   }
+  if (parts[1] === 'history' && req.method === 'GET') {
+    const syms = [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => /^[A-Z0-9.\-^]{1,12}$/.test(x)))].slice(0, 30);
+    return send(res, 200, { history: await MARKET.history(syms) });
+  }
   if (parts[1] === 'quotes' && req.method === 'GET') {
     const syms = [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => /^[A-Z0-9.\-^]{1,12}$/.test(x)))].slice(0, 60);
     return send(res, 200, { sources: MARKET.sources(), quotes: await MARKET.quotes(syms) });
@@ -477,6 +500,10 @@ async function api(req, res, url) {
     if (writing && roleOf(user, bookId) === 'view' && parts[3] !== 'shares') return send(res, 403, { error: 'This login can view this dashboard but not change it.' });
     if (parts[3] === 'teller' || parts[3] === 'plaid') { const r = await BANKSYNC[parts[3]].engine.handle(req.method, parts.slice(4), bookId, getBody); return send(res, r.status, r.body); }
     if (parts[3] === 'simplefin') { const r = await SIMPLEFIN.handle(req.method, parts.slice(4), bookId, getBody); return send(res, r.status, r.body); }
+    if (parts[3] === 'widgets' && req.method === 'GET') {
+      // the phone's home-screen widgets: same numbers as the dashboard, computed here so a widget can refresh without the app open
+      try { return send(res, 200, await widgetSummary(book, url.searchParams)); } catch (e) { return send(res, 500, { error: 'Couldn’t build the widget summary: ' + e.message }); }
+    }
     const before = req.method === 'DELETE' && parts[4] ? db.prepare('SELECT json FROM docs WHERE id = ? AND book_id = ?').get(parts[4], bookId) : null;
     let r; try { r = await BOOKS.handle(req.method, parts.slice(3), book, getBody, user); } catch (e) { if (e.code >= 400 && e.code < 500) return send(res, e.code, { error: e.message }); throw e; }
     if (writing && r.status < 300) { try { logActivity(user, bookId, req.method, parts[3], r, before); } catch {} }

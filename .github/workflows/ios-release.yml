@@ -1,12 +1,11 @@
 # Builds the iPhone app on GitHub's Macs and uploads it to App Store Connect (TestFlight).
-# Runs with the other release builds (push to the `release` branch) or by hand (Actions → iOS release → Run workflow).
+# Runs only by hand (Actions → iOS release → Run workflow): Mac build minutes count 10x, so it stays off releases until the
+# Apple developer account is set up. To build on every release again, add  push: branches: [release]  under on:.
 # Skips quietly until these secrets exist (see mobile/README.md → iPhone):
 #   APPSTORE_KEY_ID, APPSTORE_ISSUER_ID, APPSTORE_KEY_P8 (the .p8 file's text), APPLE_TEAM_ID
 # Signing is automatic: Xcode uses the App Store Connect API key to create the certificate and profile.
 name: iOS release
 on:
-  push:
-    branches: [release]
   workflow_dispatch:
 permissions:
   contents: read

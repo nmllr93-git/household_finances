@@ -1595,19 +1595,22 @@
     if (typeof C.nativePromise === 'function') return { update: (o) => C.nativePromise('LarenestWidget', 'update', o) };
     return null; };
   let wState = '';
+  // The widgets get the dashboard's summary (budget, bills, investments, markets) from /api/books/…/widgets: the PC computes it,
+  // or the phone in phone-only mode. The app also hands over where to refresh from (PC address + dashboard), so the widgets'
+  // ⟳ button and the background refresh can update without the app open.
+  let wBusy = null;
   const pushWidget = (force) => {
     const W = widgetApi(); if (!W || st('budget_totals', 'subs') !== 'ok') return Promise.resolve(false);
-    const r = budTot(), u = upcoming()[0], nm = ((meBooks().find((b) => b.label === book()) || {}).name) || book(), has = !!(r && r.categories);
-    const d = wHide() ? { title: `${nm}${r ? ' · ' + r.label : ''}`, pct: has ? Math.max(0, Math.round(r.usedPct)) : -1, // amounts hidden: percentages and names only
-      big: has ? (r.spent > r.available ? 'Over budget' : `${Math.round(r.usedPct)}% of budget used`) : 'No budget set',
-      line1: has ? (r.elapsed != null ? `${Math.round(r.elapsed * 100)}% of the month gone` : '') : 'Set one in Budget vs actual to see it here.',
-      line2: u ? `Next bill: ${u.x.vendor} on ${u.due.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}` : '' } : { title: `${nm}${r ? ' · ' + r.label : ''}`, pct: has ? Math.max(0, Math.round(r.usedPct)) : -1,
-      big: has ? (r.spent > r.available ? `${money0(r.spent - r.available)} over budget` : `${money0(r.available - r.spent)} left`) : 'No budget set',
-      line1: has ? `${money0(r.spent)} of ${money0(r.available)} spent${r.elapsed != null ? ` · ${Math.round(r.elapsed * 100)}% of the month gone` : ''}` : 'Set one in Budget vs actual to see it here.',
-      line2: u ? `Next bill: ${u.x.vendor} ${money0(u.x.lastCharge)} on ${u.due.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}` : '' };
-    const sig = JSON.stringify(d); if (sig === wSig && !force) return Promise.resolve(true); wSig = sig;
-    d.updated = 'Updated ' + new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    return Promise.resolve(W.update({ data: JSON.stringify(d) })).then(() => { wState = 'ok'; return true; }, (e) => { wState = (e && e.message) || 'error'; wSig = ''; return false; });
+    if (wBusy && !force) return wBusy;
+    const bid = window.HF && window.HF.state && window.HF.state.bookId; if (!bid) return Promise.resolve(false);
+    let follow = []; try { follow = JSON.parse(localStorage.getItem('fd-sectors') || '[]') || []; } catch {}
+    const qs = 'follow=' + encodeURIComponent(follow.join('|'));
+    wBusy = FDStore.json('GET', `/api/books/${encodeURIComponent(bid)}/widgets?${qs}`).then((data) => {
+      const cfg = { base: window.FD_LOCAL ? '' : (FDStore.base || location.origin), book: bid, query: qs, hide: wHide(), local: !!window.FD_LOCAL };
+      const sig = JSON.stringify([cfg, { ...data, at: '' }]); if (sig === wSig && !force) return true; wSig = sig;
+      return Promise.resolve(W.update({ data: JSON.stringify({ cfg, data }) })).then(() => { wState = 'ok'; return true; });
+    }).catch((e) => { wState = (e && e.message) || 'error'; wSig = ''; return false; }).finally(() => { wBusy = null; });
+    return wBusy;
   };
   dash.onData(() => { pushWidget(); });
   dash.draw('billRows', (el) => {
@@ -3241,8 +3244,13 @@
     if (widgetApi()) { const w = document.createElement('div'); const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
       const stt = document.createElement('div'); stt.className = 'fd-zero';
       const run = async () => { stt.textContent = 'Updating the widget…'; const ok = await pushWidget(true); stt.textContent = ok ? '✓ Widget updated with this dashboard.' : !widgetApi() ? 'The widget can’t be reached from here. Update the Larenest phone app to the newest version.' : st('budget_totals', 'subs') !== 'ok' ? 'Still loading this dashboard; try again in a moment.' : 'Couldn’t update the widget: ' + wState; };
-      i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} run(); }); l.append(i, ' Hide dollar amounts on the home-screen widget (shows percentages instead). This phone only.');
-      w.append(l, rbtn('Update widget now', run, false), stt); row('Phone widget', w); }
+      i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} run(); }); l.append(i, ' Hide dollar amounts on the home-screen widgets (shows percentages and lines instead). This phone only.');
+      const bg = document.createElement('label'); bg.className = 'fd-field fd-narrow'; bg.append('Refresh widgets in the background');
+      const sel = document.createElement('select'); sel.className = 'dash-select'; [['0', 'Off (refresh with ⟳ or by opening the app)'], ['60', 'Every hour'], ['120', 'Every 2 hours'], ['240', 'Every 4 hours']].forEach(([v, t]) => sel.append(new Option(t, v)));
+      sel.value = (() => { try { return localStorage.getItem('fd-widget-bg') || '0'; } catch { return '0'; } })(); bg.append(sel);
+      sel.addEventListener('change', () => { try { localStorage.setItem('fd-widget-bg', sel.value); } catch {} const N = window.LarenestWidgetNative; if (N && N.schedule) N.schedule(Number(sel.value)); stt.textContent = sel.value === '0' ? 'Background refresh is off.' : 'Widgets will refresh from your computer while it’s reachable.'; });
+      if (window.FD_LOCAL) bg.hidden = true; // phone-only mode: no computer to refresh from; the ⟳ button opens the app
+      w.append(l, bg, rbtn('Update widget now', run, false), stt); row('Phone widgets', w); }
     { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = document.body.classList.contains('fd-brand');
       i.addEventListener('change', () => { document.body.classList.toggle('fd-brand', i.checked); try { localStorage.setItem('fd-brand', i.checked ? '1' : '0'); } catch {} });
       l.append(i, ' Show the Larenest logo and colors (this device only)'); row('Larenest look', l); }
