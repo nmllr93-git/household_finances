@@ -9,7 +9,7 @@
     if (s.includes('error')) return 'error';
     return 'loading';
   };
-  const rows = (id) => (dash.data(id).status === 'ok' ? dash.data(id).data || [] : []);
+  const rows = (id) => { const d = dash.data(id).status === 'ok' ? dash.data(id).data || [] : []; return id === 'accounts' ? d.filter((a) => !a.removed) : d; }; // removed-account markers stay out of lists
   const period = () => rows('period');
   const lastMonth = () => { const p = period(); return p[p.length - 1]; };
   const longName = (m) => new Date(m + '-01T00:00:00Z').toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -296,7 +296,7 @@
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
     if (SIMPLE && SIMPLE_GROUPS.has(g)) return showGroup('all');
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id) || (SIMPLE && SIMPLE_HIDE.has(id)); }));
-    simpleNav(); ['kpis', 'fd-start'].forEach((id) => { const x = document.getElementById(id); if (x) x.classList.toggle('fd-hide-set', g === 'settings'); }); // no tiles or getting-started on the Settings tab
+    simpleNav(); ['kpis', 'fd-start', 'lede', 'range'].forEach((id) => { const x = document.getElementById(id); if (x) x.classList.toggle('fd-hide-set', g === 'settings'); }); // Settings: just the dashboard picker on top (no tiles, summary, date range or getting-started)
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   // Phone section menus: defaults below; each phone can rename, add, remove and regroup them (⚙ Settings → Phone menus). Saved on this device.
@@ -1433,13 +1433,19 @@
           armed = true;
           del.textContent = imps.length ? `Yes, delete it and its ${imps.length} statement${imps.length === 1 ? '' : 's'}/balance${imps.length === 1 ? '' : 's'}` : 'Yes, delete it';
           msg.textContent = sib.length ? 'Another entry has this name, so only this duplicate is deleted; the statements stay with the other one.'
-            : 'This can’t be undone. Any Google Sheets history for it stays; untick Active to hide that.';
+            : 'This can’t be undone. It also removes its Google Sheets balance history from this dashboard.';
           return;
         }
         del.disabled = true;
         try {
           const d = await db();
           for (const b of imps) await d.doc('data/household/imports/' + b.id).delete();
+          // Google Sheets history is read-only, so leave a "removed" marker: its sheet balances stop counting and it leaves every list
+          const reg = ae.id ? (dash.data('accounts').data || []).find((x) => x.id === ae.id) : null;
+          const names = [...new Set([ae.name, ae.match, ...((reg && reg.aliases) || [])].filter(Boolean))];
+          const nk = (x) => String(x || '').trim().toLowerCase().replace(/^[^–]+ – /, '');
+          if (!sib.length && (dash.data('sheet_balances').data || []).some((r) => r.book === book() && names.some((n) => nk(n) === nk(r.account))))
+            await d.collection('data/household/accounts').add({ book: book(), name: names[0], match: ae.match || names[0], aliases: names.slice(1), removed: true, kind: '', type: '', active: false, createdAt: new Date().toISOString() });
           if (ae.id) await d.doc('data/household/accounts/' + ae.id).delete();
           ae = null; dash.draw('acctEditor');
         } catch { del.disabled = false; msg.textContent = 'Couldn’t delete. Try again.'; }
@@ -1448,6 +1454,19 @@
     }
     box.append(bar, msg); el.append(box);
   });
+  // Pull to refresh (phones): drag down from the very top of the page, let go to reload this dashboard's data
+  (() => {
+    if (!('ontouchstart' in window)) return;
+    const ind = document.createElement('div'); ind.className = 'fd-ptr'; ind.setAttribute('aria-hidden', 'true'); document.body.append(ind);
+    let y0 = null, dy = 0, busy = false; const NEED = 80;
+    const scrolledInside = (el) => { for (let e = el; e && e !== document.body; e = e.parentElement) if (e.scrollTop > 0) return true; return false; };
+    document.addEventListener('touchstart', (e) => { if (busy || window.scrollY > 0 || e.touches.length !== 1 || scrolledInside(e.target) || e.target.closest('input, select, textarea, .fd-fab')) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
+    document.addEventListener('touchmove', (e) => { if (y0 == null) return; dy = e.touches[0].clientY - y0; if (dy <= 0 || window.scrollY > 0) { ind.style.transform = ''; ind.classList.remove('on'); return; }
+      const d = Math.min(dy * 0.5, NEED); ind.classList.add('on'); ind.style.transform = `translate(-50%, ${d}px)`; ind.textContent = dy >= NEED * 1.6 ? 'Release to refresh' : 'Pull to refresh'; }, { passive: true });
+    document.addEventListener('touchend', async () => { if (y0 == null) return; const go = dy >= NEED * 1.6 && window.scrollY <= 0; y0 = null;
+      if (!go) { ind.classList.remove('on'); ind.style.transform = ''; return; }
+      busy = true; ind.textContent = 'Refreshing…'; try { await window.HF.load(window.HF.state.bookId); } catch (e) {} ind.textContent = '✓ Updated'; setTimeout(() => { ind.classList.remove('on'); ind.style.transform = ''; busy = false; }, 700); });
+  })();
   // category boxes: browsers only suggest categories matching what's typed, so a filled box hides the list. On focus,
   // empty it (current category shown as the placeholder) to show every category; leaving without a pick puts it back.
   document.addEventListener('focusin', (e) => { const i = e.target; if (!(i instanceof HTMLInputElement) || i.getAttribute('list') !== 'fd-cats' || !i.value || i.dataset.catPrev != null) return;

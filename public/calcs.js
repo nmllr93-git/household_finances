@@ -497,11 +497,12 @@ dash.calc('balances', {
   fn: (sheet, importBatches, period, accts) => {
     // One identity per account: names match ignoring capitals and an "Owner – " prefix, and names merged into an account (aliases) count as it.
     const nk = (s) => String(s || '').trim().toLowerCase().replace(/^[^–]+ – /, '');
-    const alias = {};
-    for (const a of accts || []) for (const n of [a.name, a.match, ...(Array.isArray(a.aliases) ? a.aliases : [])]) if (n) alias[`${a.book}|${nk(n)}`] = a.name;
+    const alias = {}, gone = new Set();
+    // deleted accounts that had Google Sheets history leave a "removed" marker: their sheet balances no longer count
+    for (const a of accts || []) for (const n of [a.name, a.match, ...(Array.isArray(a.aliases) ? a.aliases : [])]) if (n) { if (a.removed) gone.add(`${a.book}|${nk(n)}`); else alias[`${a.book}|${nk(n)}`] = a.name; }
     const canon = (book, n) => alias[`${book}|${nk(n)}`] || String(n || '').replace(/^[^–]+ – /, '') || 'Account';
     importBatches = (importBatches || []).map((b) => ({ ...b, accountName: canon(b.book, b.accountName) }));
-    sheet = (sheet || []).map((r) => ({ ...r, account: canon(r.book, r.account) }));
+    sheet = (sheet || []).filter((r) => !gone.has(`${r.book}|${nk(r.account)}`)).map((r) => ({ ...r, account: canon(r.book, r.account) }));
     const inWin = new Set((period || []).map((m) => m.month));
     const latest = {};
     for (const b of importBatches || []) {

@@ -41,7 +41,7 @@
     if (coll === 'accounts') {
       const KINDS = ['deposit', 'credit', 'investment', 'mortgage', 'loan'];
       return { book: label, shareTo: Array.isArray(d.shareTo) ? d.shareTo.slice(0, 6).map((x) => str(x, 40)).filter(Boolean) : [], shareHist: !!d.shareHist, name: str(d.name, 60), match: str(d.match || d.name, 60), kind: KINDS.includes(d.kind) ? d.kind : 'deposit', type: str(d.type, 20),
-        rate: num(d.rate), owner: str(d.owner, 30), note: str(d.note, 120), rateEnds: str(d.rateEnds, 10), aliases: Array.isArray(d.aliases) ? d.aliases.slice(0, 10).map((x) => str(x, 60)).filter(Boolean) : [], limit: num(d.limit), payment: num(d.payment), escrow: num(d.escrow), extra: num(d.extra), active: d.active !== false, createdAt: now };
+        rate: num(d.rate), owner: str(d.owner, 30), note: str(d.note, 120), rateEnds: str(d.rateEnds, 10), aliases: Array.isArray(d.aliases) ? d.aliases.slice(0, 10).map((x) => str(x, 60)).filter(Boolean) : [], limit: num(d.limit), removed: !!d.removed, payment: num(d.payment), escrow: num(d.escrow), extra: num(d.extra), active: d.active !== false, createdAt: now };
     }
     if (coll === 'shares') {
       const hist = Array.isArray(d.history) ? d.history.slice(-72).filter((x) => Array.isArray(x) && /^\d{4}-\d{2}$/.test(x[0]) && isFinite(Number(x[1]))).map((x) => [x[0], Math.round(Number(x[1]) * 100) / 100]) : null;

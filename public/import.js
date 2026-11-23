@@ -197,14 +197,14 @@
   const keyN = (s) => normA(s).replace(/^[^–]+ – /, ''); // ignore an "Owner – " prefix when matching names
   const regAcct = async (db, doc) => {
     try {
-      const reg = dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : [];
+      const reg = (dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : []).filter((a) => !a.removed);
       if (reg.some((a) => a.book === doc.book && [a.match, a.name, ...(a.aliases || [])].some((x) => x && keyN(x) === keyN(doc.accountName)))) return;
       await db.collection('data/household/accounts').add({ book: doc.book, name: doc.accountName, match: doc.accountName, kind: doc.accountKind, type: doc.accountType || '', rate: null, owner: doc.owner || '', note: '', createdAt: new Date().toISOString() });
     } catch {}
   };
   // Picking a known account name fills in its type.
   document.querySelectorAll('#fd-import-form input[name=account], #fd-balance-form input[name=account]').forEach((i) => i.addEventListener('change', () => {
-    const reg = dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : [];
+    const reg = (dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : []).filter((a) => !a.removed);
     const a = reg.find((x) => [x.name, x.match, ...(x.aliases || [])].some((n) => n && keyN(n) === keyN(i.value))); if (!a) return;
     const sel = i.form && i.form.elements.kind, v = `${a.kind}:${a.type || ''}`;
     if (sel && a.type && [...sel.options].some((o) => o.value === v)) sel.value = v; // only when the account's exact type is known
@@ -259,7 +259,7 @@
   const qForm = () => document.getElementById('fd-import-form');
   const guessAccount = (name, text) => {
     const form = qForm(); if (!form) return null; const bk = form.elements.book.value;
-    const reg = (dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : []).filter((a) => a.book === bk);
+    const reg = (dash.data('accounts').status === 'ok' ? dash.data('accounts').data || [] : []).filter((a) => !a.removed).filter((a) => a.book === bk);
     const hay = (String(name) + ' ' + String(text || '').slice(0, 6000)).toLowerCase();
     const digits = new Set((hay.match(/(?:^|[^0-9])(\d{4})(?=[^0-9]|$)/g) || []).map((x) => x.replace(/\D/g, '')));
     let best = null, score = 0;
