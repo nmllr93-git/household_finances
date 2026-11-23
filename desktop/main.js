@@ -215,7 +215,10 @@ function setupUpdates() {
     updBusy = false;
     const r = await dialog.showMessageBox({ type: 'info', buttons: ['Restart now', 'When I quit'], defaultId: 0, message: `Version ${i.version} is ready`, detail: 'Restarting briefly stops the server; it starts again right after.' });
     // stop the built-in server first and wait for it to exit: a running server keeps files locked and the installer then fails
-    if (r.response === 0) { quitting = true; await stopChild(); setImmediate(() => autoUpdater.quitAndInstall()); }
+    // Stop the server first and mark it stopped, so nothing delays or cancels the quit while the installer waits for the
+    // app to close (a silent installer that finds the app still running just gives up). The installer runs with its
+    // normal window so any problem is visible, then reopens Larenest. If anything still holds the app open, exit anyway.
+    if (r.response === 0) { quitting = true; await stopChild(); stopped = true; setImmediate(() => { autoUpdater.quitAndInstall(false, true); setTimeout(() => app.exit(0), 4000); }); }
   });
   setTimeout(() => checkUpdates(false), 30e3); setInterval(() => checkUpdates(false), 24 * 3600e3);
 }
