@@ -2657,6 +2657,7 @@
       }
       if (!st.connected) {
         box.append(phMsg('Pull balances and new transactions from your banks automatically, instead of importing statements. It uses SimpleFIN Bridge, a separate read-only service you subscribe to yourself (about $15 a year). Your bank passwords go to SimpleFIN, never to this app, and nothing passes through us.'));
+        if (!window.FD_LOCAL) box.append(phMsg('Prefer a free option? Further down, “Free bank sync with your own Teller account” walks you through a free Teller developer account instead.'));
         const ol = document.createElement('ol'); ol.className = 'fd-note';
         for (const t of ['Sign up at SimpleFIN Bridge (link below), start a subscription and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect. Then untick any accounts you don’t want, check the names and types, and press Save accounts. Nothing syncs until you save.'])
           { const li = document.createElement('li'); li.textContent = t; ol.append(li); }
@@ -2740,7 +2741,7 @@
     if (k.teller.appId) syncBox(host, SYNC_P.teller).catch(() => {});
     if (k.plaid.hasSecret) syncBox(host, SYNC_P.plaid).catch(() => {});
     if (!k.canEdit) return;
-    const box = document.createElement('details'); box.className = 'fd-rb fd-bkbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Your own bank-sync keys (Teller or Plaid, advanced)'; box.append(sm);
+    const box = document.createElement('details'); box.className = 'fd-rb fd-bkbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Free bank sync with your own Teller account (or Plaid), advanced'; box.append(sm);
     box.append(phMsg('Instead of SimpleFIN, you can sync banks with a free developer account of your own. Teller is the easier one for personal use: its free “development” level connects up to 100 real bank logins. Plaid needs Plaid to approve “production” access before it works with real banks. Keys stay on this computer, in a private file outside your backups.'));
     const msg = phMsg(''), field = (lab, el) => { const r = document.createElement('label'); r.className = 'fd-field'; r.append(lab, el); return r; };
     const inp = (ph, type) => { const i = document.createElement(type === 'area' ? 'textarea' : 'input'); i.className = 'fd-in'; i.placeholder = ph; i.autocomplete = 'off'; i.spellcheck = false; if (type === 'area') { i.rows = 3; i.style.fontFamily = 'monospace'; i.style.fontSize = '12px'; } else if (type) i.type = type; return i; };
@@ -2748,10 +2749,25 @@
     const save = async (bodyObj, done) => { msg.className = 'fd-note'; msg.textContent = 'Saving…'; try { await FDStore.json('POST', '/api/bankkeys', bodyObj); msg.className = 'fd-note fd-good'; msg.textContent = done; setTimeout(() => location.reload(), 1200); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
     // Teller
     { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Teller' + (k.teller.appId ? ' · set up' : ''); box.append(h);
-      box.append(phMsg('1. Sign up at teller.io and open the dashboard. 2. Copy the Application ID. 3. Under Certificates, create one and download the zip: it holds certificate.pem and private_key.pem. Open each in a text editor (Notepad) and paste everything below, including the BEGIN and END lines.'));
+      box.append(phMsg('Free for up to 100 bank logins (one login can hold checking, savings and a card). You need a free Teller developer account; it takes about 10 minutes. It works while Larenest runs on this computer (not in phone-only mode). SimpleFIN stays the simplest choice if you’d rather not.'));
+      { const g = document.createElement('details'); g.className = 'fd-sfguide fd-tlguide'; const gs = document.createElement('summary'); gs.textContent = 'Show me step by step'; g.append(gs);
+        [['Create a free Teller account', 'Go to teller.io and sign up for a developer account, then confirm your email.'],
+          ['Copy your Application ID', 'In the Teller Dashboard, open Application Settings and copy the Application ID (it starts with “app_”). Paste it below.'],
+          ['Make a certificate', 'Open Certificates and create a new certificate. Download the file it gives you (teller.zip) and unzip it: inside are a certificate and a private key. Keep them private; they work like a password for your Teller account.'],
+          ['Add the two files here', 'Press “Choose certificate files” below and select both files from the unzipped folder (or paste their contents). Leave Environment on Development, which is free with real banks, and press Save Teller keys.'],
+          ['Connect your banks', 'A “Teller” bank-sync box appears in Settings. Press Connect a bank, sign in to your bank in Teller’s own window (Larenest never sees your bank password), then untick any accounts you don’t want and press Save accounts. Nothing is brought in until you save.']].forEach(([h, t], n) => {
+          const f = document.createElement('figure'); f.className = 'fd-sfstep'; const c = document.createElement('figcaption'); const bb = document.createElement('b'); bb.textContent = `${n + 1}. ${h}`; c.append(bb, ' ', t); f.append(c); g.append(f); });
+        box.append(g); }
       const a = inp('app_…'); a.value = k.teller.appId; const e = sel([['development', 'Development (real banks, free, up to 100)'], ['sandbox', 'Sandbox (test data only)'], ['production', 'Production (paid)']], k.teller.env);
       const c = inp(k.teller.hasCert ? 'Certificate saved. Paste a new one to replace it.' : '-----BEGIN CERTIFICATE-----', 'area'), pk = inp(k.teller.hasCert ? 'Private key saved. Paste a new one to replace it.' : '-----BEGIN PRIVATE KEY-----', 'area');
-      box.append(field('Application ID', a), field('Environment', e), field('certificate.pem', c), field('private_key.pem', pk));
+      // pick both files from the unzipped teller.zip at once; each is recognized by what's inside
+      const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.accept = '.pem,.crt,.key,.txt'; fi.hidden = true;
+      const fmsg = phMsg('');
+      fi.addEventListener('change', async () => { let got = [];
+        for (const f of fi.files) { const t = (await f.text()).trim(); if (/BEGIN CERTIFICATE/.test(t)) { c.value = t; got.push('certificate'); } else if (/BEGIN (RSA |EC )?PRIVATE KEY/.test(t)) { pk.value = t; got.push('private key'); } }
+        fmsg.className = 'fd-note' + (got.length === 2 ? ' fd-good' : ' fd-bad'); fmsg.textContent = got.length === 2 ? '✓ Found the certificate and the private key. Now press Save Teller keys.' : got.length ? `Found the ${got[0]} only. Choose both files together.` : 'Those don’t look like Teller certificate files. Choose the two files from the unzipped teller.zip.'; fi.value = ''; });
+      const pick = rbtn('Choose certificate files…', () => fi.click(), false);
+      box.append(field('Application ID', a), field('Environment', e), fi, pick, fmsg, field('Certificate (or paste it)', c), field('Private key (or paste it)', pk));
       const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Save Teller keys', () => save({ teller: { appId: a.value, env: e.value, cert: c.value, key: pk.value } }, 'Saved. Reloading…'), false));
       if (k.teller.appId) r.append(rbtn('Remove Teller keys', () => { if (confirm('Remove your Teller keys? Banks connected through Teller stop syncing.')) save({ teller: { clear: true } }, 'Removed. Reloading…'); }, false));
       const l = document.createElement('a'); l.href = 'https://teller.io'; l.target = '_blank'; l.rel = 'noopener'; l.textContent = 'teller.io ↗'; r.append(l); box.append(r); }

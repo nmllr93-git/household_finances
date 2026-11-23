@@ -23,7 +23,7 @@
   ];
   // shown only after “Show me advanced options”
   const ADV = [
-    { t: 'Advanced: your own bank-sync keys', b: 'Instead of SimpleFIN, the person running Larenest on their computer can add their own free Teller or Plaid developer keys (⚙ Settings → Your own bank-sync keys). Teller’s free level works with real banks for personal use; Plaid needs Plaid to approve production access first. Keys stay on that computer.' },
+    { t: 'Advanced: free bank sync with Teller', b: 'Prefer not to pay for SimpleFIN? A free Teller developer account connects up to 100 bank logins at no cost. It takes about 10 minutes to set up, with a step-by-step guide in ⚙ Settings → Free bank sync with your own Teller account. It works while Larenest runs on your computer. Plaid is also supported, but needs Plaid’s approval for real banks.' },
     { t: 'Advanced: market & economy data', b: 'Free API keys turn on live prices and news (Finnhub), market overview, movers and dividends (Financial Modeling Prep), rates and home prices (FRED), inflation (BLS) and gas & electricity prices (EIA). Add them in ⚙ Settings → Data sources; each has a Test button. They only ever receive stock symbols or your key.' },
     { t: 'Advanced: sharing & reaching home', b: 'From the computer running Larenest you can invite someone with a one-time QR code, set up a weekly email summary, and use Tailscale (free) to open your dashboards securely when you’re away from home. ⚙ Settings → Where your data lives explains how each connection is protected.' },
   ];

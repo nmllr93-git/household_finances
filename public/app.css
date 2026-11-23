@@ -528,3 +528,6 @@ body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); 
 .fd-connsec-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px; }
 .fd-connsec-list > div { border: 1px solid var(--color-border-line, #ddd); border-radius: 12px; padding: 9px 12px; font-size: 13.5px; line-height: 1.4; }
 .fd-connsec-list b { display: block; font-size: 14px; } .fd-connsec-list i { display: block; font-style: normal; font-weight: 600; color: var(--brand, #2b6cb0); margin: 1px 0 3px; } .fd-connsec-list span { color: var(--color-fg-muted); }
+/* the same key-instead-of-labels layout whenever the tile itself is narrow (a smaller window on a computer, not only phones) */
+#kpis .fd-card { container-type: inline-size; }
+@container (max-width: 330px) { .fd-pace-lab { display: none; } .fd-mkkey { display: flex; } }
