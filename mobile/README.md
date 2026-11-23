@@ -29,6 +29,11 @@ Away from home: turn on the Tailscale app on the phone first.
 - **Switching:** *Connect to a server instead* (top right) goes to the start screen; your phone data stays put and is there when you come back.
 - **Uninstalling the app deletes phone-only data.** Make a backup file first.
 
+## Home-screen widget (Android)
+Long-press the home screen → **Widgets** → **Larenest**. It shows the dashboard you last opened: what's left in this month's budget (with a progress bar) and the next recurring bill. The app refreshes it each time a dashboard loads, in phone-only mode or connected to a computer, and the "Updated" line says when. Tapping it opens the app. The summary stays in the app's private storage on the phone.
+
+iOS widgets need a widget extension and an App Group, which require a paid Apple developer account to sign; they'll come with the iOS App Store build.
+
 ## How it's built
 - [Capacitor](https://capacitorjs.com) ships the dashboard (`public/`), the start screen (`apps/connect.html` → `start.html`) and the shared core. In server mode the app opens your server's own pages; in phone-only mode `public/local.js` answers the dashboard's requests on the device (IndexedDB storage) using the shared core.
 - Plugins: Filesystem + Share (saving backup files), Local Notifications (bill reminders).
