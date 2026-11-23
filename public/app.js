@@ -106,6 +106,7 @@
     const who = document.getElementById('fd-user'); if (who && who.textContent.trim()) { const h = document.createElement('div'); h.className = 'fd-acctwho'; h.textContent = 'Signed in as ' + who.textContent.trim(); menu.append(h); }
     const item = (label, orig) => { if (!orig) return; const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.textContent = label; b.addEventListener('click', () => { close(); orig.click(); }); menu.append(b); };
     item('Download backup', document.getElementById('fd-export')); item('Sign out', document.getElementById('fd-logout')); item('Switch server', box.querySelector('.fd-switch'));
+    item('Send feedback', { click: () => window.FDFeedback && window.FDFeedback() });
   };
   btn.addEventListener('click', (e) => { e.stopPropagation(); if (menu.hidden) { build(); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); } else close(); });
   document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) close(); });

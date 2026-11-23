@@ -2377,7 +2377,7 @@
       const mkRing = (title, entries, chart) => { const top = entries.slice(0, 5), rest = entries.slice(5).reduce((t, [, v]) => t + v, 0); const sl = [...top, ...(rest > 0 ? [['Other', rest]] : [])].map(([k, v], i) => ({ label: k, value: v, color: colorFor(chart, k, PAL[i % PAL.length]) }));
         const svg = ring(sl, [money0(total), title.toLowerCase()], { size: 150, width: 24, chart, title: `${title}: ${money0(total)}` }); return ringBox(svg, legend(sl, total), [title, sl]); };
       const cls = (h) => (h.kind === 'bond' ? 'Bonds' : h.kind === 'crypto' ? 'Crypto' : h.kind === 'other' ? 'Other' : 'Stocks & funds');
-      rings.append(mkRing('By type', group((h) => KN[h.kind] || 'Other'), 'ring-alloc-type'), mkRing('By asset class', group(cls), 'ring-alloc-class'), mkRing('By account', group((h) => h.account || 'No account'), 'ring-alloc-acct'));
+      rings.append(mkRing('By type', group((h) => KN[h.kind] || 'Other'), 'ring-alloc-type'), mkRing('By asset class', group(cls), 'ring-alloc-class'), mkRing('By account', group((h) => h.account || 'No account'), 'ring-alloc-acct'), mkRing('By sector', sectorSplit(items, total), 'ring-alloc-sector'));
       el.append(rings);
     }
     const g = document.createElement('div'); g.className = 'fd-grid2';
@@ -2821,13 +2821,14 @@
     let bk = null; if (!window.FD_LOCAL) { try { bk = await FDStore.json('GET', '/api/bankkeys'); } catch (e) {} }
     if (host.__priv !== tok || host.querySelector('.fd-privbox')) return;
     const box = document.createElement('details'); box.className = 'fd-rb fd-privbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Where your data lives'; box.append(sm);
+    if (window.FDDataMap) box.append(window.FDDataMap(!!window.FD_LOCAL)); box.open = true;
     const NAMES = { finnhub: 'Finnhub', fmp: 'Financial Modeling Prep', fred: 'FRED', bls: 'Bureau of Labor Statistics', eia: 'Energy Information Administration' };
     const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)'); if (bk && bk.teller.appId) on.push('Teller (your own keys)'); if (bk && bk.plaid.hasSecret) on.push('Plaid (your own keys)');
     [window.FD_LOCAL ? 'Everything you enter is stored only on this phone, in the app’s private storage. Uninstalling the app deletes it, so keep a backup file somewhere safe.' : 'Everything you enter is stored only on the computer that runs Larenest, in its data folder. Phones and other computers just display it.',
       'There’s no Larenest account and no company server. The developer never receives your transactions, balances or anything else: no ads, no analytics, no tracking.',
       'Only the optional data services you turn on are contacted, directly from here. They get stock symbols, a VIN or your API key, never your financial information. Bank sync (SimpleFIN) only brings your bank data in; nothing is sent back.',
       on.length ? 'Turned on here: ' + on.join(', ') + '.' : 'Turned on here: none.',
-      'Free public sources with no key are also used: Treasury rates, exchange rates, holidays and delayed prices for the symbols you own (Stooq).',
+      'Free public sources with no key are also used: Treasury rates, exchange rates, holidays and delayed prices for the symbols you own (Stooq, Yahoo).',
       'Backups are files saved where you choose. They contain your financial data, so keep them somewhere private.'].forEach((t) => box.append(phMsg(t)));
     const a = document.createElement('a'); a.href = 'https://larenest.app/privacy'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Read the full privacy policy'; box.append(a);
     host.append(box);
@@ -3310,6 +3311,9 @@
     bankKeysBox(el).catch(() => {});
     connectBox(el).catch(() => {});
     inviteBox(el).catch(() => {});
+    if (!el.querySelector('.fd-helpbox')) { const h = document.createElement('div'); h.className = 'fd-rb fd-helpbox'; h.append(rhead('Help & feedback'));
+      const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Take the tour again', () => window.FDTour && window.FDTour(), false), rbtn('Send feedback', () => window.FDFeedback && window.FDFeedback(), false));
+      h.append(r, phMsg('Feedback opens an email to contact@larenest.app with your device filled in. Ideas, bugs and “this confused me” are all welcome.')); el.append(h); }
     privacyBox(el).catch(() => {});
     navMenuBox(el);
     activityBox(el).catch(() => {});

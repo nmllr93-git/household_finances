@@ -110,8 +110,8 @@ function makeWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: true } });
   // the dashboard tab is a <webview>: only allow it to show the local server, and open outside links in the browser
   win.webContents.on('will-attach-webview', (_e, wp, params) => { delete wp.preload; wp.nodeIntegration = false; wp.contextIsolation = true; if (params.src && !/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(params.src)) _e.preventDefault(); });
-  win.webContents.on('did-attach-webview', (_e, wc) => wc.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; }));
-  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.on('did-attach-webview', (_e, wc) => wc.setWindowOpenHandler(({ url }) => { if (/^(https?|mailto):/.test(url)) shell.openExternal(url); return { action: 'deny' }; }));
+  win.webContents.setWindowOpenHandler(({ url }) => { if (/^(https?|mailto):/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.on('close', (e) => { if (!quitting && S.role === 'host') { e.preventDefault(); win.hide(); } });
   win.on('closed', () => { win = null; });
   win.webContents.on('did-fail-load', (_e, code, desc, url) => { if (S.role === 'remote' && /^https?:/.test(url)) win.loadFile(path.join(__dirname, 'ui', 'connect.html'), { query: { failed: url } }); });
