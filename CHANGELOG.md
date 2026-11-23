@@ -3,6 +3,24 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.23
+
+### Changes
+- **Accounts shared into a dashboard now appear in its Accounts list**, marked ⇄ “Shared from …”, and count in its totals, so duplicates are easy to spot.
+- **Old account names can be removed:** Edit an account → *Other names for this account* → Remove (the account itself stays).
+- First-time defaults: the top tiles open as **Ring**; Spending by category opens as **Share** on phones and **Trend** on computers.
+- Host options: the cloud backup dropdown matches the rest of the page.
+
+### Fixes
+- Switching dashboards closes an open account editor.
+- Category boxes show the full list when you tap them, without deleting the current category first.
+- No blank space above Settings.
+
+## Android 1.6.3
+
+### Fixes
+- Same changes as Desktop 1.0.23.
+
 ## Desktop 1.0.22
 
 ### Fixes
