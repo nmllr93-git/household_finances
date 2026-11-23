@@ -17,7 +17,7 @@
     { t: 'Your data stays with you', b: '', map: true },
     { t: 'Find your way around', b: 'The tabs across the top group everything: Overview, Spending, Wealth and more. ⚙ Settings holds your dashboards, bank sync, backups and phone widgets. Use “Send feedback” there to tell us what to improve.' },
     { t: 'Get your bank data in', list: [
-      ['Import statements', 'Download a CSV, OFX or QFX file from your bank’s website and drop it on Import (+). Several files at once is fine; each is matched to the right account. Free, and nothing leaves your device.'],
+      ['Import statements', 'Download a statement from your bank’s website (PDF, CSV, OFX or QFX) and drop it on Import (+). Several files at once is fine; each is matched to the right account. Free, and nothing leaves your device.'],
       ['Or sync automatically with SimpleFIN', 'SimpleFIN Bridge is a separate read-only service (about $15 a year, paid to them). Link your banks there, paste a setup token in ⚙ Settings → Automatic bank sync, choose which accounts to bring in, and new transactions arrive about every 6 hours.']],
       b2: 'You can mix both: sync the accounts SimpleFIN supports and import the rest.', last: true },
   ];
