@@ -70,6 +70,7 @@ const db = new DatabaseSync(DB_FILE);
 const SCHEMA = `
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
+  CREATE TABLE IF NOT EXISTS tls_self (id INTEGER PRIMARY KEY CHECK (id = 1), cert TEXT NOT NULL, key TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, name TEXT NOT NULL, label TEXT NOT NULL, sort INTEGER DEFAULT 0);
   CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt TEXT NOT NULL, hash TEXT NOT NULL, created TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS members (username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
@@ -577,7 +578,10 @@ function start(opts = {}) {
   // HTTPS on the same port: the first byte of each connection says which (TLS starts with 0x16), so old http:// links keep working
   let hs = null;
   try {
-    SELFTLS = TLS.loadOrMake(path.join(DATA_DIR, 'tls'), lanAddrs());
+    // kept in the database too, so backups (and a restore after reinstalling) keep the same certificate and paired phones keep working
+    const row = db.prepare('SELECT cert, key FROM tls_self WHERE id = 1').get();
+    if (row) SELFTLS = { cert: row.cert, key: row.key, fp: TLS.fingerprint(TLS.derOf(row.cert)) };
+    else { SELFTLS = TLS.loadOrMake(path.join(DATA_DIR, 'tls'), lanAddrs()); try { db.prepare('INSERT OR REPLACE INTO tls_self (id, cert, key) VALUES (1, ?, ?)').run(SELFTLS.cert, SELFTLS.key); } catch (e) {} }
     const selfCtx = require('node:tls').createSecureContext({ cert: SELFTLS.cert, key: SELFTLS.key });
     hs = https.createServer({ cert: SELFTLS.cert, key: SELFTLS.key, SNICallback: (name, cb) => cb(null, TSCTX && TSTLS && name === TSTLS.name ? TSCTX : selfCtx) }, handler);
   } catch (e) { SELFTLS = null; console.error('HTTPS is off (couldn’t make this computer’s certificate):', e.message); }

@@ -96,14 +96,27 @@
       if (typeof C.nativePromise === 'function') return (host, fp) => C.nativePromise('LarenestWidget', 'trustCert', { host, fp }); }
     return null; };
   const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return ''; } };
+  // the certificate each computer had last time (by its Larenest id), to notice if it changes
+  const fps = () => { try { return JSON.parse(localStorage.getItem('fd-certs') || '{}'); } catch (e) { return {}; } };
+  const setFp = (k, v) => { try { const m = fps(); m[k] = v; localStorage.setItem('fd-certs', JSON.stringify(m)); } catch (e) {} };
+  function certChanged(raw, j) {
+    say('This computer’s security certificate has changed' + (j.name ? ' (' + j.name + ')' : '') + '.', 'bad');
+    explain(['That’s expected if Larenest was reinstalled or its data folder changed on that computer. If so, continue.',
+      'If nothing changed there, don’t continue: another device on this network may be pretending to be your computer. Scan the QR code in Host options on the computer instead; that always connects to the right one.']);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = 'It was reinstalled, continue';
+    b.addEventListener('click', () => { window.__fdOkNewCert = true; b.remove(); go(raw); }); $('why').after(b);
+  }
   async function go(raw) {
     let fp = ''; raw = String(raw || '').trim().replace(/[?#]fp=([0-9A-Fa-f]{64})\b.*$/, (m, f) => { fp = f.toUpperCase(); return ''; });
     let u = norm(raw); if (!u) { say('Enter an address.', 'bad'); return; }
     const T = trustApi();
-    if (fp && T && /^https:/i.test(u)) { try { await T(hostOf(u), fp); } catch (e) {} }
-    // an http:// address of a computer that offers HTTPS: switch to it (encrypted), trusting the certificate it reports
-    if (/^http:/i.test(u) && T) { const j0 = await ping(u, 4000); if (j0 && j0.tls && /^[0-9A-F]{64}$/i.test(j0.tls.fp || '')) { const hu = u.replace(/^http:/i, 'https:');
-      try { await T(hostOf(hu), j0.tls.fp.toUpperCase()); if (await ping(hu, 4000)) { try { localStorage.setItem(KEY, JSON.stringify(list().filter((x) => x !== u))); } catch (e) {} u = hu; } } catch (e) {} } }
+    if (fp && T && /^https:/i.test(u)) { try { await T(hostOf(u), fp); setFp('qr|' + hostOf(u), fp); const j1 = await ping(u, 4000); if (j1 && j1.id) setFp('id|' + j1.id, fp); } catch (e) {} }
+    // an http:// address of a computer that offers HTTPS: switch to it (encrypted), trusting the certificate it reports.
+    // If that computer's certificate is different from last time, say so and let the person decide (it's expected after a reinstall).
+    if (/^http:/i.test(u) && T) { const j0 = await ping(u, 4000); if (j0 && j0.tls && /^[0-9A-F]{64}$/i.test(j0.tls.fp || '')) { const hu = u.replace(/^http:/i, 'https:'), nfp = j0.tls.fp.toUpperCase();
+      const key = (j0.id || '') + '|' + hostOf(hu), was = fps()[key] || fps()['id|' + (j0.id || '')];
+      if (was && was !== nfp && !fp && !window.__fdOkNewCert) { certChanged(raw, j0); return; }
+      try { await T(hostOf(hu), nfp); setFp(key, nfp); if (j0.id) setFp('id|' + j0.id, nfp); if (await ping(hu, 4000)) { try { localStorage.setItem(KEY, JSON.stringify(list().filter((x) => x !== u))); } catch (e) {} u = hu; } } catch (e) {} } }
     say('Checking ' + u + ' …'); const t0 = Date.now(); explain([]);
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
     try {
