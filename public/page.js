@@ -3243,6 +3243,9 @@
       const run = async () => { stt.textContent = 'Updating the widget…'; const ok = await pushWidget(true); stt.textContent = ok ? '✓ Widget updated with this dashboard.' : !widgetApi() ? 'The widget can’t be reached from here. Update the Larenest phone app to the newest version.' : st('budget_totals', 'subs') !== 'ok' ? 'Still loading this dashboard; try again in a moment.' : 'Couldn’t update the widget: ' + wState; };
       i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} run(); }); l.append(i, ' Hide dollar amounts on the home-screen widget (shows percentages instead). This phone only.');
       w.append(l, rbtn('Update widget now', run, false), stt); row('Phone widget', w); }
+    { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = document.body.classList.contains('fd-brand');
+      i.addEventListener('change', () => { document.body.classList.toggle('fd-brand', i.checked); try { localStorage.setItem('fd-brand', i.checked ? '1' : '0'); } catch {} });
+      l.append(i, ' Show the Larenest logo and colors (this device only)'); row('Larenest look', l); }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
     const chk = (label, on, set) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.addEventListener('change', () => set(i.checked)); l.append(i, ' ' + label); return l; };
     const tw = document.createElement('div'); tw.className = 'fd-chkgrid';

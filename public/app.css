@@ -435,3 +435,46 @@ details.fd-setgrp > summary.fd-setgrp-h { cursor: pointer; padding: 10px 2px; te
 .fd-ptr { position: fixed; top: -36px; left: 50%; transform: translate(-50%, 0); z-index: 60; padding: 7px 14px; border-radius: 999px; font-size: 13px; background: var(--color-bg-elevated, #fff); color: var(--color-fg); border: 1px solid var(--color-border-line); box-shadow: 0 2px 10px rgba(0,0,0,.18); opacity: 0; transition: opacity .15s; pointer-events: none; }
 .fd-ptr.on { opacity: 1; top: 8px; }
 @media (pointer: coarse) { html, body { overscroll-behavior-y: contain; } }
+
+/* ---------- Larenest look (body.fd-brand; ⚙ Settings → Larenest look turns it off) ---------- */
+.fd-brandbar { display: none; }
+body.fd-brand { --brand: #9C4A2F; --brand-gold: #E3A848; --brand-soft: rgba(156, 74, 47, .09); --brand-line: rgba(156, 74, 47, .28); --color-accent: var(--brand); }
+@media (prefers-color-scheme: dark) { body.fd-brand { --brand: #E08A66; --brand-soft: rgba(224, 138, 102, .13); --brand-line: rgba(224, 138, 102, .35); } }
+body.fd-brand .fd-brandbar { display: flex; align-items: center; gap: 9px; margin: 0 0 6px; }
+body.fd-brand .fd-brandname { font-size: 20px; font-weight: 700; letter-spacing: -.01em; color: var(--brand); }
+body.fd-brand .fd-brandmark { flex: 0 0 auto; border-radius: 9px; }
+/* a thin terracotta-to-gold line under the header */
+body.fd-brand header#overview { position: relative; padding-bottom: 14px; }
+body.fd-brand header#overview::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--brand), var(--brand-gold)); opacity: .55; }
+/* accents: selected tab and menu, toggles, main buttons, links, checkboxes */
+body.fd-brand .fd-navb.is-on, body.fd-brand .fd-navm.is-on { color: var(--brand); border-bottom-color: var(--brand); }
+body.fd-brand .fd-tab.is-on { box-shadow: 0 0 0 1px var(--brand-line); color: var(--brand); }
+body.fd-brand .fd-vtog button.is-on { background: var(--brand-soft); color: var(--brand); }
+body.fd-brand .fd-btn:not(.fd-quiet):not(.fd-sm):not(.fd-danger) { background: var(--brand); border-color: var(--brand); color: #fff; }
+body.fd-brand .fd-fab { background: var(--brand) !important; color: #fff !important; }
+body.fd-brand a:not(.fd-btn) { color: var(--brand); }
+body.fd-brand input[type=checkbox], body.fd-brand input[type=radio], body.fd-brand progress { accent-color: var(--brand); }
+body.fd-brand .fd-setgrp-h { color: var(--brand); }
+body.fd-brand .fd-card h2, body.fd-brand section > h2 { border-left: 3px solid var(--brand-gold); padding-left: 9px; }
+body.fd-brand .fd-ptr { border-color: var(--brand-line); color: var(--brand); }
+body.fd-brand .fd-btn.fd-sm:not(.fd-quiet):not(.fd-danger) { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); }
+body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); box-shadow: 0 0 0 1px var(--brand-line); background: var(--brand-soft); }
+.fd-dl-short { display: none; }
+/* phones with the Larenest look: account links share the logo row (⟳ icon, "Backup") */
+@media (max-width: 640px) {
+  body.fd-brand header#overview { padding-top: 0; }
+  body.fd-brand .fd-brandbar { min-height: 34px; padding-right: 0; }
+  body.fd-brand .fd-brandname { font-size: 18px; }
+  body.fd-brand .fd-brandmark { width: 26px; height: 26px; }
+  body.fd-brand .fd-account { position: absolute; top: 0; right: 0; height: 34px; display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
+  body.fd-brand .fd-reflbl { display: none; }
+  body.fd-brand .fd-account .fd-link:first-child { font-size: 18px; line-height: 1; padding: 0 2px; }
+  body.fd-brand .fd-dl-long { display: none; } body.fd-brand .fd-dl-short { display: inline; }
+}
+/* Larenest look, dark mode: neutral warm charcoal instead of navy-grey, so the logo colors read cleanly */
+@media (prefers-color-scheme: dark) {
+  html:has(body.fd-brand), body.fd-brand { --color-bg: #161514; --color-panel: #201e1c; --color-border-line: #33302c; --color-fg: #ecebe8; --color-fg-muted: #a8a29b;
+    --cds-chart-grid: #2a2724; --cds-chart-axis: #403b36; --cds-chart-muted: #403b36; --cds-text-secondary: #a8a29b; --cds-surface-popover: #24211f; --cds-border: #3a3631; }
+}
+/* amounts never break between the minus sign and the number */
+[data-draw=acctRows] td:not(.fd-l), .fd-table td.fd-num, .fd-table td.fd-bad, .fd-table td.fd-good { white-space: nowrap; }
