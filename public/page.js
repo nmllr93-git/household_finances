@@ -1543,7 +1543,8 @@
   let wSig = '';
   const wHide = () => { try { return localStorage.getItem('fd-widget-hide') === '1'; } catch { return false; } };
   // reach the app's own widget plugin: the plugin list if it's there, otherwise Capacitor's direct native call
-  const widgetApi = () => { const C = window.Capacitor; if (!C || (C.getPlatform && C.getPlatform() !== 'android')) return null;
+  const widgetApi = () => { if (window.LarenestWidgetNative && window.LarenestWidgetNative.update) return { update: (o) => Promise.resolve(window.LarenestWidgetNative.update(o.data)) }; // Android app, any page
+    const C = window.Capacitor; if (!C || (C.getPlatform && C.getPlatform() !== 'android')) return null;
     if (C.Plugins && C.Plugins.LarenestWidget && C.Plugins.LarenestWidget.update) return C.Plugins.LarenestWidget;
     if (typeof C.nativePromise === 'function') return { update: (o) => C.nativePromise('LarenestWidget', 'update', o) };
     return null; };
@@ -3168,7 +3169,7 @@
     { const w = document.createElement('div'); w.className = 'fd-vtog'; [[false, 'Full'], [true, 'Simple']].forEach(([v, lab]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.className = SIMPLE === v ? 'is-on' : '';
         b.addEventListener('click', () => { SIMPLE = v; try { localStorage.setItem('fd-simple', v ? '1' : '0'); } catch {} w.querySelectorAll('button').forEach((x) => x.classList.toggle('is-on', x === b)); showGroup(NP.group || 'all'); }); w.append(b); });
       const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = ' Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
-    if (window.Capacitor && !(window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios')) { const w = document.createElement('div'); const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
+    if (widgetApi()) { const w = document.createElement('div'); const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
       const stt = document.createElement('div'); stt.className = 'fd-zero';
       const run = async () => { stt.textContent = 'Updating the widget…'; const ok = await pushWidget(true); stt.textContent = ok ? '✓ Widget updated with this dashboard.' : !widgetApi() ? 'The widget can’t be reached from here. Update the Larenest phone app to the newest version.' : st('budget_totals', 'subs') !== 'ok' ? 'Still loading this dashboard; try again in a moment.' : 'Couldn’t update the widget: ' + wState; };
       i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} run(); }); l.append(i, ' Hide dollar amounts on the home-screen widget (shows percentages instead). This phone only.');
