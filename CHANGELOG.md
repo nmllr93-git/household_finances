@@ -3,6 +3,24 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.20
+
+### Phone layout
+- Bank sync accounts show as cards; the weekly email has the address on its own row with day and time side by side.
+- Saved imports show as cards; the account picker’s + button stays beside the dropdown.
+- Dashboard tile view buttons (Numbers / Ring / Bars) always fit on one line.
+- Subscriptions: tap a row to show its “Not recurring” button.
+- Settings has bigger buttons, boxes and checkboxes on phones; the watchlist alert box matches the symbol box.
+- The page can no longer be dragged sideways past its right edge.
+
+### Fixes
+- Home-screen widget: dashboards opened from your computer now update it. ⚙ Settings → Phone widget has **Update widget now** and shows whether it worked.
+
+## Android 1.6.1
+
+### Fixes
+- Same phone layout and widget fixes as Desktop 1.0.20.
+
 ## Desktop 1.0.19
 
 ### New

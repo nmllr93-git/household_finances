@@ -526,6 +526,7 @@
   // vendors marked "Not recurring" (e.g. Venmo): left out of subscriptions, recurring bills, price changes, bill reminders and forecasts
   const notRecList = () => prefGet('notRecurring', []) || [];
   const setNotRec = async (vendor, on) => { const cur = notRecList().filter((v) => v.toLowerCase() !== vendor.toLowerCase()); await prefSet('notRecurring', on ? [...cur, vendor] : cur); };
+  document.addEventListener('click', (e) => { if (!matchMedia('(max-width: 640px)').matches) return; const tr = e.target.closest('#subscriptions tbody tr'); if (!tr || e.target.closest('button, a, input, select')) return; tr.classList.toggle('fd-open'); });
   const notRecBtn = (vendor) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link fd-notrec'; b.textContent = 'Not recurring'; b.title = `${vendor} isn\u2019t a subscription or regular bill: stop treating it as one`;
     b.addEventListener('click', async (e) => { e.stopPropagation(); b.disabled = true; try { await setNotRec(vendor, true); } catch (err) { b.disabled = false; alert('Not saved: ' + err.message); } }); return b; };
   dash.draw('notRecRows', (el) => {
@@ -3367,7 +3368,7 @@
     el.append(rhead('Watchlist'));
     const add = document.createElement('div'); add.className = 'fd-rb-row';
     const sy = rin(wIn, 'Symbol, e.g. MSFT', (v) => { wIn = v.toUpperCase(); }); sy.style.maxWidth = '12em';
-    const bl = rin(wBelow, 'Alert below $ (optional)', (v) => { wBelow = v; }); bl.type = 'number'; bl.min = '0'; bl.step = '0.01'; bl.style.maxWidth = '13em';
+    const bl = rin(wBelow, 'Alert below $ (optional)', (v) => { wBelow = v; }); bl.type = 'number'; bl.min = '0'; bl.step = '0.01'; bl.style.maxWidth = '13em'; bl.style.fontSize = 'inherit';
     add.append(sy, bl, rbtn('+ Watch', async () => { const sym = wIn.trim(); if (!/^[A-Z0-9.\-^]{1,12}$/.test(sym) || list.some((w) => w.symbol === sym)) return; await prefSet('watch', [...list, { symbol: sym, below: Number(wBelow) || 0, added: new Date().toLocaleDateString('en-CA') }]); wIn = ''; wBelow = ''; qWant = ''; }, false));
     el.append(add);
     if (!list.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Follow stocks you don’t own. Prices come with the hourly update on the self-hosted app.'; el.append(p); return; }
