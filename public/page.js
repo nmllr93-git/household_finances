@@ -284,12 +284,19 @@
     expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], import: ['import'], review: ['review'], planning: ['forecast', 'planner', 'projection', 'taxes'], markets: ['markets', 'economy'], settings: ['settings'] };
   const ALL = [...new Set(Object.values(GROUPS).flat())];
   let HIDESEC = new Set(), HIDEPART = new Set(); const PART = (k) => HIDEPART.has(k);
+  // Simple view (per device): hides the advanced sections and their menu buttons; Full shows everything
+  const SIMPLE_HIDE = new Set(['unusual', 'top-vendors', 'big', 'tags', 'dow', 'vendors', 'holdings', 'deposits', 'investments', 'forecast', 'planner', 'projection', 'taxes', 'markets', 'economy', 'review']);
+  const SIMPLE_GROUPS = new Set(['planning', 'markets', 'review']);
+  let SIMPLE = (() => { try { return localStorage.getItem('fd-simple') === '1'; } catch { return false; } })();
+  const simpleNav = () => document.querySelectorAll('.fd-navb').forEach((b) => { if (SIMPLE_GROUPS.has(b.dataset.group)) b.hidden = SIMPLE; });
   const NP = (() => { try { return JSON.parse(localStorage.getItem('fd-nav') || '{}') || {}; } catch { return {}; } })();
   const npSave = () => { try { localStorage.setItem('fd-nav', JSON.stringify(NP)); } catch {} };
   let showGroup = (g) => {
     NP.group = g; npSave();
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
-    ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id); }));
+    if (SIMPLE && SIMPLE_GROUPS.has(g)) return showGroup('all');
+    ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id) || (SIMPLE && SIMPLE_HIDE.has(id)); }));
+    simpleNav();
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   // Phone section menus: defaults below; each phone can rename, add, remove and regroup them (⚙ Settings → Phone menus). Saved on this device.
@@ -312,7 +319,7 @@
       b.addEventListener('click', (e) => {
         e.stopPropagation(); const was = open && open.__for === b; close(); if (was) return;
         const m = document.createElement('div'); m.className = 'fd-navpop'; m.setAttribute('role', 'menu'); m.__for = b;
-        for (const g of gs) { const src = navBtn(g); if (!src || (g === 'import' && document.body.classList.contains('fd-readonly'))) continue;
+        for (const g of gs) { const src = navBtn(g); if (!src || src.hidden || (g === 'import' && document.body.classList.contains('fd-readonly'))) continue;
           const it = document.createElement('button'); it.type = 'button'; it.setAttribute('role', 'menuitem'); it.textContent = label(g); if (NP.group === g) it.className = 'is-on';
           it.addEventListener('click', () => { close(); src.click(); }); m.append(it); }
         const r = b.getBoundingClientRect(); m.style.top = r.bottom + 'px'; m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 200)) + 'px';
@@ -3052,6 +3059,9 @@
     row('Open on', sel(tabs, s.tab, (v) => { s.tab = v; }));
     const rngSel = document.getElementById('fd-range'); const rngs = [['', 'Last used'], ...(rngSel ? [...rngSel.options].filter((o) => o.value !== 'custom').map((o) => [o.value, o.textContent]) : [])];
     row('Default date range', sel(rngs, s.range, (v) => { s.range = v; }));
+    { const w = document.createElement('div'); w.className = 'fd-vtog'; [[false, 'Full'], [true, 'Simple']].forEach(([v, lab]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.className = SIMPLE === v ? 'is-on' : '';
+        b.addEventListener('click', () => { SIMPLE = v; try { localStorage.setItem('fd-simple', v ? '1' : '0'); } catch {} w.querySelectorAll('button').forEach((x) => x.classList.toggle('is-on', x === b)); showGroup(NP.group || 'all'); }); w.append(b); });
+      const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = ' Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
     const chk = (label, on, set) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.addEventListener('change', () => set(i.checked)); l.append(i, ' ' + label); return l; };
     const tw = document.createElement('div'); tw.className = 'fd-chkgrid';
