@@ -3,6 +3,20 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.21
+
+### Changes
+- **Settings are organized into sections:** This dashboard, Bank & data connections, People & devices, Notifications, Backup & privacy, and a folded **Advanced** section (your own bank keys, phone menus, sections to show, recent changes). The email sending account folds away once it’s set up.
+- The dashboard tiles are hidden on the Settings tab; Download backup is a normal button.
+
+### Fixes
+- Home-screen widget: pages from your computer can now update it (needs Android 1.6.2), and ⚙ Settings → Phone widget appears on the phone.
+
+## Android 1.6.2
+
+### Fixes
+- The widget now works when the app shows your computer’s dashboards; plus the Settings changes from Desktop 1.0.21.
+
 ## Desktop 1.0.20
 
 ### Phone layout
