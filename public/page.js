@@ -1541,8 +1541,14 @@
   // Android home-screen widget: hand the app a short summary of the open dashboard (kept on the phone only)
   let wSig = '';
   const wHide = () => { try { return localStorage.getItem('fd-widget-hide') === '1'; } catch { return false; } };
-  const pushWidget = () => {
-    const W = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LarenestWidget; if (!W || st('budget_totals', 'subs') !== 'ok') return;
+  // reach the app's own widget plugin: the plugin list if it's there, otherwise Capacitor's direct native call
+  const widgetApi = () => { const C = window.Capacitor; if (!C || (C.getPlatform && C.getPlatform() !== 'android')) return null;
+    if (C.Plugins && C.Plugins.LarenestWidget && C.Plugins.LarenestWidget.update) return C.Plugins.LarenestWidget;
+    if (typeof C.nativePromise === 'function') return { update: (o) => C.nativePromise('LarenestWidget', 'update', o) };
+    return null; };
+  let wState = '';
+  const pushWidget = (force) => {
+    const W = widgetApi(); if (!W || st('budget_totals', 'subs') !== 'ok') return Promise.resolve(false);
     const r = budTot(), u = upcoming()[0], nm = ((meBooks().find((b) => b.label === book()) || {}).name) || book(), has = !!(r && r.categories);
     const d = wHide() ? { title: `${nm}${r ? ' · ' + r.label : ''}`, pct: has ? Math.max(0, Math.round(r.usedPct)) : -1, // amounts hidden: percentages and names only
       big: has ? (r.spent > r.available ? 'Over budget' : `${Math.round(r.usedPct)}% of budget used`) : 'No budget set',
@@ -1551,11 +1557,11 @@
       big: has ? (r.spent > r.available ? `${money0(r.spent - r.available)} over budget` : `${money0(r.available - r.spent)} left`) : 'No budget set',
       line1: has ? `${money0(r.spent)} of ${money0(r.available)} spent${r.elapsed != null ? ` · ${Math.round(r.elapsed * 100)}% of the month gone` : ''}` : 'Set one in Budget vs actual to see it here.',
       line2: u ? `Next bill: ${u.x.vendor} ${money0(u.x.lastCharge)} on ${u.due.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}` : '' };
-    const sig = JSON.stringify(d); if (sig === wSig) return; wSig = sig;
+    const sig = JSON.stringify(d); if (sig === wSig && !force) return Promise.resolve(true); wSig = sig;
     d.updated = 'Updated ' + new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    Promise.resolve(W.update({ data: JSON.stringify(d) })).catch(() => {});
+    return Promise.resolve(W.update({ data: JSON.stringify(d) })).then(() => { wState = 'ok'; return true; }, (e) => { wState = (e && e.message) || 'error'; wSig = ''; return false; });
   };
-  dash.onData(pushWidget);
+  dash.onData(() => { pushWidget(); });
   dash.draw('billRows', (el) => {
     if (st('subs') !== 'ok') return;
     el.replaceChildren();
@@ -3158,8 +3164,11 @@
     { const w = document.createElement('div'); w.className = 'fd-vtog'; [[false, 'Full'], [true, 'Simple']].forEach(([v, lab]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.className = SIMPLE === v ? 'is-on' : '';
         b.addEventListener('click', () => { SIMPLE = v; try { localStorage.setItem('fd-simple', v ? '1' : '0'); } catch {} w.querySelectorAll('button').forEach((x) => x.classList.toggle('is-on', x === b)); showGroup(NP.group || 'all'); }); w.append(b); });
       const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = ' Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
-    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LarenestWidget) { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
-      i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} wSig = ''; pushWidget(); }); l.append(i, ' Hide dollar amounts on the home-screen widget (shows percentages instead). This phone only.'); row('Phone widget', l); }
+    if (window.Capacitor && !(window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios')) { const w = document.createElement('div'); const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
+      const stt = document.createElement('div'); stt.className = 'fd-zero';
+      const run = async () => { stt.textContent = 'Updating the widget…'; const ok = await pushWidget(true); stt.textContent = ok ? '✓ Widget updated with this dashboard.' : !widgetApi() ? 'The widget can’t be reached from here. Update the Larenest phone app to the newest version.' : st('budget_totals', 'subs') !== 'ok' ? 'Still loading this dashboard; try again in a moment.' : 'Couldn’t update the widget: ' + wState; };
+      i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} run(); }); l.append(i, ' Hide dollar amounts on the home-screen widget (shows percentages instead). This phone only.');
+      w.append(l, rbtn('Update widget now', run, false), stt); row('Phone widget', w); }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
     const chk = (label, on, set) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.addEventListener('change', () => set(i.checked)); l.append(i, ' ' + label); return l; };
     const tw = document.createElement('div'); tw.className = 'fd-chkgrid';
