@@ -2728,10 +2728,11 @@
     if (host.querySelector('.fd-privbox')) return; const tok = {}; host.__priv = tok;
     let keys = {}; try { keys = (await FDStore.json('GET', '/api/keys')).set || {}; } catch (e) {}
     let sf = false; try { sf = !!(await FDStore.json('GET', `/api/books/${encodeURIComponent(window.HF.state.bookId)}/simplefin`)).connected; } catch (e) {}
+    let bk = null; if (!window.FD_LOCAL) { try { bk = await FDStore.json('GET', '/api/bankkeys'); } catch (e) {} }
     if (host.__priv !== tok || host.querySelector('.fd-privbox')) return;
     const box = document.createElement('details'); box.className = 'fd-rb fd-privbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Where your data lives'; box.append(sm);
     const NAMES = { finnhub: 'Finnhub', fmp: 'Financial Modeling Prep', fred: 'FRED', bls: 'Bureau of Labor Statistics', eia: 'Energy Information Administration' };
-    const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)');
+    const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)'); if (bk && bk.teller.appId) on.push('Teller (your own keys)'); if (bk && bk.plaid.hasSecret) on.push('Plaid (your own keys)');
     [window.FD_LOCAL ? 'Everything you enter is stored only on this phone, in the app’s private storage. Uninstalling the app deletes it, so keep a backup file somewhere safe.' : 'Everything you enter is stored only on the computer that runs Larenest, in its data folder. Phones and other computers just display it.',
       'There’s no Larenest account and no company server. The developer never receives your transactions, balances or anything else: no ads, no analytics, no tracking.',
       'Only the optional data services you turn on are contacted, directly from here. They get stock symbols, a VIN or your API key, never your financial information. Bank sync (SimpleFIN) only brings your bank data in; nothing is sent back.',
