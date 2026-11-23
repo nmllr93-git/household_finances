@@ -49,3 +49,9 @@ test('markets: top gainers and losers, five each', async () => {
   const o = W.build({ name: 'X', movers: { gainers: g, losers: [{ symbol: 'ab', price: 0, change: -12.34 }] } });
   assert.equal(o.markets.gainers.length, 5); assert.equal(o.markets.gainers[0].sym, 'G0'); assert.equal(o.markets.losers[0].pct, -12.3); assert.equal(o.markets.losers[0].price, null);
 });
+
+test('movers from followed sectors come first and are marked', () => {
+  const W = createRequire(import.meta.url)('../core/widgetdata.js');
+  const o = W.build({ name: 'X', follow: ['Technology'], movers: { gainers: [{ symbol: 'a', change: 9, sector: 'Energy' }, { symbol: 'b', change: 5, sector: 'Technology' }], losers: [] } });
+  assert.deepEqual(o.markets.gainers.map((x) => [x.sym, x.mine]), [['B', true], ['A', false]]);
+});

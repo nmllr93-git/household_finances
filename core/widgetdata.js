@@ -94,8 +94,10 @@
         const x = q[sym] || {}; return { sym, price: x.price > 0 ? r2(x.price) : null, pct: x.price > 0 && x.prevClose > 0 ? Math.round(((x.price - x.prevClose) / x.prevClose) * 1000) / 10 : null }; }) };
     // today's biggest gainers and losers (top 5 each)
     const mv = (l) => (Array.isArray(l) ? l : []).filter((x) => x && x.symbol && isFinite(Number(x.change))).slice(0, 5)
-      .map((x) => ({ sym: String(x.symbol).toUpperCase().slice(0, 8), name: String(x.name || '').slice(0, 40), price: Number(x.price) > 0 ? r2(Number(x.price)) : null, pct: Math.round(Number(x.change) * 10) / 10 }));
-    const mvs = i.movers || {}; out.markets.gainers = mv(mvs.gainers); out.markets.losers = mv(mvs.losers);
+      .map((x) => ({ sym: String(x.symbol).toUpperCase().slice(0, 8), name: String(x.name || '').slice(0, 40), mine: fol.has(x.sector), price: Number(x.price) > 0 ? r2(Number(x.price)) : null, pct: Math.round(Number(x.change) * 10) / 10 }));
+    // when you follow sectors, movers from those sectors come first (others fill in if there are too few)
+    const mvs = i.movers || {}, pick = (l) => { l = Array.isArray(l) ? l : []; if (!fol.size) return l; const inF = l.filter((x) => x && fol.has(x.sector)); return [...inF, ...l.filter((x) => !inF.includes(x))]; };
+    out.markets.gainers = mv(pick(mvs.gainers)); out.markets.losers = mv(pick(mvs.losers)); out.markets.followed = fol.size > 0;
     return out;
   }
 

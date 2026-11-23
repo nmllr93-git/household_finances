@@ -16,6 +16,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 // Everything the home-screen widgets share: the saved summary, where to refresh it from, formatting, refresh and schedule.
@@ -30,18 +31,28 @@ final class WidgetStore {
 
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
 
-    // {cfg:{base, book, query, hide, local}, data:{…}}
+    // {cfg:{base, book (the open dashboard), books:[{id,name}], query, hide, local, alerts}, books:{id: summary}, data: summary of the open one}
     static JSONObject payload(Context c) {
         try { return new JSONObject(prefs(c).getString("payload", "{}")); } catch (Exception e) { return new JSONObject(); }
     }
     static JSONObject data(Context c) { JSONObject p = payload(c); return p.optJSONObject("data"); }
+    // each widget can show its own dashboard (chosen when it's placed); otherwise the one open in the app
+    static String bookFor(Context c, int widgetId) { return prefs(c).getString("wbook_" + widgetId, ""); }
+    static void setBookFor(Context c, int widgetId, String book) { prefs(c).edit().putString("wbook_" + widgetId, book == null ? "" : book).apply(); }
+    static JSONObject data(Context c, int widgetId) {
+        JSONObject p = payload(c), all = p.optJSONObject("books"); String b = bookFor(c, widgetId);
+        if (!b.isEmpty() && all != null && all.optJSONObject(b) != null) return all.optJSONObject(b);
+        return p.optJSONObject("data");
+    }
+    static String bookId(Context c, int widgetId) { String b = bookFor(c, widgetId); return b.isEmpty() ? cfg(c).optString("book", "") : b; }
+    static JSONArray books(Context c) { JSONArray a = cfg(c).optJSONArray("books"); return a == null ? new JSONArray() : a; }
     static JSONObject cfg(Context c) { JSONObject p = payload(c); JSONObject x = p.optJSONObject("cfg"); return x == null ? new JSONObject() : x; }
     static boolean hide(Context c) { return cfg(c).optBoolean("hide", false); }
     static String status(Context c) { return prefs(c).getString("status", ""); }
     static void setStatus(Context c, String s) { prefs(c).edit().putString("status", s).apply(); }
 
     static void save(Context c, String json) {
-        if (json == null || json.length() > 60000) return;
+        if (json == null || json.length() > 400000) return;
         prefs(c).edit().putString("payload", json).putString("status", "").putLong("at", System.currentTimeMillis()).apply();
     }
 
@@ -79,26 +90,36 @@ final class WidgetStore {
     static boolean fetch(Context c) {
         JSONObject cf = cfg(c);
         if (!canFetch(c)) return false;
+        try {
+            JSONObject p = payload(c), all = p.optJSONObject("books"); if (all == null) all = new JSONObject();
+            JSONArray list = books(c); String cur = cf.optString("book");
+            if (list.length() == 0) { JSONObject o = new JSONObject(); o.put("id", cur); list.put(o); }
+            boolean any = false;
+            for (int i = 0; i < list.length() && i < 8; i++) {
+                String id = list.optJSONObject(i).optString("id"); if (id.isEmpty()) continue;
+                JSONObject d = get(c, cf.optString("base"), id, cf.optString("query", "")); if (d == null) return any && finish(c, p, all);
+                all.put(id, d); any = true; if (id.equals(cur)) p.put("data", d);
+            }
+            return finish(c, p, all);
+        } catch (Exception e) { setStatus(c, "Can’t reach your computer"); return false; }
+    }
+    private static boolean finish(Context c, JSONObject p, JSONObject all) throws Exception { p.put("books", all); save(c, p.toString()); Alerts.check(c); return true; }
+    private static JSONObject get(Context c, String base, String book, String query) {
         HttpURLConnection h = null;
         try {
-            String base = cf.optString("base"), url = base + "/api/books/" + java.net.URLEncoder.encode(cf.optString("book"), "UTF-8") + "/widgets?" + cf.optString("query", "");
+            String url = base + "/api/books/" + java.net.URLEncoder.encode(book, "UTF-8") + "/widgets?" + query;
             h = (HttpURLConnection) new URL(url).openConnection();
             h.setConnectTimeout(8000); h.setReadTimeout(30000); h.setRequestProperty("Accept", "application/json");
             String ck = CookieManager.getInstance().getCookie(base); // the dashboard's own sign-in on this phone
             if (ck != null) h.setRequestProperty("Cookie", ck);
             int code = h.getResponseCode();
-            if (code == 401 || code == 403) { setStatus(c, "Sign in to Larenest to refresh"); return false; }
-            if (code != 200) { setStatus(c, "Couldn’t refresh (error " + code + ")"); return false; }
+            if (code == 401 || code == 403) { setStatus(c, "Sign in to Larenest to refresh"); return null; }
+            if (code != 200) { setStatus(c, "Couldn’t refresh (error " + code + ")"); return null; }
             InputStream in = h.getInputStream(); ByteArrayOutputStream bo = new ByteArrayOutputStream(); byte[] buf = new byte[8192]; int n;
             while ((n = in.read(buf)) > 0) { bo.write(buf, 0, n); if (bo.size() > 60000) break; }
-            JSONObject data = new JSONObject(bo.toString("UTF-8")), p = payload(c);
-            p.put("data", data);
-            save(c, p.toString());
-            return true;
-        } catch (Exception e) {
-            setStatus(c, "Can’t reach your computer");
-            return false;
-        } finally { if (h != null) h.disconnect(); }
+            return new JSONObject(bo.toString("UTF-8"));
+        } catch (Exception e) { setStatus(c, "Can’t reach your computer"); return null; }
+        finally { if (h != null) h.disconnect(); }
     }
 
     // ---- background refresh: an inexact repeating alarm (battery friendly); 0 = off ----
@@ -115,8 +136,11 @@ final class WidgetStore {
         Intent i = new Intent(c, WidgetRefreshReceiver.class).setAction(ACTION_REFRESH);
         return PendingIntent.getBroadcast(c, code, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
-    static PendingIntent openApp(Context c, int code) {
-        Intent i = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    static PendingIntent openApp(Context c, int code) { return openApp(c, code, "", ""); }
+    // open the app at a section (budget, holdings, subscriptions, markets) of a dashboard
+    static PendingIntent openApp(Context c, int code, String section, String book) {
+        Intent i = new Intent(c, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("go", section == null ? "" : section).putExtra("book", book == null ? "" : book);
         return PendingIntent.getActivity(c, code, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 }

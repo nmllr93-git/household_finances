@@ -24,10 +24,18 @@
     window.HF.load(b.id);
   }
 
+  // opened from a phone widget or alert: switch dashboard if needed, then show the section
+  window.FDGo = (sec, bid) => {
+    window.__fdGo = null;
+    const cur = window.HF && window.HF.state && window.HF.state.bookId;
+    if (bid && bid !== cur && books.some((b) => b.id === bid)) pick(bid);
+    const show = () => { if (window.FDShow) window.FDShow(sec); else setTimeout(show, 200); }; setTimeout(show, bid && bid !== cur ? 700 : 50);
+  };
+
   async function boot() {
     let me;
     try { me = await window.HF.api('GET', '/api/me'); } catch { return; }
-    books = me.books;
+    books = me.books; window.FD_BOOKS = books.map((b) => ({ id: b.id, name: b.name }));
     $('#fd-user').textContent = me.username;
     const nav = $('#fd-books');
     nav.replaceChildren(...books.map((b) => {
@@ -39,6 +47,7 @@
     nav.hidden = books.length < 2;
     if (!books.length) { $('#fd-title').textContent = 'No budgets yet'; return; }
     let saved = null; try { saved = localStorage.getItem('hf-book'); } catch {}
+    const g0 = window.__fdGo; if (g0 && g0.b && books.some((b) => b.id === g0.b)) saved = g0.b;
     pick(saved);
   }
 

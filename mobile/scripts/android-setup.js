@@ -36,7 +36,12 @@ if (!x.includes('.WidgetRefreshReceiver')) rx += `    <receiver android:name=".W
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>
 `;
+if (!x.includes('.WidgetConfigActivity')) rx += `    <activity android:name=".WidgetConfigActivity" android:exported="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
+`;
 if (rx) x = x.replace('</application>', rx + '    </application>');
+if (!x.includes('POST_NOTIFICATIONS')) x = x.replace('<application', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application');
 if (!x.includes('RECEIVE_BOOT_COMPLETED')) x = x.replace('<application', '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <application');
 fs.writeFileSync(man, x);
 console.log('Android project configured');

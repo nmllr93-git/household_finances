@@ -29,14 +29,16 @@ final class WidgetRender {
 
     static void draw(Context c, AppWidgetManager m, Class<?> cls, int layout, int kind) {
         int[] ids = m.getAppWidgetIds(new ComponentName(c, cls));
-        for (int id : ids) m.updateAppWidget(id, build(c, layout, kind));
+        for (int id : ids) m.updateAppWidget(id, build(c, layout, kind, id));
     }
 
-    static RemoteViews build(Context c, int layout, int kind) {
+    static final String[] SECTION = { "budget", "holdings", "markets", "subscriptions", "markets" };
+    static RemoteViews build(Context c, int layout, int kind, int widgetId) {
         RemoteViews v = new RemoteViews(c.getPackageName(), layout);
-        JSONObject d = WidgetStore.data(c);
+        JSONObject d = WidgetStore.data(c, widgetId);
         boolean hide = WidgetStore.hide(c);
-        v.setOnClickPendingIntent(R.id.w_root, WidgetStore.openApp(c, 100 + kind));
+        // tap: open the app at this widget's section, in this widget's dashboard
+        v.setOnClickPendingIntent(R.id.w_root, WidgetStore.openApp(c, 1000 + widgetId, SECTION[kind], WidgetStore.bookId(c, widgetId)));
         v.setOnClickPendingIntent(R.id.w_refresh, WidgetStore.refreshIntent(c, 200 + kind));
         v.setTextViewText(R.id.w_updated, WidgetStore.updated(c));
         String name = d == null ? "" : d.optString("name", "");
@@ -199,7 +201,7 @@ final class WidgetRender {
             if (i >= n) { v.setViewVisibility(sym[i], View.INVISIBLE); v.setViewVisibility(val[i], View.INVISIBLE); continue; }
             JSONObject x = l.optJSONObject(i); double p = x.optDouble("pct");
             v.setViewVisibility(sym[i], View.VISIBLE); v.setViewVisibility(val[i], View.VISIBLE);
-            v.setTextViewText(sym[i], x.optString("sym"));
+            v.setTextViewText(sym[i], (x.optBoolean("mine") ? "★ " : "") + x.optString("sym"));
             String t = WidgetStore.arrow(p) + " " + WidgetStore.pct(p); if (!hide && !x.isNull("price")) t = WidgetStore.money(x.optDouble("price")) + "  " + t;
             v.setTextViewText(val[i], t); v.setTextColor(val[i], WidgetStore.tone(p));
         }

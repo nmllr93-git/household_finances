@@ -332,6 +332,10 @@
     const mark = () => { const g = NP.group || 'all'; groupBtns.forEach((b, i) => { const hit = MENUS[i][1].includes(g); b.classList.toggle('is-on', hit); b.textContent = (hit ? label(g).replace(/^⚙\s*/, '') : MENUS[i][0]) + ' ▾'; }); };
     const orig = showGroup; showGroup = (g) => { orig(g); mark(); }; mark();
   }
+  // jump to a section (phone widgets and alerts use this)
+  window.FDShow = (sec) => { const g = Object.keys(GROUPS).find((k) => GROUPS[k].includes(sec)) || 'all'; showGroup(g);
+    setTimeout(() => { const el = document.getElementById(sec); if (el) el.scrollIntoView({ block: 'start' }); }, 250); };
+  if (window.__fdGo && window.__fdGo.s) setTimeout(() => { const g = window.__fdGo; if (g) window.FDGo ? window.FDGo(g.s, g.b) : window.FDShow(g.s); }, 600);
   document.querySelectorAll('.fd-navb').forEach((b) => b.addEventListener('click', () => { const g = b.dataset.group; if (g === 'settings' && NP.group === 'settings') return showGroup(lastTab || 'all'); if (g === 'settings' && NP.group) lastTab = NP.group; showGroup(g); }));
   document.getElementById('fd-nav').addEventListener('click', (e) => {
     if (!e.target.closest('.fd-navb')) return;
@@ -1588,6 +1592,7 @@
   // Android home-screen widget: hand the app a short summary of the open dashboard (kept on the phone only)
   let wSig = '';
   const wHide = () => { try { return localStorage.getItem('fd-widget-hide') === '1'; } catch { return false; } };
+  const wAlerts = () => { try { return JSON.parse(localStorage.getItem('fd-alerts') || 'null') || { bills: false, budget: false }; } catch { return { bills: false, budget: false }; } };
   // reach the app's own widget plugin: the plugin list if it's there, otherwise Capacitor's direct native call
   const widgetApi = () => { if (window.LarenestWidgetNative && window.LarenestWidgetNative.update) return { update: (o) => Promise.resolve(window.LarenestWidgetNative.update(o.data)) }; // Android app, any page
     const C = window.Capacitor; if (!C || (C.getPlatform && C.getPlatform() !== 'android')) return null;
@@ -1605,10 +1610,14 @@
     const bid = window.HF && window.HF.state && window.HF.state.bookId; if (!bid) return Promise.resolve(false);
     let follow = []; try { follow = JSON.parse(localStorage.getItem('fd-sectors') || '[]') || []; } catch {}
     const qs = 'follow=' + encodeURIComponent(follow.join('|'));
-    wBusy = FDStore.json('GET', `/api/books/${encodeURIComponent(bid)}/widgets?${qs}`).then((data) => {
-      const cfg = { base: window.FD_LOCAL ? '' : (FDStore.base || location.origin), book: bid, query: qs, hide: wHide(), local: !!window.FD_LOCAL };
-      const sig = JSON.stringify([cfg, { ...data, at: '' }]); if (sig === wSig && !force) return true; wSig = sig;
-      return Promise.resolve(W.update({ data: JSON.stringify({ cfg, data }) })).then(() => { wState = 'ok'; return true; });
+    // every dashboard this login can see, so each widget can show its own (chosen when it's placed)
+    const list = (window.FD_BOOKS && window.FD_BOOKS.length ? window.FD_BOOKS : [{ id: bid, name: '' }]).slice(0, 8);
+    const one = (id) => FDStore.json('GET', `/api/books/${encodeURIComponent(id)}/widgets?${qs}`);
+    wBusy = Promise.all(list.map((b) => (b.id === bid ? one(b.id) : one(b.id).catch(() => null)))).then((res) => {
+      const books = {}; list.forEach((b, i) => { if (res[i]) books[b.id] = res[i]; }); const data = books[bid];
+      const cfg = { base: window.FD_LOCAL ? '' : (FDStore.base || location.origin), book: bid, books: list, query: qs, hide: wHide(), local: !!window.FD_LOCAL, alerts: wAlerts() };
+      const sig = JSON.stringify([cfg, Object.values(books).map((d) => ({ ...d, at: '' }))]); if (sig === wSig && !force) return true; wSig = sig;
+      return Promise.resolve(W.update({ data: JSON.stringify({ cfg, books, data }) })).then(() => { wState = 'ok'; return true; });
     }).catch((e) => { wState = (e && e.message) || 'error'; wSig = ''; return false; }).finally(() => { wBusy = null; });
     return wBusy;
   };
@@ -3252,6 +3261,17 @@
       sel.addEventListener('change', () => { try { localStorage.setItem('fd-widget-bg', sel.value); } catch {} const N = window.LarenestWidgetNative; if (N && N.schedule) N.schedule(Number(sel.value)); stt.textContent = sel.value === '0' ? 'Background refresh is off.' : 'Widgets will refresh from your computer while it’s reachable.'; });
       if (window.FD_LOCAL) bg.hidden = true; // phone-only mode: no computer to refresh from; the ⟳ button opens the app
       w.append(l, bg, rbtn('Update widget now', run, false), stt); row('Phone widgets', w); }
+    if (window.LarenestWidgetNative && window.LarenestWidgetNative.alertsAllowed) { // Android app: alerts worked out on the phone from the widgets' summary
+      const N = window.LarenestWidgetNative, w = document.createElement('div'), o = wAlerts(), msg = phMsg('');
+      const box = (key, text) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = !!o[key];
+        i.addEventListener('change', () => { o[key] = i.checked; try { localStorage.setItem('fd-alerts', JSON.stringify(o)); } catch {}
+          let ok = true; try { ok = N.alertsAllowed(i.checked); } catch {}
+          msg.className = 'fd-note' + (ok ? '' : ' fd-bad'); msg.textContent = ok || !i.checked ? (o.bills || o.budget ? 'Alerts are on for this phone.' : 'Alerts are off.') : 'Allow notifications for Larenest when your phone asks (or in its settings), then try again.';
+          pushWidget(true); });
+        l.append(i, ' ' + text); return l; };
+      w.append(box('bills', 'A bill is due tomorrow'), box('budget', 'A dashboard passes 90% of its budget (and again at 100%)'), msg,
+        phMsg('Worked out on this phone from your dashboards; nothing extra is sent anywhere. Alerts arrive when the widgets update, so turn on background refresh above for timely ones.'));
+      row('Phone alerts', w); }
     { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = document.body.classList.contains('fd-brand');
       i.addEventListener('change', () => { document.body.classList.toggle('fd-brand', i.checked); try { localStorage.setItem('fd-brand', i.checked ? '1' : '0'); } catch {} });
       l.append(i, ' Show the Larenest logo and colors (this device only)'); row('Larenest look', l); }

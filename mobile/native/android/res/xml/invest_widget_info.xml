@@ -2,4 +2,5 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp" android:minHeight="110dp" android:targetCellWidth="3" android:targetCellHeight="2"
     android:minResizeWidth="150dp" android:minResizeHeight="100dp" android:resizeMode="horizontal|vertical" android:updatePeriodMillis="0"
-    android:initialLayout="@layout/widget_invest" android:previewLayout="@layout/widget_invest" android:widgetCategory="home_screen" />
+    android:initialLayout="@layout/widget_invest" android:previewLayout="@layout/widget_invest" android:widgetCategory="home_screen"
+    android:configure="com.larenest.app.WidgetConfigActivity" android:widgetFeatures="reconfigurable|configuration_optional" />
