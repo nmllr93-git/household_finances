@@ -296,7 +296,7 @@
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
     if (SIMPLE && SIMPLE_GROUPS.has(g)) return showGroup('all');
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id) || (SIMPLE && SIMPLE_HIDE.has(id)); }));
-    simpleNav(); const kp = document.getElementById('kpis'); if (kp) kp.classList.toggle('fd-hide-set', g === 'settings'); // no tiles on the Settings tab
+    simpleNav(); ['kpis', 'fd-start'].forEach((id) => { const x = document.getElementById(id); if (x) x.classList.toggle('fd-hide-set', g === 'settings'); }); // no tiles or getting-started on the Settings tab
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   // Phone section menus: defaults below; each phone can rename, add, remove and regroup them (⚙ Settings → Phone menus). Saved on this device.

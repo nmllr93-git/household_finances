@@ -423,9 +423,11 @@ html, body { overflow-x: clip; max-width: 100%; }
 }
 
 /* Settings sections */
-#kpis.fd-hide-set { display: none !important; }
+#kpis.fd-hide-set, #fd-start.fd-hide-set { display: none !important; }
 .fd-setgrp { margin: 0 0 22px; } .fd-setgrp[hidden] { display: none; }
 .fd-setgrp-h { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-fg-muted); margin: 8px 2px 10px; }
 details.fd-setgrp > summary.fd-setgrp-h { cursor: pointer; padding: 10px 2px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--color-fg, inherit); }
 .fd-setgrp > .fd-rb { margin-bottom: 12px; }
 .fd-backup .fd-rb-row { align-items: center; gap: 10px; flex-wrap: wrap; }
+/* empty wrappers (all their sections hidden, e.g. on the Settings tab) shouldn't add the page's gap */
+.fd > div:empty, .fd-grid2:not(:has(> :not([hidden]))), .fd > div:not(:has(*:not([hidden]):not(script))) { display: none; }
