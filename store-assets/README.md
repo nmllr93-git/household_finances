@@ -9,6 +9,5 @@ Add new screenshots here only after they've been cleaned (no emails, codes, PINs
 
 Gallery page (claude.ai, private to you): https://claude.ai/artifact/VGAhHK7gTVrfo29AvrVYzv
 
-## To do
-- After the next release (Android 1.6.5 with the Market movers widget and the investments chart): take fresh widget screenshots, then make
-  listing images with one widget per image on a clean, professional background (replaces `android/widgets-home-screen.png`).
+## Play listing images
+- `android/play-widget-*.png` (1080×1920): one widget per image on a clean background, with made-up data, drawn to match the real widgets (Nov 23, 2026).
