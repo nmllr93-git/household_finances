@@ -3,6 +3,20 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.24
+- New Larenest look (logo and warm colors), with an off switch in Settings
+- Pull down to refresh on phones
+- Accounts from a Google Sheet can now be deleted, including retirement accounts
+- Settings no longer shows the date range and summary tiles
+- Negative amounts no longer wrap onto two lines
+- Supplies the data for the new phone widgets
+
+## Android 1.6.4
+- Four home-screen widgets: Budget & bills, Investments (with a 30-day chart), Markets, and Bills & subscriptions
+- A refresh button on each widget, plus an optional background refresh (every 1, 2 or 4 hours)
+- "Hide amounts" also applies to the widgets
+- Larenest look, pull to refresh, and the other fixes from Desktop 1.0.24
+
 ## Desktop 1.0.23
 
 ### Changes
