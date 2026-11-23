@@ -2661,15 +2661,17 @@
           { const li = document.createElement('li'); li.textContent = t; ol.append(li); }
         // step-by-step screenshots of SimpleFIN Bridge
         const guide = document.createElement('details'); guide.className = 'fd-sfguide'; const sm = document.createElement('summary'); sm.textContent = 'Show me step by step (with pictures)'; guide.append(sm);
-        [['Open SimpleFIN Bridge and press Get started.'], ['Enter your email and press Send sign-in email. Open the link in that email and press Finish signing in. (Check your spam folder if it doesn’t arrive.)'],
-          ['Read and accept the Terms of Use.'], ['Go to Billing → Subscribe and choose monthly ($1.50) or yearly ($15). SimpleFIN suggests monthly first, until you’re sure your banks work.'],
-          ['On My account, press New connection and link each bank or card. Banks can take a day or two to show transactions.'], ['Under Apps, press New app connection, name it “Larenest” and press Create Setup Token.'],
-          ['Copy the setup token (it’s shown only once and works only once), paste it below and press Connect.'],
-          ['Linking a bank (step 5 in detail): press New connection and search for your bank.'], ['Sign in on your bank’s own page. SimpleFIN never sees your bank password; your bank may text you a code.'],
-          ['Choose which accounts to share, then press Allow. Only balances and transactions are used here.'], ['Back on My account the bank shows “OK” and your app shows as Active. Transactions can take a few days to appear.'],
-          ['In this app, check each account’s name and type, press Save accounts, then Sync now. Use the same name as an account you already import statements for.']].forEach(([t], i) => {
-          const f = document.createElement('figure'); const im = document.createElement('img'); im.src = `help/simplefin/step${i + 1}.webp`; im.alt = `SimpleFIN Bridge, step ${i + 1}`; im.loading = 'lazy';
-          const c = document.createElement('figcaption'); c.textContent = `${i + 1}. ${t}`; f.append(c, im); guide.append(f); });
+        // grouped: simple steps share one heading; pictures are cropped to just the part that matters
+        [['Create your SimpleFIN account', 'Press Get started, enter your email and press Send sign-in email, open the link in that email (check spam if it doesn’t arrive), then accept the Terms of Use.', [1, 2, 3]],
+          ['Subscribe', 'Under Billing, choose monthly ($1.50) or yearly ($15). SimpleFIN suggests monthly first, until you’re sure your banks work.', [4]],
+          ['Link your bank', 'On My account press New connection and pick your bank. Sign in on your bank’s own page (SimpleFIN never sees your password; your bank may text you a code), choose which accounts to share and press Allow. Repeat for each bank or card.', [8, 9, 10]],
+          ['Create a setup token for Larenest', 'Back on My account, under Apps press New app connection, name it “Larenest” and press Create Setup Token. Copy the token: it’s shown once and works once.', [5, 6, 7]],
+          ['Check it’s working', 'Your bank shows “OK” and Larenest shows as Active. New banks can take a day or two to show transactions.', [11]],
+          ['Connect in Larenest', 'Paste the token below and press Connect. Untick any accounts you don’t want, check each name and type, then press Save accounts. Nothing is brought in until you save. Tip: use the same name as an account you already import statements for.', [12]]].forEach(([h, t, pics], n) => {
+          const f = document.createElement('figure'); f.className = 'fd-sfstep'; const c = document.createElement('figcaption'); const b = document.createElement('b'); b.textContent = `${n + 1}. ${h}`; c.append(b, ' ', t); f.append(c);
+          const g = document.createElement('div'); g.className = 'fd-sfpics' + (pics.length > 1 ? ' fd-sfpics-n' : '');
+          pics.forEach((k) => { const im = document.createElement('img'); im.src = `help/simplefin/s${k}.webp`; im.alt = `${h} (picture)`; im.loading = 'lazy'; g.append(im); });
+          f.append(g); guide.append(f); });
         const a = document.createElement('a'); a.href = 'https://beta-bridge.simplefin.org/'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open SimpleFIN Bridge ↗';
         box.append(ol, a, guide);
         if (ro) { box.append(phMsg('This login can view this dashboard but not connect a bank.')); return; }
@@ -2825,7 +2827,6 @@
     const NAMES = { finnhub: 'Finnhub', fmp: 'Financial Modeling Prep', fred: 'FRED', bls: 'Bureau of Labor Statistics', eia: 'Energy Information Administration' };
     const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)'); if (bk && bk.teller.appId) on.push('Teller (your own keys)'); if (bk && bk.plaid.hasSecret) on.push('Plaid (your own keys)');
     [window.FD_LOCAL ? 'Everything you enter is stored only on this phone, in the app’s private storage. Uninstalling the app deletes it, so keep a backup file somewhere safe.' : 'Everything you enter is stored only on the computer that runs Larenest, in its data folder. Phones and other computers just display it.',
-      'There’s no Larenest account and no company server. The developer never receives your transactions, balances or anything else: no ads, no analytics, no tracking.',
       'Only the optional data services you turn on are contacted, directly from here. They get stock symbols, a VIN or your API key, never your financial information. Bank sync (SimpleFIN) only brings your bank data in; nothing is sent back.',
       on.length ? 'Turned on here: ' + on.join(', ') + '.' : 'Turned on here: none.',
       'Free public sources with no key are also used: Treasury rates, exchange rates, holidays and delayed prices for the symbols you own (Stooq, Yahoo).',

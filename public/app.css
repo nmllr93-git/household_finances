@@ -514,3 +514,8 @@ body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); 
 .fd-tour-btns .fd-tour-back { background: transparent; color: var(--color-fg); border: 1px solid var(--color-border-line, #ccc); font-weight: 500; }
 .fd-tour-btns .fd-link { background: none; border: 0; padding: 0 4px; color: var(--color-fg-muted); text-decoration: underline; }
 @media (prefers-color-scheme: dark) { body.fd-brand .fd-tour-btns .fd-tour-go { color: #1a1412; } }
+.fd-sfguide .fd-sfstep { margin: 12px 0 20px; } .fd-sfguide .fd-sfstep figcaption { font-size: 14.5px; line-height: 1.45; margin-bottom: 8px; max-width: 760px; } .fd-sfguide .fd-sfstep figcaption b { font-size: 15px; }
+.fd-sfpics { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.fd-sfguide .fd-sfpics img { width: auto; max-width: min(100%, 560px); max-height: 420px; height: auto; border-radius: 8px; }
+.fd-sfguide .fd-sfpics-n img { max-width: min(100%, 360px); }
+@media (max-width: 640px) { .fd-sfguide .fd-sfpics img, .fd-sfguide .fd-sfpics-n img { max-width: 100%; max-height: none; width: 100%; } }
