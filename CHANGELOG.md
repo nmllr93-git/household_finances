@@ -3,6 +3,28 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.25
+- Encrypted connections on your home network: your PC makes its own HTTPS certificate (free), and the Larenest apps trust exactly that one via the QR code
+- Warns you if a computer's certificate ever changes; the certificate is kept in backups, so restores keep phones paired
+- Tailscale HTTPS: a no-warning browser address when Tailscale's free certificates are turned on; status in Host options
+- Larenest look for the host window and setup screens
+- First-run tour, ending with getting your bank data in (imports and SimpleFIN), plus optional advanced options
+- Send feedback (⚙ Settings and the phone ☰ menu)
+- "Where your data lives" picture, and how each kind of connection is protected
+- SimpleFIN: new accounts wait until you choose them and press Save; clearer six-step guide with cropped pictures
+- Investment chart and 7/30-day changes fill in again (second free price-history source)
+- "By sector" allocation ring in Holdings
+- Phone header: just ⟳ and a ☰ menu (Backup, Sign out, Switch server, Send feedback)
+
+## Android 1.6.5
+- Encrypted connection to your PC (HTTPS, trusting only your PC's certificate); phones paired before switch over on their own
+- New Market movers widget: today's top gainers and losers, your followed sectors first (★)
+- Choose which dashboard each widget shows; tap a widget to open its section
+- Phone alerts: a bill due tomorrow, a dashboard passing 90% (and 100%) of its budget
+- Investments widget shows its 30-day chart again
+- Plus the tour, Send feedback and the other Desktop 1.0.25 changes
+- After updating, this device's settings (Larenest look, followed sectors, widget and alert options) reset once, because the encrypted address counts as a new one. Your data isn't affected.
+
 ## Desktop 1.0.24
 - New Larenest look (logo and warm colors), with an off switch in Settings
 - Pull down to refresh on phones
