@@ -1,6 +1,7 @@
 # Builds the Windows installer (and the Mac apps) and publishes them to the PUBLIC repo <owner>/household_finances-releases,
 # which the desktop app's "Check for updates" reads.
-# Runs automatically when desktop/package.json changes on main, but only publishes if that version
+# Windows runs automatically when main is pushed to the release branch; the Mac apps only when run by hand (mac_publish).
+# Previously: runs automatically when desktop/package.json changes on main, but only publishes if that version
 # hasn't been released yet, so bumping "version" is all it takes. Can also be run by hand (Actions → Run workflow).
 name: Desktop release
 on:
@@ -10,6 +11,10 @@ on:
     inputs:
       mac_test:
         description: Build the Mac apps as a test download (not published)
+        type: boolean
+        default: false
+      mac_publish:
+        description: Build the Mac apps and add them to the current version's release (Mac builds are only run by hand, they cost 10x minutes)
         type: boolean
         default: false
 permissions:
@@ -63,7 +68,8 @@ jobs:
   # Apple Silicon (arm64) and Intel (x64), each with a matching built-in Node. Added to the same release.
   mac:
     needs: windows
-    if: needs.windows.outputs.new == 'true' || inputs.mac_test
+    # by hand only: pushes to the release branch build Windows alone
+    if: inputs.mac_publish || inputs.mac_test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,12 +90,14 @@ jobs:
           NV=$(node -v); curl -fsSL "https://nodejs.org/dist/$NV/node-$NV-darwin-x64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
           FD_NODE_BIN="$RUNNER_TEMP/node-$NV-darwin-x64/bin/node" node scripts/prepare.js && npx electron-builder --mac --x64 --publish never
       - name: Keep the Mac test build as a download
-        if: needs.windows.outputs.new != 'true'
+        if: ${{ !inputs.mac_publish }}
         uses: actions/upload-artifact@v4
         with: { name: mac-test, path: desktop/dist/*.dmg, retention-days: 7 }
       - name: Add the Mac files to the release
-        if: needs.windows.outputs.new == 'true'
+        if: inputs.mac_publish
         working-directory: desktop/dist
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-        run: gh release upload "v${{ needs.windows.outputs.version }}" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" *.dmg latest-mac.yml
+        run: |
+          V=$(node -p "require('../package.json').version")
+          gh release upload "v$V" --clobber --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" *.dmg latest-mac.yml

@@ -39,7 +39,8 @@ test('Teller: start gives the app id; connect saves the bank and lists accounts'
 
 test('Teller: sync imports posted transactions with spending positive, skips pending and old ones', async () => {
   const h = harness(createTeller, TELLER_KEYS, teller);
-  await h.eng.handle('POST', [], 'b1', body({ connect: { accessToken: 'token_abc', enrollment: { id: 'enr_1', institution: { name: 'Test Bank' } } } }));
+  const c = await h.eng.handle('POST', [], 'b1', body({ connect: { accessToken: 'token_abc', enrollment: { id: 'enr_1', institution: { name: 'Test Bank' } } } }));
+  await h.eng.handle('POST', [], 'b1', body({ accounts: Object.fromEntries(c.body.accounts.map((a) => [a.id, {}])) }));
   const r = await h.eng.handle('POST', ['sync'], 'b1', body({}));
   assert.equal(r.status, 200); assert.equal(r.body.added, 2);
   const t = h.docs.imports[0].txns; assert.equal(h.docs.imports[0].fileName, 'Teller sync'); assert.equal(h.docs.imports[0].balance, 1500.25);
@@ -88,6 +89,7 @@ test('Plaid: link token, exchange, sync with Plaid’s opposite sign convention'
   assert.ok(h.calls[0].url.startsWith('https://sandbox.plaid.com/')); assert.equal(h.calls[0].body.secret, 'sec');
   const c = await h.eng.handle('POST', [], 'b1', body({ connect: { publicToken: 'public-sandbox-1', institution: 'First Plaidypus' } }));
   assert.equal(c.status, 200); assert.deepEqual(c.body.banks, ['First Plaidypus']);
+  await h.eng.handle('POST', [], 'b1', body({ accounts: Object.fromEntries(c.body.accounts.map((a) => [a.id, {}])) }));
   const r = await h.eng.handle('POST', ['sync'], 'b1', body({})); assert.equal(r.body.added, 2);
   assert.deepEqual(h.docs.imports[0].txns.map((x) => [x.description, x.amount]).sort(), [['DEPOSIT', -500], ['Uber', 12.5]]);
   await h.eng.handle('DELETE', [], 'b1', body({})); assert.ok(h.calls.some((x) => x.url.endsWith('/item/remove')));

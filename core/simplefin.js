@@ -82,7 +82,8 @@
       for (const a of accounts) {
         const id = String(a.id || ''); if (!id) continue;
         const org = clean((a.org && (a.org.name || a.org.domain)) || '').slice(0, 60), name = (clean(a.name) || 'Account').slice(0, 60);
-        const cur = st.accounts[id] || { map: name.slice(0, 60), kind: guessKind(name), skip: false, seen: [], lastBal: null };
+        // a newly found account waits (review) until it's saved, so you can untick it before anything is brought in
+        const cur = st.accounts[id] || { map: name.slice(0, 60), kind: guessKind(name), skip: false, review: true, seen: [], lastBal: null };
         if (/\uFFFD/.test(cur.map)) cur.map = clean(cur.map);
         st.accounts[id] = { ...cur, name, org, currency: String(a.currency || 'USD').slice(0, 10) };
       }
@@ -90,7 +91,7 @@
     const view = (st) => ({
       provider: P.id, label: P.label, multi: !!P.multi, banks: P.multi && st && Array.isArray(st.access) ? st.access.map((x) => x.institution || 'Bank') : [],
       connected: !!(st && st.access && (!Array.isArray(st.access) || st.access.length)), lastSync: (st && st.lastSync) || null, lastError: (st && st.lastError) || '', notes: (st && st.notes) || [], kinds: KINDS,
-      accounts: Object.entries((st && st.accounts) || {}).map(([id, a]) => ({ id, name: a.name, org: a.org, map: a.map, kind: a.kind, skip: !!a.skip, flip: !!a.flip, synced: (a.seen || []).length })),
+      accounts: Object.entries((st && st.accounts) || {}).map(([id, a]) => ({ id, name: a.name, org: a.org, map: a.map, kind: a.kind, skip: !!a.skip, review: !!a.review, flip: !!a.flip, synced: (a.seen || []).length })),
     });
 
     async function sync(bookId, auto) {
@@ -112,7 +113,7 @@
           const k = String(imp.accountName || '').toLowerCase(); if (!have.has(k)) have.set(k, new Set()); for (const t of l || []) have.get(k).add(`${t.date}|${Number(t.amount)}|${t.description}`); }
         let added = 0, docs = 0;
         for (const a of res.accounts) {
-          const m = st.accounts[String(a.id)]; if (!m || m.skip) continue;
+          const m = st.accounts[String(a.id)]; if (!m || m.skip || m.review) continue;
           const seen = new Set(m.seen || []), dup = have.get(String(m.map).toLowerCase()) || new Set(), txns = [];
           for (const t of Array.isArray(a.transactions) ? a.transactions : []) {
             if (t.pending || !t.posted) continue; // only posted transactions, so nothing counts twice when a pending charge settles
@@ -170,7 +171,7 @@
         }
         if (b.accounts && typeof b.accounts === 'object') {
           for (const [id, v] of Object.entries(b.accounts)) { const a = (st.accounts || {})[id]; if (!a || !v) continue;
-            if (typeof v.map === 'string' && v.map.trim()) a.map = v.map.trim().slice(0, 60); if (KINDS.includes(v.kind)) a.kind = v.kind; a.skip = !!v.skip; if ('flip' in v) a.flip = !!v.flip; }
+            if (typeof v.map === 'string' && v.map.trim()) a.map = v.map.trim().slice(0, 60); if (KINDS.includes(v.kind)) a.kind = v.kind; a.skip = !!v.skip; delete a.review; if ('flip' in v) a.flip = !!v.flip; }
           await env.save(bookId, st); return { status: 200, body: view(st) };
         }
         return { status: 400, body: { error: 'Nothing to do.' } };

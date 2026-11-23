@@ -2648,7 +2648,7 @@
       if (!st.connected) {
         box.append(phMsg('Pull balances and new transactions from your banks automatically, instead of importing statements. It uses SimpleFIN Bridge, a separate read-only service you subscribe to yourself (about $15 a year). Your bank passwords go to SimpleFIN, never to this app, and nothing passes through us.'));
         const ol = document.createElement('ol'); ol.className = 'fd-note';
-        for (const t of ['Sign up at SimpleFIN Bridge (link below), start a subscription and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect, then check the account names and types.'])
+        for (const t of ['Sign up at SimpleFIN Bridge (link below), start a subscription and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect. Then untick any accounts you don’t want, check the names and types, and press Save accounts. Nothing syncs until you save.'])
           { const li = document.createElement('li'); li.textContent = t; ol.append(li); }
         // step-by-step screenshots of SimpleFIN Bridge
         const guide = document.createElement('details'); guide.className = 'fd-sfguide'; const sm = document.createElement('summary'); sm.textContent = 'Show me step by step (with pictures)'; guide.append(sm);
@@ -2674,12 +2674,13 @@
       if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
       if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
       for (const n of st.notes || []) box.append(phMsg(P.label + ': ' + n));
+      if ((st.accounts || []).some((a) => a.review)) { const w = phMsg('New accounts found. Untick any you don’t want, check the names and types, then press Save accounts. Nothing is brought in from them until you do.'); w.className = 'fd-note fd-warn'; box.append(w); }
       const draft = {};
       const tb = document.createElement('table'); tb.className = 'fd-table fd-synctbl';
       const hr = document.createElement('tr'); for (const h of ['Bank account', 'Show it as', 'Type', 'Sync', ...(P.multi ? ['Flip ±'] : [])]) { const th = document.createElement('th'); th.textContent = h; if (h === 'Flip ±') th.title = 'Tick if spending shows up as income for this account'; hr.append(th); } tb.append(hr);
       for (const a of st.accounts) {
         const d = draft[a.id] = { map: a.map, kind: a.kind, skip: a.skip, ...(P.multi ? { flip: !!a.flip } : {}) }, tr = document.createElement('tr');
-        const c1 = document.createElement('td'); c1.textContent = (a.org ? a.org + ' · ' : '') + a.name;
+        const c1 = document.createElement('td'); c1.textContent = (a.org ? a.org + ' · ' : '') + a.name; if (a.review) { const nb = document.createElement('span'); nb.className = 'fd-chip fd-new'; nb.textContent = 'New'; c1.append(' ', nb); }
         const nm = document.createElement('input'); nm.className = 'fd-in'; nm.value = a.map; nm.disabled = ro; nm.addEventListener('input', () => { d.map = nm.value; });
         const kd = document.createElement('select'); kd.className = 'dash-select'; kd.disabled = ro; for (const k of st.kinds) kd.append(new Option(KIND_NAMES[k] || k, k)); kd.value = a.kind; kd.addEventListener('change', () => { d.kind = kd.value; });
         const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !a.skip; cb.disabled = ro; cb.addEventListener('change', () => { d.skip = !cb.checked; });

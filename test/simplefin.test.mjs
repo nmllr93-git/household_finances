@@ -41,6 +41,11 @@ test('connect, sync posted only, no duplicates, owed balances positive', async (
   assert.equal(c.status, 200); assert.equal(c.body.connected, true); assert.equal(c.body.accounts.length, 2);
   assert.ok(c.body.accounts.some((a) => a.name === 'Rewards VISA Card' && a.map === 'Rewards VISA Card'), 'broken symbols are dropped from names');
   assert.ok(!JSON.stringify(c.body).includes('p%402'), 'access URL is never sent to the page');
+  // new accounts wait for review: nothing comes in until they're saved
+  assert.ok(c.body.accounts.every((a) => a.review));
+  assert.equal((await f.sf.syncAll(['b1'])).b1.added, 0); assert.equal(f.docs.imports.length, 0);
+  f.state.b1.lastTry = 0;
+  await f.sf.handle('POST', [], 'b1', body({ accounts: Object.fromEntries(c.body.accounts.map((a) => [a.id, {}])) }));
   const s = await f.sf.handle('POST', ['sync'], 'b1', body({}));
   assert.equal(s.status, 200); assert.equal(s.body.added, 2);
   const chk = f.docs.imports.find((d) => d.accountName === 'Everyday Checking');
