@@ -75,9 +75,23 @@
   window.__fdFind = find;
   const norm = (v) => { v = String(v || '').trim().replace(/\/+$/, ''); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'http://' + v; if (!/:\d+$/.test(v.replace(/^https?:\/\//, '')) && !/^https:/i.test(v)) v += ':8080'; return v; };
   const say = (t, c) => { msg.textContent = t; msg.className = c || ''; };
+  // Connection problem detector: turn a failed connection into likely causes and fixes, in plain words
+  function diagnose(u, took, timedOut) {
+    let h = ''; try { h = new URL(u).hostname; } catch (e) {}
+    if (navigator.onLine === false) return ['This phone isn\u2019t connected to Wi-Fi or mobile data right now. Connect and try again.'];
+    const out = [], ts = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h) || /\.ts\.net$/i.test(h), lan = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h) || /\.local$/i.test(h);
+    if (h === 'localhost' || /^127\./.test(h)) out.push('\u201c' + h + '\u201d means \u201cthis phone itself\u201d. Use the address shown on your computer in Host options instead.');
+    if (timedOut) out.push('Nothing answered. Your computer may be asleep, turned off, or on a different network. Wake it up and check Larenest is open (Host options shows \u201cHosting\u201d).');
+    else if (took < 2500) out.push('The connection was turned away right away. Usually Larenest isn\u2019t open on the computer, \u201cAllow other devices\u201d is off in Host options, the port is wrong (Host options shows it; usually 8080), or this device can\u2019t get to that network.');
+    if (ts) out.push('This is a Tailscale address. Open Tailscale on this phone and make sure it says Connected, and that your computer is signed in to the same Tailscale account.');
+    else if (lan) out.push('This is a home Wi-Fi address, so it only works when this phone is on the same Wi-Fi as your computer (not mobile data or a guest network). Away from home, use the Tailscale address.');
+    if (lan || ts) out.push('If it worked before: the computer\u2019s address may have changed (scan the QR code again), or Windows Firewall is blocking it (Windows Security \u2192 Firewall \u2192 Allow an app \u2192 tick Larenest for Private networks).');
+    return out;
+  }
+  function explain(items) { let ul = $('why'); if (!ul) { ul = document.createElement('ul'); ul.id = 'why'; ul.style.cssText = 'text-align:left;font-size:14px;margin:8px 0 0;padding-left:20px;line-height:1.4'; msg.after(ul); } ul.replaceChildren(); items.forEach((t) => { const li = document.createElement('li'); li.style.margin = '4px 0'; li.textContent = t; ul.append(li); }); }
   async function go(raw) {
     const u = norm(raw); if (!u) { say('Enter an address.', 'bad'); return; }
-    say('Checking ' + u + ' …');
+    say('Checking ' + u + ' …'); const t0 = Date.now(); explain([]);
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
     try {
       const r = await fetch(u + '/api/ping', { signal: ctl.signal, cache: 'no-store' }); clearTimeout(t);
@@ -87,8 +101,9 @@
       try { if (window.Capacitor) localStorage.setItem('fd-mode', 'remote'); } catch (e) {}
       if (window.FDApp && FDApp.openHost) FDApp.openHost(u); else location.href = u + (window.Capacitor ? '/?app=phone' : '/');
     } catch (e) {
-      clearTimeout(t);
-      say("Couldn't reach " + u + '. Check the server is running in host mode, this device is on the same network (or Tailscale is on), and the address and port are right.', 'bad');
+      clearTimeout(t); const took = Date.now() - t0;
+      if (/^https:/i.test(u) && await ping(u.replace(/^https:/i, 'http:'), 3000)) { $('u').value = u.replace(/^https:\/\//i, ''); return go(u.replace(/^https:/i, 'http:')); }
+      say("Couldn't reach " + u + '. Here\u2019s what\u2019s most likely:', 'bad'); explain(diagnose(u, took, ctl.signal.aborted));
       if (list().includes(u)) find(u);
     }
   }
@@ -111,7 +126,7 @@
   })();
   // phone app only: phone-only mode
   if (window.Capacitor) { $('localbox').hidden = false; $('golocal').addEventListener('click', () => { try { localStorage.setItem('fd-mode', 'local'); } catch (e) {} location.href = 'index.html'; }); }
-  const failed = new URLSearchParams(location.search).get('failed') || window.__fdReopenFailed; if (failed) { const f0 = (failed.match(/^https?:\/\/[^/]+/) || [failed])[0]; say("Couldn't reach " + f0 + '. Is that computer on and running in host mode?', 'bad'); find(f0); }
+  const failed = new URLSearchParams(location.search).get('failed') || window.__fdReopenFailed; if (failed) { const f0 = (failed.match(/^https?:\/\/[^/]+/) || [failed])[0]; say("Couldn't reach " + f0 + '. Here\u2019s what\u2019s most likely:', 'bad'); explain(diagnose(f0, 99999, true)); find(f0); }
   if (window.FDApp && FDApp.setupAgain && location.protocol === 'file:') { const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = 'Run this computer as the server instead'; b.addEventListener('click', () => FDApp.setupAgain()); document.querySelector('main').append(b); }
   const r = list(); if (r.length) { $('u').value = r[0].replace(/^http:\/\//, '');
     r.forEach((u) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = u.replace(/^https?:\/\//, ''); b.addEventListener('click', () => go(u)); li.append(b); $('recent').append(li); }); }
