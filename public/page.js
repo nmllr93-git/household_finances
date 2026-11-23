@@ -296,7 +296,7 @@
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
     if (SIMPLE && SIMPLE_GROUPS.has(g)) return showGroup('all');
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id) || (SIMPLE && SIMPLE_HIDE.has(id)); }));
-    simpleNav();
+    simpleNav(); const kp = document.getElementById('kpis'); if (kp) kp.classList.toggle('fd-hide-set', g === 'settings'); // no tiles on the Settings tab
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   // Phone section menus: defaults below; each phone can rename, add, remove and regroup them (⚙ Settings → Phone menus). Saved on this device.
@@ -2552,13 +2552,15 @@
     // the server's mail account (owner only)
     const sm = DIG.smtp;
     if (!DIG.canEditSmtp) { box.append(phMsg(sm.host ? `Email is sent through the account ${DIG.owner} set up.` : `${DIG.owner} (who set up this server) needs to add an email account here before weekly emails can be sent.`)); return; }
-    box.append(rhead('Sending account (only you can change this)'));
+    // mail server setup: done once, so it stays folded away once it works
+    const sa = document.createElement('details'); sa.className = 'fd-sendacct'; sa.open = !sm.host; const ss = document.createElement('summary'); ss.className = 'fd-rb-h'; ss.style.cursor = 'pointer';
+    ss.textContent = 'Sending account' + (sm.host ? ` · ${sm.host}` : ' · not set up') + ' (only you can change this)'; sa.append(ss); box.append(sa);
     const r2 = document.createElement('div'); r2.className = 'fd-rb-row';
     const fld = (ph, v, type = 'text', w) => { const i = document.createElement('input'); i.type = type; i.className = 'fd-in'; i.placeholder = ph; i.value = v || ''; if (w) i.style.maxWidth = w; r2.append(i); return i; };
     const h = fld('Mail server, e.g. smtp.gmail.com', sm.host), pt = fld('Port', sm.port, 'number', '6em'), u = fld('Username (usually your email)', sm.user), pw = fld(sm.passSet ? 'Password saved (leave blank to keep)' : 'Password or app password', '', 'password'), fr = fld('From address (optional)', sm.from, 'email');
-    box.append(r2, phMsg('Gmail: smtp.gmail.com, port 465, and an "app password" (Google Account → Security → 2-Step Verification → App passwords), not your normal password. Outlook/Hotmail: smtp-mail.outlook.com, port 587. The password is stored only in this server’s data folder.'));
+    sa.append(r2, phMsg('Gmail: smtp.gmail.com, port 465, and an "app password" (Google Account → Security → 2-Step Verification → App passwords), not your normal password. Outlook/Hotmail: smtp-mail.outlook.com, port 587. The password is stored only in this server’s data folder.'));
     const m2 = phMsg('');
-    box.append(rbtn('Save sending account', async () => { try { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp: { host: h.value, port: Number(pt.value), user: u.value, pass: pw.value, from: fr.value } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error); DIG = null; m2.className = 'fd-note fd-good'; m2.textContent = 'Saved. Use "Send me one now" to test it.'; } catch (e) { m2.className = 'fd-note fd-bad'; m2.textContent = e.message || 'Not saved'; } }), m2);
+    sa.append(rbtn('Save sending account', async () => { try { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp: { host: h.value, port: Number(pt.value), user: u.value, pass: pw.value, from: fr.value } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error); DIG = null; m2.className = 'fd-note fd-good'; m2.textContent = 'Saved. Use "Send me one now" to test it.'; } catch (e) { m2.className = 'fd-note fd-bad'; m2.textContent = e.message || 'Not saved'; } }), m2);
   };
 
   // ⚙ Settings → Automatic bank sync (SimpleFIN Bridge: the user subscribes there; we only keep its read-only access link)
@@ -3143,9 +3145,30 @@
   };
   // ---- dashboard settings page ----
   let sDraft = null;
+  // Settings are grouped: each box lands in its section as soon as it's built (boxes load at different speeds)
+  const SET_GROUPS = [['dash', 'This dashboard'], ['phone', 'This phone'], ['conn', 'Bank & data connections'], ['people', 'People & devices'], ['notify', 'Notifications'], ['backup', 'Backup & privacy'], ['adv', 'Advanced']];
+  const setGroupOf = (n) => { const c = ' ' + (n.className || '') + ' ';
+    if (/ fd-syncbox /.test(c) || (n.querySelector && n.querySelector('.fd-apitable'))) return 'conn';
+    if (/ fd-(bkbox|actbox|navmenubox) /.test(c)) return 'adv';
+    if (/ fd-emailbox /.test(c)) return 'notify';
+    if (/ fd-(qrbox|invbox) /.test(c)) return 'people';
+    if (/ fd-(backup|privbox) /.test(c)) return 'backup';
+    if (/ fd-phonebox /.test(c)) return 'phone';
+    return 'dash'; };
+  const setGroups = (el) => {
+    const g = {}; for (const [k, t] of SET_GROUPS) { const w = document.createElement(k === 'adv' ? 'details' : 'div'); w.className = 'fd-setgrp fd-setgrp-' + k; w.hidden = true;
+      const h = document.createElement(k === 'adv' ? 'summary' : 'h3'); h.className = 'fd-setgrp-h'; h.textContent = k === 'adv' ? t + ' (bank keys, menus, sections, recent changes)' : t; w.append(h); g[k] = w; el.append(w); }
+    const place = (n) => { if (n.nodeType !== 1 || n.classList.contains('fd-setgrp')) return; const k = setGroupOf(n), w = g[k];
+      // bank sync first in its section, then everything else in the order it arrives
+      if (n.classList.contains('fd-syncbox')) { const after = [...w.children].filter((x) => x.classList.contains('fd-syncbox')).pop() || w.firstChild; after.after(n); } else w.append(n);
+      w.hidden = false;
+      const sh = n.querySelector && n.querySelector('details.fd-showset'); if (sh) { g.adv.append(sh); sh.classList.add('fd-rb'); g.adv.hidden = false; } };
+    if (el.__setObs) el.__setObs.disconnect();
+    el.__setObs = new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.parentNode === el) place(n); }))); el.__setObs.observe(el, { childList: true });
+  };
   dash.draw('settingsView', (el) => {
     if (st('prefs') !== 'ok') return;
-    el.replaceChildren(); if (sDraft && sDraft._book !== book()) sDraft = null; const s = sDraft || (sDraft = { ...SET(), _book: book() });
+    el.replaceChildren(); setGroups(el); if (sDraft && sDraft._book !== book()) sDraft = null; const s = sDraft || (sDraft = { ...SET(), _book: book() });
     const box = document.createElement('div'); box.className = 'fd-rb';
     const row = (label, node, note) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const l = document.createElement('span'); l.className = 'fd-rb-lbl'; l.textContent = label; r.append(l, node); if (note) { const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = note; r.append(n); } box.append(r); };
     const sel = (opts, val, on) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([v, t]) => x.append(new Option(t, v))); x.value = val; x.addEventListener('change', () => on(x.value)); return x; };
@@ -3168,7 +3191,7 @@
     row('Default date range', sel(rngs, s.range, (v) => { s.range = v; }));
     { const w = document.createElement('div'); w.className = 'fd-vtog'; [[false, 'Full'], [true, 'Simple']].forEach(([v, lab]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.className = SIMPLE === v ? 'is-on' : '';
         b.addEventListener('click', () => { SIMPLE = v; try { localStorage.setItem('fd-simple', v ? '1' : '0'); } catch {} w.querySelectorAll('button').forEach((x) => x.classList.toggle('is-on', x === b)); showGroup(NP.group || 'all'); }); w.append(b); });
-      const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = ' Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
+      const n = document.createElement('span'); n.className = 'fd-zero'; n.style.cssText = 'display:block;font-size:13px;margin-top:4px'; n.textContent = 'Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
     if (widgetApi()) { const w = document.createElement('div'); const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
       const stt = document.createElement('div'); stt.className = 'fd-zero';
       const run = async () => { stt.textContent = 'Updating the widget…'; const ok = await pushWidget(true); stt.textContent = ok ? '✓ Widget updated with this dashboard.' : !widgetApi() ? 'The widget can’t be reached from here. Update the Larenest phone app to the newest version.' : st('budget_totals', 'subs') !== 'ok' ? 'Still loading this dashboard; try again in a moment.' : 'Couldn’t update the widget: ' + wState; };
@@ -3213,7 +3236,7 @@
     if (meBooks().length && myBookId()) {
       const bk = document.createElement('div'); bk.className = 'fd-rb fd-backup'; bk.append(rhead('Backup & restore'));
       const bn = document.createElement('p'); bn.className = 'fd-note'; bn.textContent = `Download a copy of everything saved in the ${book()} dashboard (statements, edits, rules, accounts, budgets, goals, holdings, settings). The server also keeps a full daily backup of all dashboards for 30 days.`; bk.append(bn);
-      const dl = document.createElement('a'); dl.className = 'fd-btn fd-sm'; dl.href = FDStore.url(`/api/books/${encodeURIComponent(myBookId())}/export`); dl.textContent = 'Download backup'; dl.setAttribute('download', '');
+      const dl = rbtn('Download backup', () => { const a = document.createElement('a'); a.href = FDStore.url(`/api/books/${encodeURIComponent(myBookId())}/export`); a.setAttribute('download', ''); document.body.append(a); a.click(); a.remove(); }, false);
       const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,application/json'; fi.style.maxWidth = '260px';
       const rmsg = document.createElement('p'); rmsg.className = 'fd-note';
       let armed = false;
