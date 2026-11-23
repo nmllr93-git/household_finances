@@ -24,7 +24,7 @@ for (const f of fs.readdirSync(path.join(N, 'java'))) fs.copyFileSync(path.join(
 for (const d of fs.readdirSync(path.join(N, 'res'))) { fs.mkdirSync(path.join(RES, d), { recursive: true }); for (const f of fs.readdirSync(path.join(N, 'res', d))) fs.copyFileSync(path.join(N, 'res', d, f), path.join(RES, d, f)); }
 // four widgets (the first keeps its original class name so widgets already placed keep working), plus the refresh receiver
 const W = [['LarenestWidget', 'Larenest · Budget &amp; bills', 'larenest_widget_info'], ['InvestWidget', 'Larenest · Investments', 'invest_widget_info'],
-  ['MarketsWidget', 'Larenest · Markets', 'markets_widget_info'], ['BillsWidget', 'Larenest · Bills &amp; subscriptions', 'bills_widget_info']];
+  ['MarketsWidget', 'Larenest · Markets', 'markets_widget_info'], ['MoversWidget', 'Larenest · Market movers', 'movers_widget_info'], ['BillsWidget', 'Larenest · Bills &amp; subscriptions', 'bills_widget_info']];
 let rx = '';
 for (const [cls, label, info] of W) if (!x.includes('.' + cls + '"')) rx += `    <receiver android:name=".${cls}" android:exported="false" android:label="${label}">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>

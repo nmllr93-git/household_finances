@@ -91,7 +91,13 @@
             v = arr.map((x) => [String(x.date).slice(0, 10), Number(x.price ?? x.close)]).filter((x) => x[1] > 0); } catch {} }
           if (!v.length) { try { const txt = await getText(`https://stooq.com/q/d/l/?s=${encodeURIComponent(s.toLowerCase())}${s.includes('.') ? '' : '.us'}&i=d`);
             v = String(txt).trim().split(/\r?\n/).slice(1).map((l) => l.split(',')).map((c) => [c[0], Number(c[4])]).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x[0]) && x[1] > 0); } catch {} }
-          v.sort((a, b) => (a[0] < b[0] ? -1 : 1)); c = { at: Date.now(), v: v.slice(-45) }; if (v.length || !c.v) HCACHE.set(s, c);
+          // Yahoo's free daily chart, when the others have nothing (Stooq now often refuses plain downloads)
+          if (!v.length) { try { const j = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=3mo&interval=1d`);
+            const r = j && j.chart && j.chart.result && j.chart.result[0], ts = (r && r.timestamp) || [], cl = (r && r.indicators && r.indicators.quote && r.indicators.quote[0] && r.indicators.quote[0].close) || [];
+            v = ts.map((t, n) => [new Date(t * 1000).toISOString().slice(0, 10), Number(cl[n])]).filter((x) => x[1] > 0); } catch {} }
+          v.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+          // keep a good result for 20 hours; an empty one only for an hour, so a hiccup doesn't leave the chart blank all day
+          c = { at: v.length ? Date.now() : Date.now() - 19 * 3600e3, v: v.length ? v.slice(-45) : ((c && c.v) || []) }; HCACHE.set(s, c);
         }
         out[s] = c.v || [];
       }

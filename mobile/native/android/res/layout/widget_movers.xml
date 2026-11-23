@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/w_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:paddingStart="14dp" android:paddingEnd="8dp" android:paddingTop="10dp" android:paddingBottom="12dp" android:background="@drawable/larenest_widget_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <ImageView android:layout_width="18dp" android:layout_height="18dp" android:src="@drawable/larenest_mark" android:contentDescription="Larenest" />
+        <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="7dp"
+            android:textColor="#E3A848" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/w_updated" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#A8A29B" android:textSize="11sp" android:maxLines="1" />
+        <TextView android:id="@+id/w_refresh" android:layout_width="34dp" android:layout_height="30dp" android:gravity="center" android:text="⟳" android:textColor="#E08A66"
+            android:textSize="18sp" android:contentDescription="Refresh" />
+    </LinearLayout>
+    <TextView android:id="@+id/w_sub" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="#A8A29B" android:textSize="12sp" android:visibility="gone" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="6dp" android:paddingEnd="6dp" android:orientation="horizontal">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="GAINERS" android:textColor="#4CC38A" android:textSize="10sp" android:letterSpacing="0.08" android:textStyle="bold" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_g1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_gv1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_g2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_gv2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_g3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_gv3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_g4" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_gv4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_g5" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_gv5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+        </LinearLayout>
+        <ImageView android:layout_width="1dp" android:layout_height="match_parent" android:layout_marginStart="10dp" android:layout_marginEnd="10dp" android:src="@drawable/larenest_widget_divider" />
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LOSERS" android:textColor="#F07070" android:textSize="10sp" android:letterSpacing="0.08" android:textStyle="bold" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_l1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_lv1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_l2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_lv2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_l3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_lv3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_l4" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_lv4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/w_l5" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#ECEBE8" android:textSize="13sp" android:textStyle="bold" android:maxLines="1" android:visibility="invisible" />
+                <TextView android:id="@+id/w_lv5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:maxLines="1" android:visibility="invisible" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

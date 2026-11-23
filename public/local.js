@@ -154,11 +154,11 @@
     let watch = []; try { watch = pw ? JSON.parse(pw.value) || [] : []; } catch (e) {}
     const holdings = mine(data.holdings), m = await marketReady;
     const syms = [...new Set([...holdings, ...watch].map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean))].slice(0, 30);
-    let quotes = {}, history = {}, sectors = [];
+    let quotes = {}, history = {}, sectors = [], movers = {};
     try { quotes = syms.length ? await m.quotes(syms) : {}; } catch (e) {}
     try { history = holdings.length ? await m.history(holdings.map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean).slice(0, 30)) : {}; } catch (e) {}
-    try { sectors = ((await m.markets(false)) || {}).sectors || []; } catch (e) {}
-    return W.build({ name: book.name, label, budget: (get('budget_totals') || []).find((r) => r.key === label), subs: mine(get('subs')), holdings, quotes, history, watch, sectors,
+    try { const mk = (await m.markets(false)) || {}; sectors = mk.sectors || []; movers = { gainers: mk.gainers || [], losers: mk.losers || [] }; } catch (e) {}
+    return W.build({ name: book.name, label, budget: (get('budget_totals') || []).find((r) => r.key === label), subs: mine(get('subs')), holdings, quotes, history, watch, sectors, movers,
       follow: String(sp.get('follow') || '').split('|').filter(Boolean), marketOpen: m.marketOpen() });
   }
   const backend = { name: 'local', fetch: (path, opts) => handle(path, opts).catch((e) => json(e.code || 500, { error: e.message || 'Error' })) };

@@ -24,6 +24,7 @@ final class WidgetRender {
         draw(c, m, InvestWidget.class, R.layout.widget_invest, 1);
         draw(c, m, MarketsWidget.class, R.layout.widget_markets, 2);
         draw(c, m, BillsWidget.class, R.layout.widget_bills, 3);
+        draw(c, m, MoversWidget.class, R.layout.widget_movers, 4);
     }
 
     static void draw(Context c, AppWidgetManager m, Class<?> cls, int layout, int kind) {
@@ -44,12 +45,14 @@ final class WidgetRender {
             case 0: budget(v, d, hide, name); break;
             case 1: invest(v, d, hide); break;
             case 2: markets(v, d, hide); break;
+            case 4: movers(v, d, hide); break;
             default: bills(v, d, hide, name); break;
         }
         return v;
     }
 
     private static void empty(RemoteViews v, int kind) {
+        if (kind == 4) { v.setTextViewText(R.id.w_title, "Market movers"); v.setTextViewText(R.id.w_sub, "This widget fills in after you open a dashboard."); v.setViewVisibility(R.id.w_sub, View.VISIBLE); return; }
         v.setViewVisibility(R.id.w_big, View.VISIBLE); v.setTextViewText(R.id.w_big, "Open Larenest");
         v.setTextViewText(R.id.w_sub, "This widget fills in after you open a dashboard.");
         v.setViewVisibility(R.id.w_sub, View.VISIBLE);
@@ -178,5 +181,28 @@ final class WidgetRender {
         hideRows(v, n, 5);
         v.setViewVisibility(R.id.w_sub, n == 0 ? View.VISIBLE : View.GONE);
         v.setTextViewText(R.id.w_sub, "Nothing due in the next 30 days.");
+    }
+
+    // ---- Market movers (wide): today's biggest gainers and losers side by side ----
+    private static final int[] GS = { R.id.w_g1, R.id.w_g2, R.id.w_g3, R.id.w_g4, R.id.w_g5 }, GV = { R.id.w_gv1, R.id.w_gv2, R.id.w_gv3, R.id.w_gv4, R.id.w_gv5 };
+    private static final int[] LS = { R.id.w_l1, R.id.w_l2, R.id.w_l3, R.id.w_l4, R.id.w_l5 }, LV = { R.id.w_lv1, R.id.w_lv2, R.id.w_lv3, R.id.w_lv4, R.id.w_lv5 };
+    private static void movers(RemoteViews v, JSONObject d, boolean hide) {
+        JSONObject mk = d.optJSONObject("markets");
+        v.setTextViewText(R.id.w_title, "Market movers" + (mk != null ? (mk.optBoolean("open") ? " · Open" : " · Closed") : ""));
+        int a = col(v, mk == null ? null : mk.optJSONArray("gainers"), GS, GV, hide), b = col(v, mk == null ? null : mk.optJSONArray("losers"), LS, LV, hide);
+        v.setViewVisibility(R.id.w_sub, a + b == 0 ? View.VISIBLE : View.GONE);
+        v.setTextViewText(R.id.w_sub, "Movers need a free Financial Modeling Prep key (Settings → Data sources).");
+    }
+    private static int col(RemoteViews v, JSONArray l, int[] sym, int[] val, boolean hide) {
+        int n = l == null ? 0 : Math.min(5, l.length());
+        for (int i = 0; i < 5; i++) {
+            if (i >= n) { v.setViewVisibility(sym[i], View.INVISIBLE); v.setViewVisibility(val[i], View.INVISIBLE); continue; }
+            JSONObject x = l.optJSONObject(i); double p = x.optDouble("pct");
+            v.setViewVisibility(sym[i], View.VISIBLE); v.setViewVisibility(val[i], View.VISIBLE);
+            v.setTextViewText(sym[i], x.optString("sym"));
+            String t = WidgetStore.arrow(p) + " " + WidgetStore.pct(p); if (!hide && !x.isNull("price")) t = WidgetStore.money(x.optDouble("price")) + "  " + t;
+            v.setTextViewText(val[i], t); v.setTextColor(val[i], WidgetStore.tone(p));
+        }
+        return n;
     }
 }

@@ -42,3 +42,10 @@ test('runCalcs: the dashboard’s own calcs.js runs outside the browser', () => 
   assert.ok(Array.isArray(get('budget_totals')));
   assert.ok(Array.isArray(get('subs')));
 });
+
+test('markets: top gainers and losers, five each', async () => {
+  const { createRequire } = await import('node:module'); const W = createRequire(import.meta.url)('../core/widgetdata.js');
+  const g = Array.from({ length: 7 }, (_, n) => ({ symbol: 'g' + n, name: 'G', price: 10 + n, change: 20 - n }));
+  const o = W.build({ name: 'X', movers: { gainers: g, losers: [{ symbol: 'ab', price: 0, change: -12.34 }] } });
+  assert.equal(o.markets.gainers.length, 5); assert.equal(o.markets.gainers[0].sym, 'G0'); assert.equal(o.markets.losers[0].pct, -12.3); assert.equal(o.markets.losers[0].price, null);
+});
