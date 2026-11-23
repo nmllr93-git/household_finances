@@ -73,10 +73,28 @@
       const d = await api('GET', `/api/books/${encodeURIComponent(bookId)}/data`);
       if (S.bookId !== bookId) return;
       for (const id of RAW) { S.raw[id] = d[id] || []; S.status[id] = 'ok'; }
+      lostBanner(false);
     } catch (e) {
       for (const id of RAW) { S.status[id] = 'error'; S.error[id] = e.message; }
+      if (e instanceof TypeError && !window.FD_LOCAL) lostBanner(true); // network failure: the host can't be reached
     }
     S.version++; schedule();
+  }
+  // Connection lost while the dashboard is open: one plain banner, retried automatically
+  let lostT = null;
+  function lostBanner(on) {
+    let b = document.getElementById('fd-lost');
+    if (!on) { if (b) b.remove(); clearInterval(lostT); lostT = null; return; }
+    if (!b) {
+      b = document.createElement('div'); b.id = 'fd-lost'; b.setAttribute('role', 'alert');
+      b.style.cssText = 'position:sticky;top:0;z-index:50;background:#7a2e1f;color:#fff;padding:10px 14px;font-size:14px;line-height:1.4';
+      const t = document.createElement('div'); t.innerHTML = '<b>Can’t reach your computer right now.</b> It may be asleep or turned off, Larenest may be closed on it, or this device left your home Wi-Fi (away from home, turn on Tailscale). Trying again on its own…';
+      const r = document.createElement('button'); r.type = 'button'; r.textContent = 'Try again now'; r.style.cssText = 'margin:8px 8px 0 0;font:inherit;padding:4px 10px;border-radius:6px;border:0;cursor:pointer';
+      r.addEventListener('click', () => load(S.bookId)); b.append(t, r);
+      if (window.Capacitor && !window.FDApp) { const h = document.createElement('a'); h.textContent = 'Connection help'; h.style.color = '#fff'; h.href = 'https://localhost/?failed=' + encodeURIComponent(location.origin); b.append(h); }
+      document.body.prepend(b);
+    }
+    if (!lostT) { lostT = setInterval(() => { if (navigator.onLine !== false) load(S.bookId); }, 20000); window.addEventListener('online', () => load(S.bookId), { once: true }); }
   }
 
   const collOf = (p) => { const parts = String(p).split('/'); return parts[parts.length - 1]; };
