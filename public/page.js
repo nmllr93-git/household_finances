@@ -2824,6 +2824,7 @@
     if (host.__priv !== tok || host.querySelector('.fd-privbox')) return;
     const box = document.createElement('details'); box.className = 'fd-rb fd-privbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Where your data lives'; box.append(sm);
     if (window.FDDataMap) box.append(window.FDDataMap(!!window.FD_LOCAL)); box.open = true;
+    if (window.FDConnSecurity) { box.append(rhead('How your connection is protected'), window.FDConnSecurity()); }
     const NAMES = { finnhub: 'Finnhub', fmp: 'Financial Modeling Prep', fred: 'FRED', bls: 'Bureau of Labor Statistics', eia: 'Energy Information Administration' };
     const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)'); if (bk && bk.teller.appId) on.push('Teller (your own keys)'); if (bk && bk.plaid.hasSecret) on.push('Plaid (your own keys)');
     [window.FD_LOCAL ? 'Everything you enter is stored only on this phone, in the app’s private storage. Uninstalling the app deletes it, so keep a backup file somewhere safe.' : 'Everything you enter is stored only on the computer that runs Larenest, in its data folder. Phones and other computers just display it.',

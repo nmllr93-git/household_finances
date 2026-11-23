@@ -74,6 +74,11 @@ I'd go with the careful reading: **declare the connected-mode traffic**. The pho
 2. **Is all of the user data collected by your app encrypted in transit?** No.
    - In connected mode on a home network, the phone talks to the user's PC over plain HTTP. Tailscale or HTTPS encrypt it, but that isn't guaranteed.
    - If you'd rather answer Yes, the app would first need to require HTTPS or Tailscale. That's a code change worth considering.
+   - What this means for users (also explained in the app: ⚙ Settings → Where your data lives → How your connection is protected):
+     - **Home Wi-Fi:** Wi-Fi encrypts traffic over the air, but other devices on the same network could in principle read it. Fine on a trusted home network.
+     - **Tailscale (free):** encrypted from the phone all the way to the PC, at home or away.
+     - **WireGuard to the router:** encrypted across the internet, then plain on the home network from the router to the PC.
+     - **Phone-only mode or the PC itself:** nothing travels over a network.
 3. **Do you provide a way for users to request that their data is deleted?** Yes.
    - Users can delete any dashboard, account or transaction in the app.
    - Phone-only data is removed when they uninstall or clear app data.
