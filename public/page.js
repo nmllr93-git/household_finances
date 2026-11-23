@@ -3255,6 +3255,8 @@
     { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = document.body.classList.contains('fd-brand');
       i.addEventListener('change', () => { document.body.classList.toggle('fd-brand', i.checked); try { localStorage.setItem('fd-brand', i.checked ? '1' : '0'); } catch {} });
       l.append(i, ' Show the Larenest logo and colors (this device only)'); row('Larenest look', l); }
+    { const sw = document.querySelector('.fd-account .fd-switch'); // only inside the desktop or phone app
+      if (sw) { const w = document.createElement('div'); w.append(rbtn('Switch server…', () => sw.click(), false), phMsg('Connect this app to a different computer, or use it on this phone only.')); row('Server', w); } }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
     const chk = (label, on, set) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.addEventListener('change', () => set(i.checked)); l.append(i, ' ' + label); return l; };
     const tw = document.createElement('div'); tw.className = 'fd-chkgrid';

@@ -66,7 +66,7 @@
     const phone = localStorage.getItem('fd-inapp') === 'phone', desk = !!(window.FDApp && window.FDApp.setupAgain);
     if (!phone && !desk) return;
     const box = document.querySelector('.fd-account'); if (!box) return;
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link'; b.textContent = 'Switch server';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link fd-switch'; b.textContent = 'Switch server';
     b.addEventListener('click', () => { if (desk) window.FDApp.setupAgain(); else location.href = 'https://localhost/?pick=1'; });
     box.append(' · ', b);
   } catch (e) {}
@@ -84,4 +84,22 @@
     location.reload();
   });
   box.prepend(b, ' · ');
+})();
+
+// Phones: the logo row keeps ⟳ and a ☰ menu; the account links (who's signed in, Backup, Sign out, Switch server) move into the menu.
+(function () {
+  const box = document.querySelector('.fd-account'); if (!box) return;
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'fd-link fd-menubtn'; btn.textContent = '☰'; btn.setAttribute('aria-label', 'Account menu'); btn.setAttribute('aria-expanded', 'false');
+  const menu = document.createElement('div'); menu.className = 'fd-acctmenu'; menu.hidden = true; menu.setAttribute('role', 'menu');
+  const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  const build = () => {
+    menu.textContent = '';
+    const who = document.getElementById('fd-user'); if (who && who.textContent.trim()) { const h = document.createElement('div'); h.className = 'fd-acctwho'; h.textContent = 'Signed in as ' + who.textContent.trim(); menu.append(h); }
+    const item = (label, orig) => { if (!orig) return; const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.textContent = label; b.addEventListener('click', () => { close(); orig.click(); }); menu.append(b); };
+    item('Download backup', document.getElementById('fd-export')); item('Sign out', document.getElementById('fd-logout')); item('Switch server', box.querySelector('.fd-switch'));
+  };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); if (menu.hidden) { build(); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); } else close(); });
+  document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  box.append(btn, menu);
 })();

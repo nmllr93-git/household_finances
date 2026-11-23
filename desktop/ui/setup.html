@@ -5,8 +5,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
 <title>Set up · Larenest</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1f2a37; --mut:#5b6675; --card:#fff; --line:#d8dde3; --acc:#1f5f8b; --soft:#e6eff7; --bad:#b3261e; --ok:#1e7a46; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#12171d; --fg:#e6e9ed; --mut:#9aa4b0; --card:#1b222b; --line:#2c3540; --acc:#6fb0e0; --soft:#1f2f3d; --bad:#f08a80; --ok:#6fcf97; } }
+  :root { color-scheme: light dark; --bg:#f7f3ee; --fg:#2a221d; --mut:#6e6259; --card:#fff; --line:#e3d9cf; --acc:#9C4A2F; --soft:#f6e9e1; --bad:#b3261e; --ok:#1e7a46; --gold:#E3A848; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161514; --fg:#ecebe8; --mut:#a8a29b; --card:#201e1c; --line:#34302c; --acc:#E08A66; --soft:#2b2320; --bad:#f07070; --ok:#4cc38a; } }
   * { box-sizing: border-box; }
   body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg); font:15px/1.45 "Segoe UI", system-ui, sans-serif; padding:24px; }
   main { width:100%; max-width:560px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:28px; }
@@ -24,6 +24,8 @@
   .bar { display:flex; justify-content:space-between; gap:8px; margin-top:22px; }
   .note { font-size:.88rem; } #msg { min-height:1.3em; margin-top:12px; } .bad { color:var(--bad); } .ok { color:var(--ok); }
   [hidden] { display:none !important; }
+  @media (prefers-color-scheme: dark) { button.b { color:#1a1412; } }
+  h1, h2 { letter-spacing:-.01em; }
 </style>
 </head>
 <body>

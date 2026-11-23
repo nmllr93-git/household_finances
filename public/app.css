@@ -471,6 +471,18 @@ body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); 
   body.fd-brand .fd-account .fd-link:first-child { font-size: 18px; line-height: 1; padding: 0 2px; }
   body.fd-brand .fd-dl-long { display: none; } body.fd-brand .fd-dl-short { display: inline; }
 }
+/* phones: only ⟳ and ☰ stay in the row; the rest is in the ☰ menu */
+.fd-menubtn, .fd-acctmenu { display: none; }
+@media (max-width: 640px) {
+  .fd-account { position: relative; font-size: 0 !important; }
+  .fd-account > * { display: none !important; }
+  .fd-account > .fd-link:first-child, .fd-account > .fd-menubtn { display: inline-flex !important; align-items: center; justify-content: center; font-size: 20px; line-height: 1; min-width: 36px; height: 34px; padding: 0 4px; text-decoration: none; }
+  .fd-account > .fd-acctmenu:not([hidden]) { display: flex !important; flex-direction: column; position: absolute; top: 36px; right: 0; z-index: 50; min-width: 210px; padding: 6px; font-size: 15px;
+    background: var(--color-panel, #fff); border: 1px solid var(--color-border-line, #ddd); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.35); white-space: nowrap; }
+  .fd-acctmenu button { font: inherit; text-align: left; background: none; border: 0; color: var(--color-fg); padding: 11px 12px; border-radius: 8px; cursor: pointer; }
+  .fd-acctmenu button:active, .fd-acctmenu button:hover { background: var(--brand-soft, rgba(127,127,127,.12)); }
+  .fd-acctwho { color: var(--color-fg-muted); font-size: 13px; padding: 6px 12px 8px; border-bottom: 1px solid var(--color-border-line, #ddd); margin-bottom: 4px; }
+}
 /* Larenest look, dark mode: neutral warm charcoal instead of navy-grey, so the logo colors read cleanly */
 @media (prefers-color-scheme: dark) {
   html:has(body.fd-brand), body.fd-brand { --color-bg: #161514; --color-panel: #201e1c; --color-border-line: #33302c; --color-fg: #ecebe8; --color-fg-muted: #a8a29b;
