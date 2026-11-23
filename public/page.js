@@ -2538,7 +2538,10 @@
     const on = document.createElement('label'); on.className = 'fd-check'; const oc = document.createElement('input'); oc.type = 'checkbox'; oc.checked = !!me.on; on.append(oc, ' Send it');
     const day = document.createElement('select'); day.className = 'dash-select'; ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'].forEach((d, i) => day.append(new Option(d, i))); day.value = me.day;
     const hr = document.createElement('select'); hr.className = 'dash-select'; for (let h = 5; h <= 21; h++) hr.append(new Option(`at ${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`, h)); hr.value = me.hour;
-    r1.append(em, on, day, hr); box.append(r1);
+    em.style.cssText = 'flex:1 1 100%;width:100%;max-width:none;min-width:0;box-sizing:border-box'; r1.style.width = '100%'; r1.style.maxWidth = 'none'; r1.append(em);
+    // how often and what time side by side; the on/off switch on its own line
+    const rWhen = document.createElement('div'); rWhen.className = 'fd-rb-row'; rWhen.style.cssText = 'flex-wrap:nowrap;width:100%;max-width:none'; day.style.cssText = hr.style.cssText = 'flex:1 1 0;min-width:0;max-width:none'; rWhen.append(day, hr);
+    const rOn = document.createElement('div'); rOn.className = 'fd-rb-row'; on.lastChild.textContent = ' Send me this email'; rOn.append(on); box.append(r1, rWhen, rOn);
     const msg = phMsg('');
     const saveMe = async () => { const r = await FDStore.fetch('/api/digest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ me: { email: em.value.trim(), on: oc.checked, day: Number(day.value), hour: Number(hr.value) } }) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Not saved'); DIG = null; };
     const btns = document.createElement('div'); btns.className = 'fd-rb-row'; box.append(btns);
@@ -2619,7 +2622,7 @@
       if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
       for (const n of st.notes || []) box.append(phMsg(P.label + ': ' + n));
       const draft = {};
-      const tb = document.createElement('table'); tb.className = 'fd-table';
+      const tb = document.createElement('table'); tb.className = 'fd-table fd-synctbl';
       const hr = document.createElement('tr'); for (const h of ['Bank account', 'Show it as', 'Type', 'Sync', ...(P.multi ? ['Flip ±'] : [])]) { const th = document.createElement('th'); th.textContent = h; if (h === 'Flip ±') th.title = 'Tick if spending shows up as income for this account'; hr.append(th); } tb.append(hr);
       for (const a of st.accounts) {
         const d = draft[a.id] = { map: a.map, kind: a.kind, skip: a.skip, ...(P.multi ? { flip: !!a.flip } : {}) }, tr = document.createElement('tr');

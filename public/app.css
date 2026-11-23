@@ -381,3 +381,18 @@ body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 
 .fd-sfguide { margin: 8px 0; } .fd-sfguide summary { cursor: pointer; font-weight: 600; } .fd-sfguide figure { margin: 10px 0 16px; } .fd-sfguide figcaption { font-size: 14px; margin-bottom: 6px; } .fd-sfguide img { width: 100%; max-width: 720px; border: 1px solid var(--color-border-line); border-radius: 8px; display: block; }
 
 .fd-btn.fd-busy { opacity: .7; cursor: progress; }
+
+/* Bank sync accounts on phones: one card per account (bank name, then "Show it as", then type and checkboxes) */
+@media (max-width: 640px) {
+  .fd-synctbl, .fd-synctbl tbody { display: block; width: 100%; }
+  .fd-synctbl tr:first-child { display: none; }
+  .fd-synctbl tr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 0; border-bottom: 1px solid var(--color-border-line); }
+  .fd-synctbl td { display: block; padding: 0; border: 0; min-width: 0; }
+  .fd-synctbl td:nth-child(1) { flex: 1 1 100%; font-size: 13px; color: var(--color-fg-muted); overflow-wrap: anywhere; }
+  .fd-synctbl td:nth-child(2) { flex: 1 1 100%; } .fd-synctbl td:nth-child(2) input { width: 100%; box-sizing: border-box; }
+  .fd-synctbl td:nth-child(3) { flex: 1 1 auto; } .fd-synctbl td:nth-child(3) select { width: 100%; }
+  .fd-synctbl td:nth-child(4)::before { content: 'Sync '; font-size: 13px; color: var(--color-fg-muted); }
+  .fd-synctbl td:nth-child(5)::before { content: 'Flip ± '; font-size: 13px; color: var(--color-fg-muted); }
+}
+/* never let the page scroll sideways on phones (wide tables scroll inside their own box instead) */
+html, body { overflow-x: clip; max-width: 100%; }
