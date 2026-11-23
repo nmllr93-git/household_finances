@@ -7,4 +7,4 @@ Add new screenshots here only after they've been cleaned (no emails, codes, PINs
 - `phone-web/`: the dashboard on a phone
 - `desktop/`: the PC app (host window, setup) and the dashboard on a computer
 
-Gallery page (claude.ai): see the link in the chat where these were added.
+Gallery page (claude.ai, private to you): https://claude.ai/artifact/VGAhHK7gTVrfo29AvrVYzv
