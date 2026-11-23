@@ -248,7 +248,7 @@
     const head = (labels) => { const tr = document.createElement('tr'); labels.forEach((l, i) => { const th = document.createElement('th'); th.textContent = l; if (i === 0) th.className = 'fd-l'; tr.append(th); }); el.append(tr); };
     if (v === 'subs') {
       const s = rows('subs').filter((x) => x.book === book());
-      if (!s.length) return empty(el, 4, 'No subscriptions found in this range.');
+      if (!s.length) return empty(el, 4, emptyIn('subscriptions or recurring bills'));
       for (const kind of ['Subscription', 'Recurring bill']) {
         const g = s.filter((x) => x.kind === kind).sort((a, b) => b.avg - a.avg); if (!g.length) continue;
         head([kind === 'Subscription' ? 'Subscription' : 'Recurring bill', 'Last charge', 'Per month', 'Per year']);
@@ -259,7 +259,7 @@
     }
     const kind = v === 'cash' ? 'deposit' : 'investment';
     const d = latestRows(kind);
-    if (!d.month) return empty(el, 3, 'No balances in this range.');
+    if (!d.month) return empty(el, 3, emptyIn('balances'));
     const prevM = rows('balances').filter((r) => r.book === book() && r.kind === kind && r.month < d.month).map((r) => r.month).sort().pop();
     const prev = Object.fromEntries(rows('balances').filter((r) => r.book === book() && r.kind === kind && r.month === prevM).map((r) => [r.label, r.balance]));
     head(['Account', 'Source', 'Balance', 'Change']);
@@ -432,14 +432,14 @@
     const s = st('vendors', 'period'); if (s !== 'ok') return placeholder(el, s);
     const per = period();
     const top = rows('vendors').filter((r) => r.book === book()).slice(0, 5);
-    if (!top.length) return placeholder(el, 'ok', 'No spending in this range.');
+    if (!top.length) return placeholder(el, 'ok', emptyIn('spending'));
     window.FD.lineChart(el, { labels: per.map((m) => m.label), aria: `Monthly spending at the top five vendors: ${top.map((t) => t.vendor).join(', ')}`,
       series: top.map((t) => ({ name: t.vendor, points: per.map((m) => ({ label: m.label, v: t.series[m.i] })) })) });
   });
   dash.draw('flowChart', (el) => {
     const s = st('monthly'); if (s !== 'ok') return placeholder(el, s);
     const r = rows('monthly').filter((x) => x.book === book());
-    if (!r.length) return placeholder(el, 'ok', 'No months in this range.');
+    if (!r.length) return placeholder(el, 'ok', emptyIn('income or spending'));
     window.FD.groupedBars(el, { aria: 'Income and spending by month',
       groups: r.map((x) => ({ label: x.label, values: [{ name: 'Income', v: x.income, color: dash.colors[0] }, { name: 'Spending', v: x.spend, color: dash.colors[1] }],
         extra: [`Net ${money0(x.net)}`].concat(x.income > 0 ? [`Kept ${Math.round((x.net / x.income) * 100)}% of income`] : []).concat(x.oneTime ? [`Plus one-time items: ${money0(x.oneTime)}`] : []) })) });
@@ -449,7 +449,7 @@
     const s = st('cat_trend', 'period'); if (s !== 'ok') return placeholder(el, s);
     const per = period();
     const c = rows('cat_trend').filter((r) => r.book === book() && r.total > 0);
-    if (!c.length) return placeholder(el, 'ok', 'No spending in this range.');
+    if (!c.length) return placeholder(el, 'ok', emptyIn('spending'));
     const topN = c.slice(0, 7), rest = c.slice(7);
     const series = topN.map((r) => ({ name: r.category, values: r.series }));
     if (rest.length) series.push({ name: 'Everything else', color: 'var(--series-6)', values: per.map((m) => rest.reduce((t, r) => t + r.series[m.i], 0)) });
@@ -466,13 +466,13 @@
       series: [...accts.map((a) => ({ name: a, points: per.map((m) => { const r = b.find((x) => x.label === a && x.month === m.month); return { label: m.label, v: r ? r.balance : null, note: r && r.estimate ? 'estimate' : '' }; }) })),
         ...(kinds.includes('investment') ? sharedIn().filter((d) => d.kind === 'investment' && d.history && shIncl(d).inv).map((d) => ({ name: `${d.name} (${d.owner || d.srcLabel})`, points: per.map((m) => { const h = d.history.find((x) => x[0] === m.month); return { label: m.label, v: h ? h[1] : null, note: 'shared' }; }) })) : [])] });
   };
-  dash.draw('investChart', (el) => balLines(el, ['investment'], 'No investment balances in this range.'));
-  dash.draw('loanChart', (el) => balLines(el, ['mortgage', 'loan'], 'No mortgage or loan balances in this range.'));
+  dash.draw('investChart', (el) => balLines(el, ['investment'], emptyIn('investment balances')));
+  dash.draw('loanChart', (el) => balLines(el, ['mortgage', 'loan'], emptyIn('mortgage or loan balances')));
   dash.draw('depositChart', (el) => {
     const s = st('balance_totals', 'period'); if (s !== 'ok') return placeholder(el, s);
     const per = period();
     const t = rows('balance_totals').filter((r) => r.book === book() && r.kind === 'deposit');
-    if (!t.length) return placeholder(el, 'ok', 'No balances in this range.');
+    if (!t.length) return placeholder(el, 'ok', emptyIn('balances'));
     window.FD.lineChart(el, { labels: per.map((m) => m.label), zero: false, aria: 'Checking and savings balance by month',
       series: [{ name: 'Checking & savings', points: per.map((m) => { const r = t.find((x) => x.month === m.month); return { label: m.label, v: r ? r.total : null }; }) }] });
   });
@@ -484,7 +484,7 @@
     if (st('cat_trend') !== 'ok') return;
     const cmp = !!P().compare, sel = P().cat;
     const c = rows('cat_trend').filter((r) => r.book === book());
-    if (!c.length) return empty(el, 7, 'No spending in this range.');
+    if (!c.length) return empty(el, 7, emptyIn('spending'));
     for (const r of c) {
       const tr = document.createElement('tr'); tr.dataset.key = enc(r.key); tr.className = 'fd-click' + (sel === r.category ? ' is-sel' : '');
       tr.addEventListener('click', () => pickCat(r.category));
@@ -552,7 +552,7 @@
         el.append(tr);
       }
     }
-    if (!r.length) empty(el, 6, 'No subscriptions found in this range.');
+    if (!r.length) empty(el, 6, emptyIn('subscriptions or recurring bills'));
   });
 
   // ---- budget vs actual ----
@@ -1221,7 +1221,7 @@
     el.replaceChildren();
     const inPer = new Set(period().map((m) => m.month));
     const b = rows('txns').filter((t) => t.book === book() && t.type === 'expense' && inPer.has(t.month) && shown(t)).sort((a, c) => c.amount - a.amount).slice(0, 10);
-    if (!b.length) return empty(el, 4, 'No spending in this range.');
+    if (!b.length) return empty(el, 4, emptyIn('spending'));
     for (const t of b) {
       const tr = document.createElement('tr'); tr.className = 'fd-click'; tr.title = 'Show this vendor’s transactions';
       tr.addEventListener('click', () => goTx({ search: t.vendor }));
@@ -1512,7 +1512,7 @@
   dash.draw('nwChart', (el) => {
     const s = st('balances', 'period'); if (s !== 'ok') return placeholder(el, s);
     const per = period(), b = rows('balances').filter((r) => r.book === book());
-    if (!b.length) return placeholder(el, 'ok', 'No balances in this range yet.');
+    if (!b.length) return placeholder(el, 'ok', emptyIn('balances'));
     const ASSET = { deposit: true, investment: true }, last = {}, nw = [], as = [], de = [];
     // home, vehicles and shared values without history are counted at today's value in every month
     const homeNow = assetsAll().reduce((t, a) => t + assetNow(a), 0) + sharedIn().filter((d) => d.kind === 'asset' && !d.history && shIncl(d).nw).reduce((t, d) => t + (Number(d.balance) || 0), 0);
@@ -1636,7 +1636,7 @@
     el.replaceChildren();
     const inPer = new Set(period().map((m) => m.month));
     const tx = rows('txns').filter((t) => t.book === book() && t.type === 'expense' && !t.oneTime && inPer.has(t.month) && /^\d{4}-\d{2}-\d{2}$/.test(t.date || ''));
-    if (!tx.length) return empty(el, 4, 'No dated spending in this range.');
+    if (!tx.length) return empty(el, 4, emptyIn('spending'));
     const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], tot = Array(7).fill(0), cnt = Array(7).fill(0);
     for (const t of tx) { const d = (new Date(t.date + 'T00:00:00Z').getUTCDay() + 6) % 7; tot[d] += t.amount; cnt[d]++; }
     const max = Math.max(...tot) || 1, all = tot.reduce((s, v) => s + v, 0);
@@ -1874,7 +1874,7 @@
   dash.draw('kWhere', (el) => {
     if (st('txns', 'period', 'subs') !== 'ok') return;
     el.replaceChildren(); const x = incomeSplit();
-    if (!x.inc) { el.textContent = 'No income in this range.'; return; }
+    if (!x.inc) { el.textContent = emptyIn('income'); return; }
     const s = [[x.mort >= x.rent ? 'Mortgage' : 'Rent', x.home, '#ffffff'], ['Utilities', x.util, '#2f6fd6'], ['Subs', x.subs, '#d43d3d'], ['Everyday', x.every, '#f6d84a'], ['One-time', x.one, '#7b5ea7']]
       .filter(([, v]) => v > 0).map(([label, value, color]) => ({ label, value, color }));
     s.push(x.kept >= 0 ? { label: 'Kept', value: x.kept, color: '#0b5e31' } : { label: 'Overspent', value: -x.kept, color: '#8b1e1e' });
@@ -2020,7 +2020,7 @@
   dash.draw('reviewHead', (el) => {
     if (st('txns') !== 'ok') return;
     el.replaceChildren();
-    const ys = rYears(); if (!ys.length) { el.textContent = 'No transactions yet.'; return; }
+    const ys = rYears(); if (!ys.length) { el.textContent = (hasAnyData() ? 'No transactions yet.' : emptyIn('')); return; }
     if (!ry || !ys.includes(ry)) ry = ys[ys.length - 1];
     const bar = document.createElement('div'); bar.className = 'fd-rb-row';
     const s = document.createElement('select'); s.className = 'dash-select'; ys.slice().reverse().forEach((y) => s.append(new Option(y, y))); s.value = ry;
@@ -2801,6 +2801,9 @@
 
   // ================= Phone-only mode: settings, backup reminder, bill notifications, first-run walkthrough =================
   const PH = () => window.FD_LOCAL && window.FDLocal;
+  // plain-language empty states: brand-new dashboard → what to do; otherwise → the dates are the reason
+  const hasAnyData = () => rows('imports').some((b) => b.book === book() && ((b.txns || []).length || b.balance != null)) || rows('balances').some((b) => b.book === book()) || rows('manual').some((m) => m.book === book());
+  const emptyIn = (what) => (hasAnyData() ? `No ${what} in the dates you picked. Try a wider date range at the top of the page.` : 'Nothing here yet. Import a bank or credit card statement (Import tab) and this fills in on its own.');
   const phMsg = (t, cls) => { const p = document.createElement('p'); p.className = 'fd-note' + (cls ? ' ' + cls : ''); p.textContent = t; return p; };
   const billsAhead = (days) => { const end = Date.now() + days * 864e5, out = [];
     rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 6 && d.getTime() <= end; g++) { out.push({ name: x.vendor, amount: money0(x.lastCharge), due: new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).toISOString() }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
