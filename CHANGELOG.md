@@ -3,6 +3,11 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.22
+
+### Fixes
+- **Updates install reliably on Windows:** the app now stops its server before the installer starts, so the installer no longer gives up after the “allow changes” prompt. The installer shows its window (so any problem is visible) and reopens Larenest when it’s done. If you’re on 1.0.21 or earlier, install this version once from [larenest.app/download](https://larenest.app/download/); updates after that install on their own.
+
 ## Desktop 1.0.21
 
 ### Changes
