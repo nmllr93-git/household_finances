@@ -8,6 +8,10 @@
 //   load(bookId) / save(bookId, state)                     connection state per dashboard (kept OUT of backups)
 //   bookData(bookId) → { imports: [...], accounts: [...] } the dashboard's statements and account list (duplicate checks)
 //   addDoc(bookId, coll, doc)                              save a document the same way the app does
+//   provider (optional)                                    another aggregator (Teller, Plaid: core/banklinks.js) with the
+//                                                          same shape as the SimpleFIN one below: { id, label, multi, connect,
+//                                                          pull, start?, disconnect?, autoGap?, manualGap?, emptyNote? }.
+//                                                          pull() returns accounts in SimpleFIN's format, so the import logic is shared.
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -52,6 +56,9 @@
 
   function createSimpleFin(env) {
     const busy = new Set();
+    const P = env.provider || { id: 'simplefin', label: 'SimpleFIN', multi: false, connect: (b) => claim(b.token), pull: (access, start) => pull(access, start),
+      emptyNote: 'Connected, but no bank accounts yet. Add your banks in SimpleFIN Bridge (New connection), then press Sync now here.' };
+    const AUTO = P.autoGap || AUTO_GAP, MANUAL = P.manualGap || MANUAL_GAP;
     async function claim(token) {
       let url; try { url = unb64(String(token || '').trim()); new URL(url); } catch { throw err(400, 'That doesn’t look like a SimpleFIN setup token. Copy the whole token from SimpleFIN Bridge and paste it here.'); }
       if (!/^https:\/\//i.test(url)) throw err(400, 'That setup token doesn’t point to a secure (https) address.');
@@ -81,23 +88,24 @@
       }
     }
     const view = (st) => ({
-      connected: !!(st && st.access), lastSync: (st && st.lastSync) || null, lastError: (st && st.lastError) || '', notes: (st && st.notes) || [], kinds: KINDS,
-      accounts: Object.entries((st && st.accounts) || {}).map(([id, a]) => ({ id, name: a.name, org: a.org, map: a.map, kind: a.kind, skip: !!a.skip, synced: (a.seen || []).length })),
+      provider: P.id, label: P.label, multi: !!P.multi, banks: P.multi && st && Array.isArray(st.access) ? st.access.map((x) => x.institution || 'Bank') : [],
+      connected: !!(st && st.access && (!Array.isArray(st.access) || st.access.length)), lastSync: (st && st.lastSync) || null, lastError: (st && st.lastError) || '', notes: (st && st.notes) || [], kinds: KINDS,
+      accounts: Object.entries((st && st.accounts) || {}).map(([id, a]) => ({ id, name: a.name, org: a.org, map: a.map, kind: a.kind, skip: !!a.skip, flip: !!a.flip, synced: (a.seen || []).length })),
     });
 
     async function sync(bookId, auto) {
       if (busy.has(bookId)) return { added: 0, busy: true };
-      const st = (await env.load(bookId)) || {}; if (!st.access) throw err(400, 'Not connected to SimpleFIN.');
+      const st = (await env.load(bookId)) || {}; if (!st.access) throw err(400, `Not connected to ${P.label}.`);
       const now = Date.now();
-      if (st.lastTry && now - st.lastTry < (auto ? AUTO_GAP : MANUAL_GAP)) {
+      if (st.lastTry && now - st.lastTry < (auto ? AUTO : MANUAL)) {
         if (auto) return { added: 0, skipped: true };
-        throw err(429, `Synced recently. SimpleFIN allows about 24 checks a day, so wait ${Math.ceil((MANUAL_GAP - (now - st.lastTry)) / 60e3)} more minute(s).`);
+        throw err(429, `Synced recently. To stay within ${P.label}’s limits, wait ${Math.ceil((MANUAL - (now - st.lastTry)) / 60e3)} more minute(s).`);
       }
       busy.add(bookId);
       try {
         st.lastTry = now;
         const start = (st.lastSync ? st.lastSync - OVERLAP_DAYS * 864e5 : now - FIRST_DAYS * 864e5) / 1000;
-        let res; try { res = await pull(st.access, start); } catch (e) { st.lastError = e.message; await env.save(bookId, st); throw e; }
+        let res; try { res = await P.pull(st.access, start); } catch (e) { st.lastError = e.message; await env.save(bookId, st); throw e; }
         refreshList(st, res.accounts);
         const data = (await env.bookData(bookId)) || {}, have = new Map(), known = [...(data.accounts || [])];
         for (const imp of data.imports || []) { let l = imp.txns; if (typeof l === 'string') { try { l = JSON.parse(l); } catch { l = []; } }
@@ -109,7 +117,7 @@
           for (const t of Array.isArray(a.transactions) ? a.transactions : []) {
             if (t.pending || !t.posted) continue; // only posted transactions, so nothing counts twice when a pending charge settles
             const id = String(t.id || ''); if (id && seen.has(id)) continue;
-            const amount = Math.round(-Number(t.amount) * 100) / 100; if (!isFinite(amount) || !amount) { if (id) seen.add(id); continue; }
+            const amount = Math.round((m.flip ? 1 : -1) * Number(t.amount) * 100) / 100; if (!isFinite(amount) || !amount) { if (id) seen.add(id); continue; }
             const row = { date: day(t.posted), description: String(t.description || t.payee || '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Transaction', amount };
             if (id) seen.add(id); if (dup.has(`${row.date}|${row.amount}|${row.description}`)) continue;
             txns.push(row);
@@ -121,14 +129,14 @@
           const asOf = a['balance-date'] ? day(a['balance-date']) : new Date().toISOString().slice(0, 10), [kind, type] = m.kind.split(':');
           for (let i = 0; i < Math.max(1, txns.length); i += 2000) {
             const part = txns.slice(i, i + 2000), last = i + 2000 >= txns.length;
-            await env.addDoc(bookId, 'imports', { accountKind: kind, accountType: type || '', accountName: m.map, owner: '', fileName: 'SimpleFIN sync', importedAt: new Date().toISOString(),
+            await env.addDoc(bookId, 'imports', { accountKind: kind, accountType: type || '', accountName: m.map, owner: '', fileName: P.label + ' sync', importedAt: new Date().toISOString(),
               rowCount: part.length, dateFrom: part.length ? part[0].date : asOf, dateTo: part.length ? part[part.length - 1].date : asOf,
               balance: last ? bal : null, balanceMonth: asOf.slice(0, 7), asOf, txns: part });
             docs++;
           }
           const nk = (x) => String(x || '').trim().toLowerCase().replace(/^[^\u2013]+ \u2013 /, '');
           if (!known.some((r) => [r.match, r.name, ...(r.aliases || [])].some((x) => x && nk(x) === nk(m.map)))) {
-            await env.addDoc(bookId, 'accounts', { name: m.map, match: m.map, kind, type: type || '', rate: null, owner: '', note: 'Synced from SimpleFIN', createdAt: new Date().toISOString() });
+            await env.addDoc(bookId, 'accounts', { name: m.map, match: m.map, kind, type: type || '', rate: null, owner: '', note: 'Synced from ' + P.label, createdAt: new Date().toISOString() });
             known.push({ name: m.map, match: m.map });
           }
           m.lastBal = bal; added += txns.length;
@@ -143,32 +151,34 @@
     async function handle(method, rest, bookId, getBody) {
       const st = (await env.load(bookId)) || {};
       if (method === 'GET') return { status: 200, body: view(st) };
-      if (method === 'DELETE') { await env.save(bookId, null); return { status: 200, body: { ok: true } }; }
+      if (method === 'DELETE') { if (P.disconnect && st.access) { try { await P.disconnect(st.access); } catch {} } await env.save(bookId, null); return { status: 200, body: { ok: true } }; }
       if (method !== 'POST') return { status: 405, body: { error: 'Not allowed' } };
       try {
+        if (rest[0] === 'start') { if (!P.start) return { status: 400, body: { error: 'Nothing to start.' } }; return { status: 200, body: await P.start(bookId) }; }
         if (rest[0] === 'sync') return { status: 200, body: { ...(await sync(bookId, false)), ...view(await env.load(bookId)) } };
         const b = (await getBody()) || {};
-        if (b.token) {
+        if (b.token || b.connect) {
           // Save the connection as soon as SimpleFIN hands it over: a setup token works only once, so a problem
           // fetching accounts afterwards (no banks linked yet, subscription not active) must not lose it.
-          const access = await claim(b.token), next = { access, accounts: {} };
+          // (Teller and Plaid add one bank login at a time, so those keep a list and keep the accounts already set up.)
+          const access = await P.connect(b, P.multi ? st.access : null), next = P.multi ? { ...st, access, accounts: st.accounts || {} } : { access, accounts: {} };
           await env.save(bookId, next);
-          try { const res = await pull(access, Date.now() / 1000 - 86400); refreshList(next, res.accounts); next.notes = res.errors; next.lastError = ''; }
+          try { const res = await P.pull(access, Date.now() / 1000 - 86400); refreshList(next, res.accounts); next.notes = res.errors; next.lastError = ''; }
           catch (e) { next.lastError = e.message; }
-          if (!Object.keys(next.accounts).length && !next.lastError) next.notes = [...(next.notes || []), 'Connected, but no bank accounts yet. Add your banks in SimpleFIN Bridge (New connection), then press Sync now here.'];
+          if (!Object.keys(next.accounts).length && !next.lastError && P.emptyNote) next.notes = [...(next.notes || []), P.emptyNote];
           await env.save(bookId, next); return { status: 200, body: view(next) };
         }
         if (b.accounts && typeof b.accounts === 'object') {
           for (const [id, v] of Object.entries(b.accounts)) { const a = (st.accounts || {})[id]; if (!a || !v) continue;
-            if (typeof v.map === 'string' && v.map.trim()) a.map = v.map.trim().slice(0, 60); if (KINDS.includes(v.kind)) a.kind = v.kind; a.skip = !!v.skip; }
+            if (typeof v.map === 'string' && v.map.trim()) a.map = v.map.trim().slice(0, 60); if (KINDS.includes(v.kind)) a.kind = v.kind; a.skip = !!v.skip; if ('flip' in v) a.flip = !!v.flip; }
           await env.save(bookId, st); return { status: 200, body: view(st) };
         }
         return { status: 400, body: { error: 'Nothing to do.' } };
-      } catch (e) { return { status: e.code >= 400 && e.code < 600 ? e.code : 502, body: { error: e.message || 'SimpleFIN error' } }; }
+      } catch (e) { return { status: e.code >= 400 && e.code < 600 ? e.code : 502, body: { error: e.message || P.label + ' error' } }; }
     }
     // Background sync for every connected dashboard (each at most every 6 hours).
     async function syncAll(bookIds) { const out = {}; for (const id of bookIds) { try { const st = await env.load(id); if (st && st.access) out[id] = await sync(id, true); } catch (e) { out[id] = { error: e.message }; } } return out; }
     return { handle, sync, syncAll, claim, guessKind };
   }
-  return { createSimpleFin, guessKind, splitAccess };
+  return { createSimpleFin, createBankSync: createSimpleFin, guessKind, splitAccess, clean, err };
 });

@@ -2537,17 +2537,34 @@
     'credit:card': 'Credit card', 'credit:loc': 'Line of credit', 'mortgage:mortgage': 'Mortgage', 'loan:heloc': 'Home equity (HELOC)', 'loan:auto': 'Auto loan', 'loan:student': 'Student loan', 'loan:personal': 'Personal loan', 'loan:other': 'Other loan',
     'investment:brokerage': 'Brokerage', 'investment:401k': '401(k)', 'investment:403b': '403(b)', 'investment:457b': '457(b)', 'investment:roth_ira': 'Roth IRA', 'investment:trad_ira': 'Traditional IRA', 'investment:rollover_ira': 'Rollover IRA',
     'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment' };
-  const syncBox = async (host) => {
-    const tok = {}; host.__sync = tok; const bid = myBookId(); if (!bid) return;
-    const url = `/api/books/${encodeURIComponent(bid)}/simplefin`;
+  const SYNC_P = { simplefin: { id: 'simplefin', label: 'SimpleFIN' }, teller: { id: 'teller', label: 'Teller', multi: true }, plaid: { id: 'plaid', label: 'Plaid', multi: true } };
+  const syncBox = async (host, P = SYNC_P.simplefin) => {
+    const tk = '__sync_' + P.id, tok = {}; host[tk] = tok; const bid = myBookId(); if (!bid) return;
+    const url = `/api/books/${encodeURIComponent(bid)}/${P.id}`;
     const call = async (path, method, body) => { const r = await FDStore.fetch(url + path, method ? { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined } : {}); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; };
     let st; try { st = await call(''); } catch (e) { return; }
-    if (host.__sync !== tok || host.querySelector('.fd-syncbox')) return;
-    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-syncbox'; host.append(box);
+    if (host[tk] !== tok || host.querySelector('.fd-syncbox-' + P.id)) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-syncbox fd-syncbox-' + P.id; host.append(box);
+    // Teller Connect / Plaid Link: load their script only when you press Connect, then hand the result to this server
+    const widget = async (msg) => {
+      msg.className = 'fd-note'; msg.textContent = `Opening ${P.label}…`;
+      const cfg = await call('/start', 'POST', {});
+      const src = cfg.kind === 'teller' ? 'https://cdn.teller.io/connect/connect.js' : 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+      if (!document.querySelector(`script[src="${src}"]`)) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error(`Couldn’t load ${P.label}. Check this device’s internet connection.`)); document.head.append(sc); });
+      const done = async (connect) => { msg.textContent = 'Saving the connection…'; try { st = await call('', 'POST', { connect }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
+      msg.textContent = '';
+      if (cfg.kind === 'teller') window.TellerConnect.setup({ applicationId: cfg.applicationId, environment: cfg.environment, products: ['transactions', 'balance'], onSuccess: (e) => done(e), onExit: () => {} }).open();
+      else window.Plaid.create({ token: cfg.linkToken, onSuccess: (pub, md) => done({ publicToken: pub, institution: (md && md.institution && md.institution.name) || '' }), onExit: () => {} }).open();
+    };
     const ro = document.body.classList.contains('fd-readonly');
     const draw = () => {
-      box.textContent = ''; box.append(rhead('Automatic bank sync (SimpleFIN)'));
+      box.textContent = ''; box.append(rhead(`Automatic bank sync (${P.label}${P.multi ? ', your own keys' : ''})`));
       const msg = phMsg('');
+      if (!st.connected && P.multi) {
+        box.append(phMsg(`Connect each bank once in ${P.label}’s own window (your bank password goes to ${P.label}, never to this app). Balances and new posted transactions then arrive about every 6 hours, using your keys.`));
+        if (ro) { box.append(phMsg('This login can view this dashboard but not connect a bank.')); return; }
+        box.append(rbtn('Connect a bank', () => widget(msg).catch((e) => { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; }), false), msg); return;
+      }
       if (!st.connected) {
         box.append(phMsg('Pull balances and new transactions from your banks automatically, instead of importing statements. It uses SimpleFIN Bridge, a separate read-only service you subscribe to yourself (about $15 a year). Your bank passwords go to SimpleFIN, never to this app, and nothing passes through us.'));
         const ol = document.createElement('ol'); ol.className = 'fd-note';
@@ -2575,17 +2592,20 @@
       const when = st.lastSync ? new Date(st.lastSync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'not yet';
       box.append(phMsg(`Connected. Last sync: ${when}. New posted transactions are added about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}; pending ones wait until they post. Rules, categories and duplicate checks work the same as for imported statements.`));
       if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
-      for (const n of st.notes || []) box.append(phMsg('SimpleFIN: ' + n));
+      if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
+      for (const n of st.notes || []) box.append(phMsg(P.label + ': ' + n));
       const draft = {};
       const tb = document.createElement('table'); tb.className = 'fd-table';
-      const hr = document.createElement('tr'); for (const h of ['Bank account', 'Show it as', 'Type', 'Sync']) { const th = document.createElement('th'); th.textContent = h; hr.append(th); } tb.append(hr);
+      const hr = document.createElement('tr'); for (const h of ['Bank account', 'Show it as', 'Type', 'Sync', ...(P.multi ? ['Flip ±'] : [])]) { const th = document.createElement('th'); th.textContent = h; if (h === 'Flip ±') th.title = 'Tick if spending shows up as income for this account'; hr.append(th); } tb.append(hr);
       for (const a of st.accounts) {
-        const d = draft[a.id] = { map: a.map, kind: a.kind, skip: a.skip }, tr = document.createElement('tr');
+        const d = draft[a.id] = { map: a.map, kind: a.kind, skip: a.skip, ...(P.multi ? { flip: !!a.flip } : {}) }, tr = document.createElement('tr');
         const c1 = document.createElement('td'); c1.textContent = (a.org ? a.org + ' · ' : '') + a.name;
         const nm = document.createElement('input'); nm.className = 'fd-in'; nm.value = a.map; nm.disabled = ro; nm.addEventListener('input', () => { d.map = nm.value; });
         const kd = document.createElement('select'); kd.className = 'dash-select'; kd.disabled = ro; for (const k of st.kinds) kd.append(new Option(KIND_NAMES[k] || k, k)); kd.value = a.kind; kd.addEventListener('change', () => { d.kind = kd.value; });
         const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !a.skip; cb.disabled = ro; cb.addEventListener('change', () => { d.skip = !cb.checked; });
-        const c2 = document.createElement('td'), c3 = document.createElement('td'), c4 = document.createElement('td'); c2.append(nm); c3.append(kd); c4.append(cb); tr.append(c1, c2, c3, c4); tb.append(tr);
+        const c2 = document.createElement('td'), c3 = document.createElement('td'), c4 = document.createElement('td'); c2.append(nm); c3.append(kd); c4.append(cb); tr.append(c1, c2, c3, c4);
+        if (P.multi) { const fc = document.createElement('input'); fc.type = 'checkbox'; fc.checked = !!a.flip; fc.disabled = ro; fc.title = 'Tick if spending shows up as income for this account'; fc.addEventListener('change', () => { d.flip = fc.checked; }); const c5 = document.createElement('td'); c5.append(fc); tr.append(c5); }
+        tb.append(tr);
       }
       const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); box.append(sc);
       box.append(phMsg('Tip: use the same name as an account you already import statements for, so its history lines up and nothing is counted twice.'));
@@ -2605,17 +2625,52 @@
           draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false),
         rbtn('Sync now', async (e) => {
           const b = e.currentTarget || e.target; if (b.disabled) return; b.disabled = true; b.classList.add('fd-busy'); b.textContent = 'Syncing…';
-          msg.className = 'fd-note fd-sync-msg'; msg.textContent = 'Syncing with SimpleFIN… this can take up to a minute.';
+          msg.className = 'fd-note fd-sync-msg'; msg.textContent = `Syncing with ${P.label}… this can take up to a minute.`;
           try { await call('', 'POST', { accounts: draft }); const j = await call('/sync', 'POST'); st = j; draw();
             const at = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             const m = box.querySelector('.fd-sync-msg'); if (m) { m.className = 'fd-note fd-good fd-sync-msg'; m.textContent = '✓ Finished syncing at ' + at + '. ' + (j.added ? `Added ${j.added} new transaction${j.added === 1 ? '' : 's'}.` : 'Up to date; no new transactions.'); }
             const nb = [...box.querySelectorAll('button')].find((x) => x.textContent === 'Sync now'); if (nb) { nb.textContent = '✓ Synced'; setTimeout(() => { nb.textContent = 'Sync now'; }, 4000); }
             if (window.HF && window.HF.state && window.HF.state.bookId) window.HF.load(window.HF.state.bookId); }
           catch (err) { b.disabled = false; b.classList.remove('fd-busy'); b.textContent = 'Sync now'; msg.className = 'fd-note fd-bad fd-sync-msg'; msg.textContent = 'Sync failed: ' + err.message; } }, false),
-        rbtn('Disconnect', async () => { if (!confirm('Disconnect SimpleFIN from this dashboard? Transactions already added stay.')) return; try { await call('', 'DELETE'); st = await call(''); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
+        ...(P.multi ? [rbtn('Add another bank', () => widget(msg).catch((e) => { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; }), false)] : []),
+        rbtn('Disconnect', async () => { if (!confirm(`Disconnect ${P.label} from this dashboard${P.multi ? ' (all its banks)' : ''}? Transactions already added stay.`)) return; try { await call('', 'DELETE'); st = await call(''); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
       msg.classList.add('fd-sync-msg'); box.append(btns, msg);
     };
     draw();
+  };
+
+  // Your own Teller / Plaid keys (server owner), and a bank-sync box for each one that's set up
+  const bankKeysBox = async (host) => {
+    if (window.FD_LOCAL || host.querySelector('.fd-bkbox')) return; const tok = {}; host.__bk = tok;
+    let k; try { k = await FDStore.json('GET', '/api/bankkeys'); } catch (e) { return; }
+    if (host.__bk !== tok || host.querySelector('.fd-bkbox')) return;
+    if (k.teller.appId) syncBox(host, SYNC_P.teller).catch(() => {});
+    if (k.plaid.hasSecret) syncBox(host, SYNC_P.plaid).catch(() => {});
+    if (!k.canEdit) return;
+    const box = document.createElement('details'); box.className = 'fd-rb fd-bkbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Your own bank-sync keys (Teller or Plaid, advanced)'; box.append(sm);
+    box.append(phMsg('Instead of SimpleFIN, you can sync banks with a free developer account of your own. Teller is the easier one for personal use: its free “development” level connects up to 100 real bank logins. Plaid needs Plaid to approve “production” access before it works with real banks. Keys stay on this computer, in a private file outside your backups.'));
+    const msg = phMsg(''), field = (lab, el) => { const r = document.createElement('label'); r.className = 'fd-field'; r.append(lab, el); return r; };
+    const inp = (ph, type) => { const i = document.createElement(type === 'area' ? 'textarea' : 'input'); i.className = 'fd-in'; i.placeholder = ph; i.autocomplete = 'off'; i.spellcheck = false; if (type === 'area') { i.rows = 3; i.style.fontFamily = 'monospace'; i.style.fontSize = '12px'; } else if (type) i.type = type; return i; };
+    const sel = (opts, v) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([a, b]) => x.append(new Option(b, a))); x.value = v; return x; };
+    const save = async (bodyObj, done) => { msg.className = 'fd-note'; msg.textContent = 'Saving…'; try { await FDStore.json('POST', '/api/bankkeys', bodyObj); msg.className = 'fd-note fd-good'; msg.textContent = done; setTimeout(() => location.reload(), 1200); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
+    // Teller
+    { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Teller' + (k.teller.appId ? ' · set up' : ''); box.append(h);
+      box.append(phMsg('1. Sign up at teller.io and open the dashboard. 2. Copy the Application ID. 3. Under Certificates, create one and download the zip: it holds certificate.pem and private_key.pem. Open each in a text editor (Notepad) and paste everything below, including the BEGIN and END lines.'));
+      const a = inp('app_…'); a.value = k.teller.appId; const e = sel([['development', 'Development (real banks, free, up to 100)'], ['sandbox', 'Sandbox (test data only)'], ['production', 'Production (paid)']], k.teller.env);
+      const c = inp(k.teller.hasCert ? 'Certificate saved. Paste a new one to replace it.' : '-----BEGIN CERTIFICATE-----', 'area'), pk = inp(k.teller.hasCert ? 'Private key saved. Paste a new one to replace it.' : '-----BEGIN PRIVATE KEY-----', 'area');
+      box.append(field('Application ID', a), field('Environment', e), field('certificate.pem', c), field('private_key.pem', pk));
+      const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Save Teller keys', () => save({ teller: { appId: a.value, env: e.value, cert: c.value, key: pk.value } }, 'Saved. Reloading…'), false));
+      if (k.teller.appId) r.append(rbtn('Remove Teller keys', () => { if (confirm('Remove your Teller keys? Banks connected through Teller stop syncing.')) save({ teller: { clear: true } }, 'Removed. Reloading…'); }, false));
+      const l = document.createElement('a'); l.href = 'https://teller.io'; l.target = '_blank'; l.rel = 'noopener'; l.textContent = 'teller.io ↗'; r.append(l); box.append(r); }
+    // Plaid
+    { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Plaid' + (k.plaid.hasSecret ? ' · set up' : ''); box.append(h);
+      box.append(phMsg('Sign up at dashboard.plaid.com, then copy your client ID and the secret for the environment you’ll use (Developers → Keys).'));
+      const ci = inp(k.plaid.clientId || 'client ID'), se = inp(k.plaid.hasSecret ? 'Secret saved. Paste a new one to replace it.' : 'secret', 'password'), e = sel([['production', 'Production (real banks, after Plaid approves you)'], ['sandbox', 'Sandbox (test data only)']], k.plaid.env);
+      box.append(field('Client ID', ci), field('Secret', se), field('Environment', e));
+      const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Save Plaid keys', () => save({ plaid: { clientId: ci.value, secret: se.value, env: e.value } }, 'Saved. Reloading…'), false));
+      if (k.plaid.hasSecret) r.append(rbtn('Remove Plaid keys', () => { if (confirm('Remove your Plaid keys? Banks connected through Plaid stop syncing.')) save({ plaid: { clear: true } }, 'Removed. Reloading…'); }, false));
+      const l = document.createElement('a'); l.href = 'https://dashboard.plaid.com/signup'; l.target = '_blank'; l.rel = 'noopener'; l.textContent = 'plaid.com ↗'; r.append(l); box.append(r); }
+    box.append(msg); host.append(box);
   };
 
   // Getting started: a short checklist at the top of a new dashboard; it goes away when everything is done (or on Hide).
@@ -3114,6 +3169,7 @@
     phoneBox(el).catch(() => {});
     emailBox(el).catch(() => {});
     syncBox(el).catch(() => {});
+    bankKeysBox(el).catch(() => {});
     connectBox(el).catch(() => {});
     inviteBox(el).catch(() => {});
     privacyBox(el).catch(() => {});
