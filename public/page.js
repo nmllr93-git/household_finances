@@ -2668,6 +2668,24 @@
     try { const j = await FDStore.json('GET', '/api/connect-info'); return j.addrs || []; } catch (e) { return []; }
   };
   // ⚙ Settings → Invite someone (server owner only): a one-time link + QR code; they choose their own login and password
+  // "Where your data lives": plain explanation, with which optional services are actually turned on here
+  const privacyBox = async (host) => {
+    if (host.querySelector('.fd-privbox')) return; const tok = {}; host.__priv = tok;
+    let keys = {}; try { keys = (await FDStore.json('GET', '/api/keys')).set || {}; } catch (e) {}
+    let sf = false; try { sf = !!(await FDStore.json('GET', `/api/books/${encodeURIComponent(window.HF.state.bookId)}/simplefin`)).connected; } catch (e) {}
+    if (host.__priv !== tok || host.querySelector('.fd-privbox')) return;
+    const box = document.createElement('details'); box.className = 'fd-rb fd-privbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Where your data lives'; box.append(sm);
+    const NAMES = { finnhub: 'Finnhub', fmp: 'Financial Modeling Prep', fred: 'FRED', bls: 'Bureau of Labor Statistics', eia: 'Energy Information Administration' };
+    const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)');
+    [window.FD_LOCAL ? 'Everything you enter is stored only on this phone, in the app’s private storage. Uninstalling the app deletes it, so keep a backup file somewhere safe.' : 'Everything you enter is stored only on the computer that runs Larenest, in its data folder. Phones and other computers just display it.',
+      'There’s no Larenest account and no company server. The developer never receives your transactions, balances or anything else: no ads, no analytics, no tracking.',
+      'Only the optional data services you turn on are contacted, directly from here. They get stock symbols, a VIN or your API key, never your financial information. Bank sync (SimpleFIN) only brings your bank data in; nothing is sent back.',
+      on.length ? 'Turned on here: ' + on.join(', ') + '.' : 'Turned on here: none.',
+      'Free public sources with no key are also used: Treasury rates, exchange rates, holidays and delayed prices for the symbols you own (Stooq).',
+      'Backups are files saved where you choose. They contain your financial data, so keep them somewhere private.'].forEach((t) => box.append(phMsg(t)));
+    const a = document.createElement('a'); a.href = 'https://larenest.app/privacy'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Read the full privacy policy'; box.append(a);
+    host.append(box);
+  };
   const inviteBox = async (host) => {
     if (window.FD_LOCAL || host.querySelector('.fd-invbox')) return;
     const tok = {}; host.__inv = tok;
@@ -3098,6 +3116,7 @@
     syncBox(el).catch(() => {});
     connectBox(el).catch(() => {});
     inviteBox(el).catch(() => {});
+    privacyBox(el).catch(() => {});
     navMenuBox(el);
     activityBox(el).catch(() => {});
     if (meBooks().length && myBookId()) {
