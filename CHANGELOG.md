@@ -3,6 +3,28 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.19
+
+### New
+- **Bank sync with your own Teller or Plaid keys:** ⚙ Settings → *Your own bank-sync keys* (server owner only; kept in a private file outside backups). Connect each bank in Teller’s or Plaid’s own window; mapping, duplicate checks and syncing work like SimpleFIN. **Flip ±** per account if spending shows up as income.
+- **Simple / Full view** (⚙ Settings → View, per device): Simple hides Markets, Planning, Year in review and the deeper spending and investment sections.
+- **Where your data lives** (⚙ Settings): what’s stored where, and which outside services are turned on here.
+- **Connection help:** when a phone or PC can’t reach the host, it lists the likely causes and fixes; if the host drops off while a dashboard is open, a banner says so and keeps retrying.
+- **Clearer empty sections:** a new dashboard says what to do; otherwise empty sections point at the date range.
+- **Shared accounts can have their own name** on the receiving dashboard (⚙ on the shared row).
+
+### Fixes
+- Renaming an account now sticks, including shared accounts and names changed in bank sync.
+- Broker position files without a cost basis (e.g. Vanguard) use today’s price instead of $0.
+- View toggle labels (Numbers / Ring / Bars) no longer get squeezed on narrow screens.
+
+## Android 1.6.0
+
+### New
+- **Home-screen widget:** long-press the home screen → Widgets → Larenest. Shows this month’s budget left, a progress bar and the next bill; tap to open. ⚙ Settings → *Phone widget* can hide dollar amounts (percentages instead).
+- **Phone-only mode can share between dashboards** (e.g. an account from your personal dashboard into the shared one).
+- Everything new in Desktop 1.0.19 (Teller/Plaid keys are set on the computer that hosts).
+
 ## Desktop 1.0.18
 
 ### New

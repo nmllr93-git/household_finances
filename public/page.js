@@ -1540,17 +1540,22 @@
   const upcoming = () => { const end = Date.now() + 30 * 864e5; return rows('subs').filter((x) => x.book === book()).map((x) => ({ x, due: nextDue(x) })).filter((o) => o.due && o.due.date.getTime() <= end).sort((a, b) => a.due.date - b.due.date); };
   // Android home-screen widget: hand the app a short summary of the open dashboard (kept on the phone only)
   let wSig = '';
-  dash.onData(() => {
+  const wHide = () => { try { return localStorage.getItem('fd-widget-hide') === '1'; } catch { return false; } };
+  const pushWidget = () => {
     const W = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LarenestWidget; if (!W || st('budget_totals', 'subs') !== 'ok') return;
     const r = budTot(), u = upcoming()[0], nm = ((meBooks().find((b) => b.label === book()) || {}).name) || book(), has = !!(r && r.categories);
-    const d = { title: `${nm}${r ? ' · ' + r.label : ''}`, pct: has ? Math.max(0, Math.round(r.usedPct)) : -1,
+    const d = wHide() ? { title: `${nm}${r ? ' · ' + r.label : ''}`, pct: has ? Math.max(0, Math.round(r.usedPct)) : -1, // amounts hidden: percentages and names only
+      big: has ? (r.spent > r.available ? 'Over budget' : `${Math.round(r.usedPct)}% of budget used`) : 'No budget set',
+      line1: has ? (r.elapsed != null ? `${Math.round(r.elapsed * 100)}% of the month gone` : '') : 'Set one in Budget vs actual to see it here.',
+      line2: u ? `Next bill: ${u.x.vendor} on ${u.due.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}` : '' } : { title: `${nm}${r ? ' · ' + r.label : ''}`, pct: has ? Math.max(0, Math.round(r.usedPct)) : -1,
       big: has ? (r.spent > r.available ? `${money0(r.spent - r.available)} over budget` : `${money0(r.available - r.spent)} left`) : 'No budget set',
       line1: has ? `${money0(r.spent)} of ${money0(r.available)} spent${r.elapsed != null ? ` · ${Math.round(r.elapsed * 100)}% of the month gone` : ''}` : 'Set one in Budget vs actual to see it here.',
       line2: u ? `Next bill: ${u.x.vendor} ${money0(u.x.lastCharge)} on ${u.due.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}` : '' };
     const sig = JSON.stringify(d); if (sig === wSig) return; wSig = sig;
     d.updated = 'Updated ' + new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     Promise.resolve(W.update({ data: JSON.stringify(d) })).catch(() => {});
-  });
+  };
+  dash.onData(pushWidget);
   dash.draw('billRows', (el) => {
     if (st('subs') !== 'ok') return;
     el.replaceChildren();
@@ -3153,6 +3158,8 @@
     { const w = document.createElement('div'); w.className = 'fd-vtog'; [[false, 'Full'], [true, 'Simple']].forEach(([v, lab]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.className = SIMPLE === v ? 'is-on' : '';
         b.addEventListener('click', () => { SIMPLE = v; try { localStorage.setItem('fd-simple', v ? '1' : '0'); } catch {} w.querySelectorAll('button').forEach((x) => x.classList.toggle('is-on', x === b)); showGroup(NP.group || 'all'); }); w.append(b); });
       const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = ' Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LarenestWidget) { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
+      i.addEventListener('change', () => { try { localStorage.setItem('fd-widget-hide', i.checked ? '1' : '0'); } catch {} wSig = ''; pushWidget(); }); l.append(i, ' Hide dollar amounts on the home-screen widget (shows percentages instead). This phone only.'); row('Phone widget', l); }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
     const chk = (label, on, set) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.addEventListener('change', () => set(i.checked)); l.append(i, ' ' + label); return l; };
     const tw = document.createElement('div'); tw.className = 'fd-chkgrid';
