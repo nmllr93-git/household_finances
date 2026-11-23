@@ -89,8 +89,21 @@
     return out;
   }
   function explain(items) { let ul = $('why'); if (!ul) { ul = document.createElement('ul'); ul.id = 'why'; ul.style.cssText = 'text-align:left;font-size:14px;margin:8px 0 0;padding-left:20px;line-height:1.4'; msg.after(ul); } ul.replaceChildren(); items.forEach((t) => { const li = document.createElement('li'); li.style.margin = '4px 0'; li.textContent = t; ul.append(li); }); }
+  // HTTPS with this computer's own certificate: the app trusts exactly that certificate (its fingerprint comes in the QR code,
+  // or from the computer itself the first time you connect), so the connection is encrypted with no warnings and no fee.
+  const trustApi = () => { const C = window.Capacitor; if (window.FDApp && FDApp.trustCert) return (host, fp) => FDApp.trustCert(host, fp);
+    if (C && C.getPlatform && C.getPlatform() === 'android') { const P = C.Plugins && C.Plugins.LarenestWidget; if (P && P.trustCert) return (host, fp) => P.trustCert({ host, fp });
+      if (typeof C.nativePromise === 'function') return (host, fp) => C.nativePromise('LarenestWidget', 'trustCert', { host, fp }); }
+    return null; };
+  const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return ''; } };
   async function go(raw) {
-    const u = norm(raw); if (!u) { say('Enter an address.', 'bad'); return; }
+    let fp = ''; raw = String(raw || '').trim().replace(/[?#]fp=([0-9A-Fa-f]{64})\b.*$/, (m, f) => { fp = f.toUpperCase(); return ''; });
+    let u = norm(raw); if (!u) { say('Enter an address.', 'bad'); return; }
+    const T = trustApi();
+    if (fp && T && /^https:/i.test(u)) { try { await T(hostOf(u), fp); } catch (e) {} }
+    // an http:// address of a computer that offers HTTPS: switch to it (encrypted), trusting the certificate it reports
+    if (/^http:/i.test(u) && T) { const j0 = await ping(u, 4000); if (j0 && j0.tls && /^[0-9A-F]{64}$/i.test(j0.tls.fp || '')) { const hu = u.replace(/^http:/i, 'https:');
+      try { await T(hostOf(hu), j0.tls.fp.toUpperCase()); if (await ping(hu, 4000)) { try { localStorage.setItem(KEY, JSON.stringify(list().filter((x) => x !== u))); } catch (e) {} u = hu; } } catch (e) {} } }
     say('Checking ' + u + ' …'); const t0 = Date.now(); explain([]);
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
     try {
@@ -128,7 +141,9 @@
   if (window.Capacitor) { $('localbox').hidden = false; $('golocal').addEventListener('click', () => { try { localStorage.setItem('fd-mode', 'local'); } catch (e) {} location.href = 'index.html'; }); }
   const failed = new URLSearchParams(location.search).get('failed') || window.__fdReopenFailed; if (failed) { const f0 = (failed.match(/^https?:\/\/[^/]+/) || [failed])[0]; say("Couldn't reach " + f0 + '. Here\u2019s what\u2019s most likely:', 'bad'); explain(diagnose(f0, 99999, true)); find(f0); }
   if (window.FDApp && FDApp.setupAgain && location.protocol === 'file:') { const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = 'Run this computer as the server instead'; b.addEventListener('click', () => FDApp.setupAgain()); document.querySelector('main').append(b); }
-  const r = list(); if (r.length) { $('u').value = r[0].replace(/^http:\/\//, '');
+  window.__fdGoHost = (h) => { say('Switching to an encrypted connection…'); go(h); };
+  if (window.__fdUpgrade) window.__fdGoHost(window.__fdUpgrade);
+  const r = list(); if (r.length) { $('u').value = r[0].replace(/^https?:\/\//, '');
     r.forEach((u) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = u.replace(/^https?:\/\//, ''); b.addEventListener('click', () => go(u)); li.append(b); $('recent').append(li); }); }
 })();
 </script>

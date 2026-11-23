@@ -75,13 +75,15 @@ window.FDConnSecurity = () => {
     : /^(localhost|127\.0\.0\.1|\[?::1\]?)$/.test(host) ? ['ok', 'You’re on the computer that runs Larenest, so your data never leaves it.']
     : https ? ['ok', 'This connection is encrypted (HTTPS).']
     : ts ? ['ok', 'You’re connected through Tailscale, so this connection is encrypted from this device all the way to your computer.']
-    : ['warn', 'You’re connected over your home network without encryption. That’s normal for a trusted home network, but see below.'];
+    : ['warn', 'This connection isn’t encrypted (http://). Use the https:// address or the Larenest app instead; see below.'];
   const h = document.createElement('div'); h.className = 'fd-connsec-now fd-cs-' + now[0]; h.textContent = (now[0] === 'ok' ? '🔒 ' : '⚠ ') + now[1]; w.append(h);
   const rows = [
-    ['Home Wi-Fi or network', 'Not encrypted between devices', 'Your Wi-Fi password encrypts what goes through the air, but anyone or anything already on your network (a guest, a smart TV, a compromised device) could in principle read the traffic, including your sign-in. Fine on a home network you trust. Avoid it on shared or public networks.'],
-    ['Tailscale (free)', 'Encrypted end to end', 'Each device talks to your computer through its own encrypted tunnel, at home or away. Nothing in between can read it, including Tailscale. The most private way to connect.'],
-    ['WireGuard to your router', 'Encrypted to your home, then plain', 'Encrypted while it crosses the internet, so it’s safe on public Wi-Fi. Once it reaches your router it continues to the computer unencrypted on your home network, the same as being at home.'],
-    ['On the computer itself', 'Never leaves the computer', 'The Larenest PC app and a browser on that computer don’t send anything over a network.']];
+    ['Larenest phone & PC apps', 'Encrypted (HTTPS)', 'The apps connect with HTTPS using your computer’s own certificate. Scanning the QR code tells the app exactly which certificate to trust, so it’s encrypted end to end, even on plain home Wi-Fi, at no cost.'],
+    ['A web browser, https:// address', 'Encrypted, one-time warning', 'Also encrypted. The browser warns once (“not secure”) because the certificate is your computer’s own rather than from a public authority. With Tailscale HTTPS turned on, the Tailscale address has no warning at all.'],
+    ['A web browser, http:// address', 'Not encrypted', 'Your Wi-Fi password encrypts what goes through the air, but anything already on your network (a guest’s phone, a compromised smart TV) could in principle read the traffic, including your sign-in. Use the https:// address instead.'],
+    ['Tailscale (free)', 'Encrypted end to end', 'Each device talks to your computer through its own encrypted tunnel, at home or away. Nothing in between can read it, including Tailscale.'],
+    ['WireGuard to your router', 'Tunnel to your home, then HTTPS', 'WireGuard encrypts the trip across the internet to your router. From there to your computer, the apps and https:// addresses are still encrypted; an http:// address would be plain on your home network.'],
+    ['Phone-only mode, or the computer itself', 'Never leaves the device', 'Nothing travels over a network.']];
   const t = document.createElement('div'); t.className = 'fd-connsec-list';
   rows.forEach(([a, b, c]) => { const d = document.createElement('div'); const x = document.createElement('b'); x.textContent = a; const y = document.createElement('i'); y.textContent = b; const z = document.createElement('span'); z.textContent = c; d.append(x, y, z); t.append(d); });
   w.append(t);

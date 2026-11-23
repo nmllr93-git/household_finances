@@ -33,6 +33,13 @@ public class MainActivity extends BridgeActivity {
                 return ok;
             }
         }, "LarenestWidgetNative");
+        // HTTPS to your own computer: accept its certificate only if it's the one pinned for it (see Pins)
+        getBridge().setWebViewClient(new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+            @Override
+            public void onReceivedSslError(android.webkit.WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
+                if (error != null && Pins.trusted(ctx, error.getCertificate())) handler.proceed(); else handler.cancel();
+            }
+        });
         goFrom(getIntent());
     }
 

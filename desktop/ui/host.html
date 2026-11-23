@@ -75,6 +75,7 @@
     <div class="card">
       <h2>Addresses for phones &amp; other devices</h2>
       <div id="addrs"></div>
+      <div id="tlsInfo" class="row" hidden><div><b>🔒 Encrypted connections</b><small id="tlsSub"></small></div></div>
       <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>For the address just above. In the Larenest phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. Use a home-network address at home, a Tailscale one when you're away.<span id="qrAddr"></span></small></div></div>
       <details id="tsGuide"><summary>Use it away from home (optional)</summary>
         <p class="mut" style="margin:8px 0">Tailscale is a free app that links your devices privately, so your phone can reach this computer from anywhere. Nothing is opened to the internet. Each step turns green when it's done.</p>
@@ -136,8 +137,13 @@
       const qb = document.createElement('button'); qb.className = 'q'; qb.type = 'button'; qb.textContent = a === qrSel ? 'Showing QR' : 'QR code'; qb.disabled = a === qrSel;
       qb.addEventListener('click', () => { qrSel = a; render(s); });
       const sp = document.createElement('span'); sp.append(qb, ' ', b); r.append(d, sp); box.append(r);
-      if (a === qrSel && window.FDQR) { QRI.innerHTML = FDQR.svg(a, 240); box.append(QRP); QRP.hidden = false; } });
+      if (a === qrSel && window.FDQR) { QRI.innerHTML = FDQR.svg(/^https:/.test(a) && s.fp ? a + '/?fp=' + s.fp : a, 240); box.append(QRP); QRP.hidden = false; } });
     if (!s.addrs.length) QRP.hidden = true;
+    { const t = s.tsHttps || {}; $('tlsInfo').hidden = !s.running || s.mode !== 'host' || !s.fp;
+      $('tlsSub').textContent = 'The Larenest phone and PC apps connect with HTTPS using this computer\u2019s own certificate, so everything between them is encrypted, even on plain home Wi-Fi. Scanning the QR code tells the app which certificate to trust. A regular web browser shows a one-time \u201cnot secure\u201d warning for these addresses, because the certificate is this computer\u2019s own.'
+        + (t.state === 'ok' ? ' Browsers: use ' + t.url + ' (Tailscale\u2019s free certificate, no warning).'
+          : t.state === 'needs-https' ? ' For browsers with no warning: turn on HTTPS Certificates in Tailscale (admin console \u2192 DNS \u2192 HTTPS Certificates \u2192 Enable, free), then restart hosting.'
+          : t.state === 'error' ? ' Tailscale certificate: ' + t.message : ''); }
     const ts = s.ts || {};
     { const steps = [
         [!!ts.installed, 'Install Tailscale on this computer', 'Get Tailscale', () => A.hostAction('tailscale')],

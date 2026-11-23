@@ -24,6 +24,13 @@ public class WidgetPlugin extends Plugin {
         call.resolve();
     }
 
+    // the start screen (the app's own page, never a server's) pins your computer's certificate
+    @PluginMethod
+    public void trustCert(PluginCall call) {
+        Pins.add(getContext(), call.getString("host", ""), call.getString("fp", ""));
+        call.resolve();
+    }
+
     @PluginMethod
     public void clear(PluginCall call) {
         Context ctx = getContext();

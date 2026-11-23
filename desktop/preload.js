@@ -19,5 +19,6 @@ if (local) Object.assign(api, {
   hostState: () => ipcRenderer.invoke('fd:hostState'),
   hostAction: (act, arg) => ipcRenderer.invoke('fd:hostAction', act, arg),
   onHostChanged: (fn) => ipcRenderer.on('fd:hostChanged', (_e, st) => fn(st)),
+  trustCert: (host, fp) => ipcRenderer.invoke('fd:trustCert', host, fp), // connect screen only: pin another computer's certificate
 });
 contextBridge.exposeInMainWorld('FDApp', api);

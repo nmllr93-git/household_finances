@@ -71,14 +71,16 @@ Nothing. There is no Larenest server, analytics or crash reporting SDK. Feedback
 I'd go with the careful reading: **declare the connected-mode traffic**. The phone sends financial data off the device to a server the user runs. Google's form doesn't have an exception for "the user's own server", so not declaring it is the riskier choice.
 
 1. **Does your app collect or share any of the required user data types?** Yes
-2. **Is all of the user data collected by your app encrypted in transit?** No.
-   - In connected mode on a home network, the phone talks to the user's PC over plain HTTP. Tailscale or HTTPS encrypt it, but that isn't guaranteed.
-   - If you'd rather answer Yes, the app would first need to require HTTPS or Tailscale. That's a code change worth considering.
+2. **Is all of the user data collected by your app encrypted in transit?** Yes (from Android 1.6.5 / Desktop 1.0.25).
+   - The app connects to the user's computer over HTTPS. The computer makes its own certificate, and the app pins its fingerprint from the QR code, or from the first connection if the user types the address.
+   - All third-party services (price data, SimpleFIN, NHTSA, FRED, etc.) use HTTPS.
+   - Phones paired before 1.6.5 switch to HTTPS automatically the next time they open.
    - What this means for users (also explained in the app: ⚙ Settings → Where your data lives → How your connection is protected):
-     - **Home Wi-Fi:** Wi-Fi encrypts traffic over the air, but other devices on the same network could in principle read it. Fine on a trusted home network.
-     - **Tailscale (free):** encrypted from the phone all the way to the PC, at home or away.
-     - **WireGuard to the router:** encrypted across the internet, then plain on the home network from the router to the PC.
-     - **Phone-only mode or the PC itself:** nothing travels over a network.
+     - **Larenest apps:** encrypted end to end, even on plain home Wi-Fi.
+     - **A browser on an https:// address:** encrypted, with a one-time warning. With Tailscale HTTPS certificates turned on (free), the Tailscale address has no warning.
+     - **A browser on an http:// address:** not encrypted between devices. It still works for compatibility, and the app recommends https.
+     - **Tailscale:** encrypted end to end.
+     - **WireGuard:** encrypted to the router, then still HTTPS to the computer.
 3. **Do you provide a way for users to request that their data is deleted?** Yes.
    - Users can delete any dashboard, account or transaction in the app.
    - Phone-only data is removed when they uninstall or clear app data.
@@ -97,7 +99,7 @@ I'd go with the careful reading: **declare the connected-mode traffic**. The pho
 - Every other type (location, personal info, contacts, photos, app activity, device IDs, etc.): **not collected**.
   - The camera is used only to scan a QR code on the device, and images never leave it.
 
-**Security practices to tick:** "Data is encrypted in transit" stays unticked for now (see #2). Tick "You can request that data be deleted."
+**Security practices to tick:** "Data is encrypted in transit" and "You can request that data be deleted."
 
 ### Permissions and why (for review notes)
 - **Internet:** connect to the user's own PC and to optional data services

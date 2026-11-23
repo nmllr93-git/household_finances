@@ -135,7 +135,7 @@ function buildTray() {
   if (S.role !== 'host') { if (tray) { tray.destroy(); tray = null; } return; }
   if (!tray) { tray = new Tray(nativeImage.createFromPath(TRAY_ICON)); tray.setToolTip('Larenest'); tray.on('click', show); }
   const on = !!INFO.running, others = on && INFO.mode === 'host';
-  const addrs = others ? [...(INFO.lan || []), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])] : [];
+  const addrs = others ? [...(INFO.lan || []), ...(TS.on && TS.name ? [`${INFO.tlsFp ? 'https' : 'http'}://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`${INFO.tlsFp ? 'https' : 'http'}://${TS.ip}:${INFO.port}`] : [])] : [];
   const tsItem = !TS.installed ? { label: 'Get Tailscale (to connect away from home)…', click: () => shell.openExternal('https://tailscale.com/download') }
     : { label: TS.on ? `Tailscale: on${TS.name ? ' · ' + TS.name : ''}` : 'Tailscale: off — open Tailscale to turn it on', enabled: !TS.on, click: () => shell.openExternal('https://login.tailscale.com/admin/machines') };
   tray.setToolTip(`Larenest · ${on ? (others ? 'hosting for other devices' : 'this computer only') : 'stopped'}`);
@@ -263,11 +263,22 @@ function cloudFolders() {
 const refreshCloud = async () => { if (child) { try { CLOUD = await call('cloudInfo'); } catch {} } };
 const hostState = () => {
   const on = !!INFO.running, others = on && INFO.mode === 'host';
-  return { version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, cloud: CLOUD, cloudFolders: cloudFolders(), tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
-    addrs: others ? [...new Set([...(INFO.lan || []).filter((u) => !/\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(u)), ...(TS.on && TS.name ? [`http://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`http://${TS.ip}:${INFO.port}`] : [])])] : [],
-    addrLabels: Object.fromEntries([...(INFO.lan || []).map((u) => [u, 'On your home network']), ...(TS.name ? [[`http://${TS.name}:${INFO.port}`, 'Away from home (Tailscale name)']] : []), ...(TS.ip ? [[`http://${TS.ip}:${INFO.port}`, 'Away from home (Tailscale number, same as the name)']] : [])]), ts: TS };
+  return { fp: INFO.tlsFp || '', tsHttps: INFO.tsHttps || null, version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, cloud: CLOUD, cloudFolders: cloudFolders(), tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
+    addrs: others ? [...new Set([...(INFO.lan || []).filter((u) => !/\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(u)), ...(INFO.tsHttps && INFO.tsHttps.url ? [INFO.tsHttps.url] : []), ...(TS.on && TS.name ? [`${INFO.tlsFp ? 'https' : 'http'}://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`${INFO.tlsFp ? 'https' : 'http'}://${TS.ip}:${INFO.port}`] : [])])] : [],
+    addrLabels: Object.fromEntries([...(INFO.tsHttps && INFO.tsHttps.url ? [[INFO.tsHttps.url, 'Away from home, works in any browser with no warning (Tailscale HTTPS)']] : []), ...(INFO.lan || []).map((u) => [u, 'On your home network']), ...(TS.name ? [[`${INFO.tlsFp ? 'https' : 'http'}://${TS.name}:${INFO.port}`, 'Away from home (Tailscale name)']] : []), ...(TS.ip ? [[`${INFO.tlsFp ? 'https' : 'http'}://${TS.ip}:${INFO.port}`, 'Away from home (Tailscale number, same as the name)']] : [])]), ts: TS };
 };
 const notifyHost = () => { try { if (win && !win.isDestroyed()) win.webContents.send('fd:hostChanged', hostState()); } catch {} };
+// HTTPS to another Larenest computer: trust its own certificate only if it's the one pinned from the connect screen
+const pinFile = () => path.join(app.getPath('userData'), 'tls-pins.json');
+const pins = () => { try { return JSON.parse(fs.readFileSync(pinFile(), 'utf8')) || []; } catch { return []; } };
+ipcMain.handle('fd:trustCert', (e, host, fp) => {
+  if (!e.senderFrame || !/^file:/.test(e.senderFrame.url) || !/^[0-9A-F]{64}$/i.test(String(fp || ''))) return false;
+  const l = [...new Set([String(fp).toUpperCase(), ...pins()])].slice(0, 20); try { fs.writeFileSync(pinFile(), JSON.stringify(l)); } catch {} return true;
+});
+app.on('certificate-error', (event, _wc, _url, _err, cert, cb) => {
+  let fp = ''; try { fp = require('crypto').createHash('sha256').update(Buffer.from(String(cert.data).replace(/-----[^-]+-----|\s/g, ''), 'base64')).digest('hex').toUpperCase(); } catch {}
+  if (fp && pins().includes(fp)) { event.preventDefault(); cb(true); } else cb(false);
+});
 ipcMain.handle('fd:hostState', async () => { readSleep(); if (child) { await refresh().catch(() => {}); await refreshCloud(); } return hostState(); });
 ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
   switch (act) {

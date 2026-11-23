@@ -14,6 +14,9 @@
 'use strict';
 
 const http = require('node:http');
+const https = require('node:https');
+const net = require('node:net');
+const TLS = require('./core/tlscert.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -357,7 +360,7 @@ async function api(req, res, url) {
   { const m = /(?:^|:)100\.(\d+)\.\d+\.\d+$/.exec(ip || ''); if (m && +m[1] >= 64 && +m[1] <= 127 && !lanAddrs().includes(ip.replace(/^::ffff:/, ''))) TS_SEEN = Date.now(); }
 
   // ping: lets the desktop/phone connect screen confirm an address really is this app (no login, no data)
-  if (parts[1] === 'ping') { res.setHeader('Access-Control-Allow-Origin', '*'); if (!CFG.serverId) { try { saveCfg({ serverId: crypto.randomBytes(9).toString('base64url') }); } catch {} } return send(res, 200, { app: 'household-finances', version: require('./package.json').version, id: CFG.serverId || '', name: os.hostname() }); }
+  if (parts[1] === 'ping') { res.setHeader('Access-Control-Allow-Origin', '*'); if (!CFG.serverId) { try { saveCfg({ serverId: crypto.randomBytes(9).toString('base64url') }); } catch {} } return send(res, 200, { app: 'household-finances', version: require('./package.json').version, id: CFG.serverId || '', name: os.hostname(), tls: SELFTLS ? { fp: SELFTLS.fp } : null, tsUrl: tsHttps().url }); }
 
   if (parts[1] === 'login' && req.method === 'POST') {
     if (tooMany(ip)) return send(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });
@@ -488,7 +491,7 @@ async function api(req, res, url) {
       return send(res, 200, { token, expires: Date.now() + days * 864e5 });
     }
   }
-  if (parts[1] === 'connect-info' && req.method === 'GET') return send(res, 200, { addrs: RUN && RUN.host !== '127.0.0.1' ? lanAddrs().map((a) => `http://${a}:${RUN.port}`) : [], hostOnly: !RUN || RUN.host === '127.0.0.1' });
+  if (parts[1] === 'connect-info' && req.method === 'GET') return send(res, 200, { addrs: RUN && RUN.host !== '127.0.0.1' ? lanAddrs().map((a) => `${SELFTLS ? 'https' : 'http'}://${a}:${RUN.port}`) : [], fp: SELFTLS ? SELFTLS.fp : '', ts: tsHttps(), hostOnly: !RUN || RUN.host === '127.0.0.1' });
 
   if (parts[1] === 'books' && parts[2]) {
     const bookId = parts[2];
@@ -557,7 +560,7 @@ function start(opts = {}) {
   if (nUsers === 0) {
     log('\nNo logins yet. Stop the server and run setup first (see README):\n  node server.js add-user nate nate,shared\n  node server.js add-user mckenna mckenna,shared\n');
   }
-  const server = http.createServer(async (req, res) => {
+  const handler = async (req, res) => {
     try {
       const url = new URL(req.url, 'http://x');
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
@@ -569,10 +572,24 @@ function start(opts = {}) {
       if (!res.headersSent) send(res, ro ? 503 : e.code >= 400 && e.code < 600 ? e.code : 500, { error: ro ? WRITE_HELP : e.code ? e.message : 'Server error' });
       if (!e.code) console.error(e);
     }
+  };
+  const server = http.createServer(handler);
+  // HTTPS on the same port: the first byte of each connection says which (TLS starts with 0x16), so old http:// links keep working
+  let hs = null;
+  try {
+    SELFTLS = TLS.loadOrMake(path.join(DATA_DIR, 'tls'), lanAddrs());
+    const selfCtx = require('node:tls').createSecureContext({ cert: SELFTLS.cert, key: SELFTLS.key });
+    hs = https.createServer({ cert: SELFTLS.cert, key: SELFTLS.key, SNICallback: (name, cb) => cb(null, TSCTX && TSTLS && name === TSTLS.name ? TSCTX : selfCtx) }, handler);
+  } catch (e) { SELFTLS = null; console.error('HTTPS is off (couldn’t make this computer’s certificate):', e.message); }
+  const front = net.createServer((sock) => {
+    sock.once('data', (b) => { sock.pause(); sock.unshift(b); (hs && b[0] === 0x16 ? hs : server).emit('connection', sock); process.nextTick(() => sock.resume()); });
+    sock.on('error', () => {});
   });
+  FRONT = front; HTTPS = hs;
   const ready = new Promise((resolve, reject) => {
-    server.once('error', (e) => { SERVER = null; reject(e.code === 'EADDRINUSE' ? Object.assign(new Error(`Port ${port} is already in use. Close the other program or pick another port.`), { code: 'EADDRINUSE' }) : e); });
-    server.listen(port, host, () => {
+    front.once('error', (e) => { SERVER = null; FRONT = null; reject(e.code === 'EADDRINUSE' ? Object.assign(new Error(`Port ${port} is already in use. Close the other program or pick another port.`), { code: 'EADDRINUSE' }) : e); });
+    front.listen(port, host, () => {
+      if (host !== '127.0.0.1') { tsCertCheck(); if (!TSTIMER) { TSTIMER = setInterval(tsCertCheck, 12 * 3600e3); if (TSTIMER.unref) TSTIMER.unref(); } }
       RUN = { mode, port, host, since: Date.now() };
       log(`Larenest is running on http://localhost:${port}`);
       if (host !== '127.0.0.1') for (const a of lanAddrs()) log(`  on your network: http://${a}:${port}`);
@@ -589,16 +606,23 @@ function start(opts = {}) {
   return ready;
 }
 
+// Tailscale's free certificate for this computer's *.ts.net name (browsers trust it), checked at start and twice a day
+let FRONT = null, HTTPS = null, SELFTLS = null, TSTLS = null, TSCTX = null, TSTIMER = null;
+async function tsCertCheck() {
+  try { const r = await TLS.tailscaleCert(path.join(DATA_DIR, 'tls')); TSTLS = r;
+    TSCTX = r.state === 'ok' ? require('node:tls').createSecureContext({ cert: r.cert, key: r.key }) : null; } catch (e) { TSTLS = { state: 'error', message: e.message }; TSCTX = null; }
+}
+const tsHttps = () => (TSTLS ? { state: TSTLS.state, message: TSTLS.message || '', url: TSTLS.state === 'ok' && RUN ? `https://${TSTLS.name}:${RUN.port}` : '' } : { state: 'checking', message: '', url: '' });
 // stop() → Promise. Closes open connections so the port frees right away (tray "Stop hosting").
 function stop() {
   if (!SERVER) return Promise.resolve();
-  const s = SERVER; SERVER = null; RUN = null; if (BTIMER) { clearInterval(BTIMER); BTIMER = null; } if (DTIMER) { clearInterval(DTIMER); DTIMER = null; }
-  return new Promise((r) => { s.close(() => r()); if (s.closeAllConnections) s.closeAllConnections(); });
+  const s = SERVER, f = FRONT, h = HTTPS; SERVER = null; FRONT = null; HTTPS = null; RUN = null; if (h && h.closeAllConnections) h.closeAllConnections(); if (BTIMER) { clearInterval(BTIMER); BTIMER = null; } if (DTIMER) { clearInterval(DTIMER); DTIMER = null; }
+  return new Promise((r) => { if (f) f.close(() => r()); else r(); if (s.closeAllConnections) s.closeAllConnections(); });
 }
 // info(): what the tray/settings screen shows.
 function info() {
   const lan = RUN && RUN.host !== '127.0.0.1' ? lanAddrs() : [];
-  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `http://${a}:${RUN.port}`), dataDir: DATA_DIR, tsSeen: TS_SEEN, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null };
+  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `${SELFTLS ? 'https' : 'http'}://${a}:${RUN.port}`), dataDir: DATA_DIR, tsSeen: TS_SEEN, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null, tlsFp: SELFTLS ? SELFTLS.fp : '', tsHttps: tsHttps() };
 }
 // setMode('local'|'host'): saves it and restarts if running, so the change takes effect immediately.
 async function setMode(mode, port) {

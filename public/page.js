@@ -2809,10 +2809,11 @@
   });
 
   // addresses other devices can use to reach this server (the one in the address bar, unless that's this computer's own name)
+  let HOSTFP = ''; const withFp = (a) => (/^https:/.test(a) && HOSTFP ? a + '/?fp=' + HOSTFP : a);
   const hostAddrs = async () => {
     const here = (FDStore.base || location.origin).replace(/\/+$/, '');
-    if (!/\/\/(localhost|127\.0\.0\.1)(:|$)/.test(here)) return [here];
-    try { const j = await FDStore.json('GET', '/api/connect-info'); return j.addrs || []; } catch (e) { return []; }
+    if (!/\/\/(localhost|127\.0\.0\.1)(:|$)/.test(here)) { try { HOSTFP = (await FDStore.json('GET', '/api/connect-info')).fp || ''; } catch (e) {} return [HOSTFP && !window.FD_LOCAL ? here.replace(/^http:/, 'https:') : here]; }
+    try { const j = await FDStore.json('GET', '/api/connect-info'); HOSTFP = j.fp || ''; return j.addrs || []; } catch (e) { return []; }
   };
   // ⚙ Settings → Invite someone (server owner only): a one-time link + QR code; they choose their own login and password
   // "Where your data lives": plain explanation, with which optional services are actually turned on here
@@ -2893,7 +2894,7 @@
     if (!addrs.length) { box.append(phMsg('Other devices can’t connect yet. On the host computer, turn on “Allow other devices” in Host options, then come back here for a QR code.')); return; }
     box.append(phMsg('In the Larenest phone app, tap “Scan QR code” and point it at this code. On an iPhone or any other phone, scan it with the camera to open the dashboard in the browser. The phone must be on the same Wi-Fi (or on Tailscale).'));
     let i = 0; const wrap = document.createElement('div'); wrap.className = 'fd-qr';
-    const show = () => { wrap.innerHTML = window.FDQR.svg(addrs[i], 220); const c = document.createElement('code'); c.textContent = addrs[i]; wrap.append(c); };
+    const show = () => { wrap.innerHTML = window.FDQR.svg(withFp(addrs[i]), 220); const c = document.createElement('code'); c.textContent = addrs[i]; wrap.append(c); };
     show(); box.append(wrap);
     if (addrs.length > 1) { const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Try another address', () => { i = (i + 1) % addrs.length; show(); })); box.append(r, phMsg('This computer has more than one network address. If the phone can’t connect, try the next one.')); }
     try { localStorage.setItem('fd-gs-phone', '1'); } catch (e) {}

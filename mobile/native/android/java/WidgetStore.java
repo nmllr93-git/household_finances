@@ -109,6 +109,8 @@ final class WidgetStore {
         try {
             String url = base + "/api/books/" + java.net.URLEncoder.encode(book, "UTF-8") + "/widgets?" + query;
             h = (HttpURLConnection) new URL(url).openConnection();
+            if (h instanceof javax.net.ssl.HttpsURLConnection) { javax.net.ssl.HttpsURLConnection hs = (javax.net.ssl.HttpsURLConnection) h; javax.net.ssl.SSLSocketFactory sf = Pins.socketFactory(c);
+                if (sf != null) hs.setSSLSocketFactory(sf); hs.setHostnameVerifier(Pins.verifier(c)); }
             h.setConnectTimeout(8000); h.setReadTimeout(30000); h.setRequestProperty("Accept", "application/json");
             String ck = CookieManager.getInstance().getCookie(base); // the dashboard's own sign-in on this phone
             if (ck != null) h.setRequestProperty("Cookie", ck);
