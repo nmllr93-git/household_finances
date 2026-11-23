@@ -1592,6 +1592,7 @@
   // Android home-screen widget: hand the app a short summary of the open dashboard (kept on the phone only)
   let wSig = '';
   const wHide = () => { try { return localStorage.getItem('fd-widget-hide') === '1'; } catch { return false; } };
+  const wMovers = () => { try { const o = JSON.parse(localStorage.getItem('fd-movers') || 'null') || {}; return { min: o.min == null ? 5 : Number(o.min) || 0, lev: o.lev !== false }; } catch { return { min: 5, lev: true }; } };
   const wAlerts = () => { try { return JSON.parse(localStorage.getItem('fd-alerts') || 'null') || { bills: false, budget: false }; } catch { return { bills: false, budget: false }; } };
   // reach the app's own widget plugin: the plugin list if it's there, otherwise Capacitor's direct native call
   const widgetApi = () => { if (window.LarenestWidgetNative && window.LarenestWidgetNative.update) return { update: (o) => Promise.resolve(window.LarenestWidgetNative.update(o.data)) }; // Android app, any page
@@ -1609,7 +1610,7 @@
     if (wBusy && !force) return wBusy;
     const bid = window.HF && window.HF.state && window.HF.state.bookId; if (!bid) return Promise.resolve(false);
     let follow = []; try { follow = JSON.parse(localStorage.getItem('fd-sectors') || '[]') || []; } catch {}
-    const qs = 'follow=' + encodeURIComponent(follow.join('|'));
+    const mv = wMovers(), qs = 'follow=' + encodeURIComponent(follow.join('|')) + '&min=' + mv.min + '&lev=' + (mv.lev ? '0' : '1');
     // every dashboard this login can see, so each widget can show its own (chosen when it's placed)
     const list = (window.FD_BOOKS && window.FD_BOOKS.length ? window.FD_BOOKS : [{ id: bid, name: '' }]).slice(0, 8);
     const one = (id) => FDStore.json('GET', `/api/books/${encodeURIComponent(id)}/widgets?${qs}`);
@@ -3276,6 +3277,12 @@
       w.append(box('bills', 'A bill is due tomorrow'), box('budget', 'A dashboard passes 90% of its budget (and again at 100%)'), msg,
         phMsg('Worked out on this phone from your dashboards; nothing extra is sent anywhere. Alerts arrive when the widgets update, so turn on background refresh above for timely ones.'));
       row('Phone alerts', w); }
+    if (widgetApi()) { const w = document.createElement('div'), o = wMovers(), r = document.createElement('div'); r.className = 'fd-rb-row';
+      const sel = document.createElement('select'); sel.className = 'dash-select'; [[0, 'Show all prices'], [1, 'Hide stocks under $1'], [5, 'Hide stocks under $5'], [10, 'Hide stocks under $10']].forEach(([v, t]) => sel.append(new Option(t, v))); sel.value = String(o.min);
+      const l = document.createElement('label'); l.className = 'fd-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = o.lev; l.append(cb, ' Hide leveraged and inverse ETFs');
+      const save = () => { try { localStorage.setItem('fd-movers', JSON.stringify({ min: Number(sel.value), lev: cb.checked })); } catch {} pushWidget(true); };
+      sel.addEventListener('change', save); cb.addEventListener('change', save); r.append(sel, l);
+      w.append(r, phMsg('For the Market movers widget. Penny stocks and 2×/3× ETFs swing wildly and crowd out names you’d recognize, so they’re hidden by default.')); row('Market movers widget', w); }
     { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = document.body.classList.contains('fd-brand');
       i.addEventListener('change', () => { document.body.classList.toggle('fd-brand', i.checked); try { localStorage.setItem('fd-brand', i.checked ? '1' : '0'); } catch {} });
       l.append(i, ' Show the Larenest logo and colors (this device only)'); row('Larenest look', l); }

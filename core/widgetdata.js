@@ -96,7 +96,11 @@
     const mv = (l) => (Array.isArray(l) ? l : []).filter((x) => x && x.symbol && isFinite(Number(x.change))).slice(0, 5)
       .map((x) => ({ sym: String(x.symbol).toUpperCase().slice(0, 8), name: String(x.name || '').slice(0, 40), mine: fol.has(x.sector), price: Number(x.price) > 0 ? r2(Number(x.price)) : null, pct: Math.round(Number(x.change) * 10) / 10 }));
     // when you follow sectors, movers from those sectors come first (others fill in if there are too few)
-    const mvs = i.movers || {}, pick = (l) => { l = Array.isArray(l) ? l : []; if (!fol.size) return l; const inF = l.filter((x) => x && fol.has(x.sector)); return [...inF, ...l.filter((x) => !inF.includes(x))]; };
+    // by default skip penny stocks (under $5) and leveraged or inverse ETFs, which crowd the lists with huge swings; both can be turned off
+    const minP = i.moverMin == null ? 5 : Number(i.moverMin) || 0, noLev = i.moverLev !== false;
+    const LEV = /\b(\d(\.\d+)?x|leveraged|ultra(pro|short)?|inverse|daily target|bull|bear|short)\b/i;
+    const keep = (x) => x && !(minP > 0 && Number(x.price) > 0 && Number(x.price) < minP) && !(noLev && LEV.test(String(x.name || '')));
+    const mvs = i.movers || {}, pick = (l) => { l = (Array.isArray(l) ? l : []).filter(keep); if (!fol.size) return l; const inF = l.filter((x) => x && fol.has(x.sector)); return [...inF, ...l.filter((x) => !inF.includes(x))]; };
     out.markets.gainers = mv(pick(mvs.gainers)); out.markets.losers = mv(pick(mvs.losers)); out.markets.followed = fol.size > 0;
     return out;
   }

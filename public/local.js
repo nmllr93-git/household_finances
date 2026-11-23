@@ -159,7 +159,7 @@
     try { history = holdings.length ? await m.history(holdings.map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean).slice(0, 30)) : {}; } catch (e) {}
     try { const mk = (await m.markets(false)) || {}; sectors = mk.sectors || []; movers = { gainers: mk.gainers || [], losers: mk.losers || [] }; } catch (e) {}
     return W.build({ name: book.name, label, budget: (get('budget_totals') || []).find((r) => r.key === label), subs: mine(get('subs')), holdings, quotes, history, watch, sectors, movers,
-      follow: String(sp.get('follow') || '').split('|').filter(Boolean), marketOpen: m.marketOpen() });
+      follow: String(sp.get('follow') || '').split('|').filter(Boolean), moverMin: sp.has('min') ? Number(sp.get('min')) || 0 : 5, moverLev: sp.get('lev') !== '1', marketOpen: m.marketOpen() });
   }
   const backend = { name: 'local', fetch: (path, opts) => handle(path, opts).catch((e) => json(e.code || 500, { error: e.message || 'Error' })) };
   if (window.FDStore) window.FDStore.use(backend); else document.addEventListener('DOMContentLoaded', () => window.FDStore && window.FDStore.use(backend));

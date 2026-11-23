@@ -161,7 +161,7 @@ final class WidgetRender {
                 row(v, n, (x.optBoolean("followed") ? "★ " : "") + x.optString("name"), WidgetStore.arrow(p) + " " + WidgetStore.pct(p), WidgetStore.tone(p)); }
             for (int i = 0; i < nw && n < 5; i++, n++) { JSONObject x = w.optJSONObject(i);
                 String val = x.isNull("pct") ? "–" : WidgetStore.arrow(x.optDouble("pct")) + " " + WidgetStore.pct(x.optDouble("pct"));
-                if (!hide && !x.isNull("price")) val = WidgetStore.money(x.optDouble("price")) + "  " + val;
+                if (!x.isNull("price")) val = WidgetStore.money(x.optDouble("price")) + "  " + val; // public prices, shown even with hide amounts
                 row(v, n, x.optString("sym"), val, x.isNull("pct") ? WidgetStore.MUTED : WidgetStore.tone(x.optDouble("pct"))); }
         }
         hideRows(v, n, 5);
@@ -202,7 +202,7 @@ final class WidgetRender {
             JSONObject x = l.optJSONObject(i); double p = x.optDouble("pct");
             v.setViewVisibility(sym[i], View.VISIBLE); v.setViewVisibility(val[i], View.VISIBLE);
             v.setTextViewText(sym[i], (x.optBoolean("mine") ? "★ " : "") + x.optString("sym"));
-            String t = WidgetStore.arrow(p) + " " + WidgetStore.pct(p); if (!hide && !x.isNull("price")) t = WidgetStore.money(x.optDouble("price")) + "  " + t;
+            String t = WidgetStore.arrow(p) + " " + WidgetStore.pct(p); if (!x.isNull("price")) /* public market prices: shown even with hide amounts */ t = WidgetStore.money(x.optDouble("price")) + "  " + t;
             v.setTextViewText(val[i], t); v.setTextColor(val[i], WidgetStore.tone(p));
         }
         return n;

@@ -287,7 +287,7 @@ async function widgetSummary(book, sp) {
   const history = want.includes('invest') && holdings.length ? await MARKET.history(holdings.map((h) => String(h.symbol || '').toUpperCase()).filter(Boolean).slice(0, 30)) : {};
   let sectors = [], movers = {}; if (want.includes('markets')) { try { const mk = (await MARKET.markets(false)) || {}; sectors = mk.sectors || []; movers = { gainers: mk.gainers || [], losers: mk.losers || [] }; } catch {} }
   return WIDGETS.build({ name: book.name, label, budget: (get('budget_totals') || []).find((r) => r.key === label), subs: mine(get('subs')), holdings, quotes, history, watch, sectors, movers,
-    follow: String(sp.get('follow') || '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 12), marketOpen: MARKET.marketOpen() });
+    follow: String(sp.get('follow') || '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, 12), moverMin: sp.has('min') ? Number(sp.get('min')) || 0 : 5, moverLev: sp.get('lev') !== '1', marketOpen: MARKET.marketOpen() });
 }
 const sfSyncAll = () => { SIMPLEFIN.syncAll(Object.keys(sfAll())).catch(() => {}); for (const v of Object.values(BANKSYNC)) v.engine.syncAll(Object.keys(v.all())).catch(() => {}); };
 

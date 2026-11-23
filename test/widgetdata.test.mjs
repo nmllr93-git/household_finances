@@ -55,3 +55,10 @@ test('movers from followed sectors come first and are marked', () => {
   const o = W.build({ name: 'X', follow: ['Technology'], movers: { gainers: [{ symbol: 'a', change: 9, sector: 'Energy' }, { symbol: 'b', change: 5, sector: 'Technology' }], losers: [] } });
   assert.deepEqual(o.markets.gainers.map((x) => [x.sym, x.mine]), [['B', true], ['A', false]]);
 });
+
+test('movers skip penny stocks and leveraged ETFs by default, configurable', () => {
+  const W = createRequire(import.meta.url)('../core/widgetdata.js');
+  const g = [{ symbol: 'weto', name: 'Webus', price: 0.54, change: 240 }, { symbol: 'nvd', name: 'GraniteShares 2x Short NVDA Daily ETF', price: 8, change: 60 }, { symbol: 'aapl', name: 'Apple Inc.', price: 190, change: 3 }];
+  assert.deepEqual(W.build({ name: 'X', movers: { gainers: g } }).markets.gainers.map((x) => x.sym), ['AAPL']);
+  assert.deepEqual(W.build({ name: 'X', moverMin: 0, moverLev: false, movers: { gainers: g } }).markets.gainers.map((x) => x.sym), ['WETO', 'NVD', 'AAPL']);
+});
