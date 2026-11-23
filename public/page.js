@@ -2414,8 +2414,9 @@
         r1.append(al, dl, rl); w.append(r1);
         const tb = document.createElement('table'); tb.className = 'fd-table'; const h = document.createElement('tr'); ['', 'Symbol', 'Name', 'Shares', 'Avg cost', 'Type'].forEach((t, i) => { const c = document.createElement('th'); c.textContent = t; if (i < 3 || i === 5) c.className = 'fd-l'; h.append(c); }); tb.append(h);
         posImp.rows.forEach((x, i) => { const tr = document.createElement('tr'); const c0 = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = posImp.pick[i]; cb.addEventListener('change', () => { posImp.pick[i] = cb.checked; }); c0.append(cb);
-          tr.append(c0, td(x.symbol, 'fd-l'), td(x.name, 'fd-l fd-zero'), td(String(x.qty)), td(x.price != null ? money2(x.price) : 'unknown'), td(x.kind, 'fd-l')); tb.append(tr); });
+          tr.append(c0, td(x.symbol, 'fd-l'), td(x.name, 'fd-l fd-zero'), td(String(x.qty)), td(x.price != null ? money2(x.price) + (x.noCost ? ' *' : '') : 'unknown'), td(x.kind, 'fd-l')); tb.append(tr); });
         const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); w.append(sc);
+        if (posImp.rows.some((x) => x.noCost)) w.append(phMsg('* This file has no cost basis, so today’s price is used as the cost (gains start at $0). Edit a holding to enter what you really paid.'));
         const msg = document.createElement('p'); msg.className = 'fd-note';
         const go = rbtn(`Import ${posImp.rows.length} positions`, async () => {
           go.disabled = true; msg.textContent = 'Saving…';

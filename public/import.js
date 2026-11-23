@@ -12,7 +12,7 @@
     const h = g[hi].map(norm), col = (...re) => h.findIndex((c) => re.some((r) => r.test(c)));
     const cSym = col(/^(symbol|ticker)$/), cQty = col(/^(quantity|shares|qty)/), cName = col(/^description$/, /^(security)?name$/, /^investmentname$/, /^securitydescription$/);
     const cTot = col(/^costbasistotal$/, /^costbasis$/, /^totalcost(basis)?$/, /^cost$/), cAvg = col(/^(average|avg)cost(basis)?(\/share|pershare)?$/, /^costpershare$/, /^costbasispershare$/, /^pricepaid$/);
-    const cAcct = col(/^accountname$/, /^account$/), cType = col(/^(security|investment|asset)type$/);
+    const cPx = col(/^(shareprice|lastprice|price|currentprice)$/), cAcct = col(/^accountname$/, /^account$/), cType = col(/^(security|investment|asset)type$/);
     const n = (x) => { const v = Number(String(x || '').replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1')); return isFinite(v) ? v : null; };
     const rows = [];
     for (const r of g.slice(hi + 1)) {
@@ -22,10 +22,10 @@
       const name = cName >= 0 ? r[cName] || '' : '';
       if (/money market|cash (reserves|investments)|core position|sweep/i.test(name)) continue;
       let price = null; const tot = cTot >= 0 ? n(r[cTot]) : null, avg = cAvg >= 0 ? n(r[cAvg]) : null;
-      if (avg > 0) price = avg; else if (tot > 0) price = tot / qty;
+      let noCost = false; if (avg > 0) price = avg; else if (tot > 0) price = tot / qty; else if (cPx >= 0 && n(r[cPx]) > 0) { price = n(r[cPx]); noCost = true; }
       const t = (cType >= 0 ? r[cType] : '') + ' ' + name;
       const kind = /\betf\b|exchange.traded|ishares|spdr|vanguard .* etf/i.test(t) ? 'etf' : /mutual fund|\bfund\b|\bfd\b|index|admiral|investor sh/i.test(t) ? 'fund' : /bond|treasury|note/i.test(t) ? 'bond' : 'stock';
-      rows.push({ symbol: sym, name: name.slice(0, 60), qty: Math.round(qty * 10000) / 10000, price: price != null ? Math.round(price * 10000) / 10000 : null, kind, account: cAcct >= 0 ? (r[cAcct] || '').slice(0, 60) : '' });
+      rows.push({ symbol: sym, name: name.slice(0, 60), qty: Math.round(qty * 10000) / 10000, price: price != null ? Math.round(price * 10000) / 10000 : null, kind, noCost, account: cAcct >= 0 ? (r[cAcct] || '').slice(0, 60) : '' });
     }
     return { rows, error: rows.length ? '' : 'No positions found in that file.' };
   }
