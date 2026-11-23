@@ -1338,8 +1338,9 @@
   acctPicker('fd-import-form', 'fd-imp-pick', 'fd-imp-new', 'impAcctPick');
   dash.draw('acctNames', (dl) => { dl.replaceChildren(...acctList().filter((a) => a.active !== false).map((a) => { const o = document.createElement('option'); o.value = a.name; return o; })); });
   dash.draw('acctEditor', (el) => {
+    if (ae && ae.book && ae.book !== book()) ae = null; // switched dashboards: close the editor
     el.replaceChildren();
-    if (!ae) { el.append(rbtn('+ Add account', () => { ae = { id: null, match: '', name: '', kt: 'deposit:checking', rate: '', owner: '', note: '', limit: '', payment: '', escrow: '', extra: '', active: true }; dash.draw('acctEditor'); }, false)); return; }
+    if (!ae) { el.append(rbtn('+ Add account', () => { ae = { book: book(), id: null, match: '', name: '', kt: 'deposit:checking', rate: '', owner: '', note: '', limit: '', payment: '', escrow: '', extra: '', active: true }; dash.draw('acctEditor'); }, false)); return; }
     const box = document.createElement('div'); box.className = 'fd-rb';
     box.append(rhead(ae.id || ae.match ? `Edit account: ${ae.match || ae.name}` : 'New account'));
     const row = (label, node) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const l = document.createElement('span'); l.className = 'fd-rb-lbl'; l.textContent = label; r.append(l, node); box.append(r); return r; };
@@ -1402,11 +1403,21 @@
       try {
         const d = await db();
         await d.collection('data/household/accounts').add({ book: book(), name, match: (ae.match || name).slice(0, 60), kind, type: type || '', rate: kind === 'investment' ? null : rate,
-          owner: String(ae.owner || '').trim().slice(0, 30), note: String(ae.note || '').trim().slice(0, 120), rateEnds: /^\d{4}-\d{2}-\d{2}$/.test(ae.rateEnds || '') ? ae.rateEnds : '', aliases: ((ae.id && rows('accounts').find((x) => x.id === ae.id)) || {}).aliases || [], limit: numOrNull(ae.limit), payment: numOrNull(ae.payment), escrow: numOrNull(ae.escrow), extra: numOrNull(ae.extra), active: ae.active !== false, shareTo: ae.shareTo || [], shareHist: !!ae.shareHist, createdAt: new Date().toISOString() });
+          owner: String(ae.owner || '').trim().slice(0, 30), note: String(ae.note || '').trim().slice(0, 120), rateEnds: /^\d{4}-\d{2}-\d{2}$/.test(ae.rateEnds || '') ? ae.rateEnds : '', aliases: ae.aliases || ((ae.id && rows('accounts').find((x) => x.id === ae.id)) || {}).aliases || [], limit: numOrNull(ae.limit), payment: numOrNull(ae.payment), escrow: numOrNull(ae.escrow), extra: numOrNull(ae.extra), active: ae.active !== false, shareTo: ae.shareTo || [], shareHist: !!ae.shareHist, createdAt: new Date().toISOString() });
         if (ae.id) await d.doc('data/household/accounts/' + ae.id).delete();
         ae = null; dash.draw('acctEditor');
       } catch { save.disabled = false; msg.textContent = 'Couldn’t save. Try again.'; }
     }, false);
+    // other names this account has had (merged or renamed): each can be removed; the account itself stays
+    { const reg = ae.id && rows('accounts').find((x) => x.id === ae.id); if (reg && !ae.aliases) ae.aliases = [...(reg.aliases || [])];
+      const other = (ae.aliases || []).filter((n) => keyA(n) !== keyA(ae.name || '') && keyA(n) !== keyA(ae.match || ''));
+      if (other.length || (ae.match && keyA(ae.match) !== keyA(ae.name || ''))) {
+        const w = document.createElement('div'); w.className = 'fd-rb fd-aliases'; const h = document.createElement('div'); h.className = 'fd-rb-lbl'; h.textContent = 'Other names for this account'; w.append(h);
+        if (ae.match && keyA(ae.match) !== keyA(ae.name || '')) w.append(phMsg(`“${ae.match}”: the name in your imported statements and bank sync. It links them to this account, so it stays.`));
+        for (const n of other) { const r = document.createElement('div'); r.className = 'fd-rb-row'; const t = document.createElement('span'); t.textContent = `“${n}”`;
+          r.append(t, rbtn('Remove', () => { ae.aliases = ae.aliases.filter((x) => x !== n); dash.draw('acctEditor'); }, false)); w.append(r); }
+        if (other.length) w.append(phMsg('Removing a name takes effect when you press Save. Statements imported under that name stop counting for this account.'));
+        el.append(w); } }
     const bar = document.createElement('div'); bar.className = 'fd-rb-row'; bar.append(save, rbtn('Cancel', () => { ae = null; dash.draw('acctEditor'); }));
     if (ae.id || ae.match) {
       // Delete for good (for accounts created by mistake). Two clicks. If another entry shares the name, only this duplicate goes.
@@ -1437,6 +1448,12 @@
     }
     box.append(bar, msg); el.append(box);
   });
+  // category boxes: browsers only suggest categories matching what's typed, so a filled box hides the list. On focus,
+  // empty it (current category shown as the placeholder) to show every category; leaving without a pick puts it back.
+  document.addEventListener('focusin', (e) => { const i = e.target; if (!(i instanceof HTMLInputElement) || i.getAttribute('list') !== 'fd-cats' || !i.value || i.dataset.catPrev != null) return;
+    i.dataset.catPrev = i.value; i.dataset.catPh = i.placeholder || ''; i.placeholder = i.value; i.value = ''; });
+  document.addEventListener('focusout', (e) => { const i = e.target; if (!(i instanceof HTMLInputElement) || i.dataset.catPrev == null) return;
+    if (!i.value.trim()) i.value = i.dataset.catPrev; i.placeholder = i.dataset.catPh; delete i.dataset.catPrev; delete i.dataset.catPh; });
   // small "shared" badge next to an account or asset name, listing the dashboards it's shared with
   const shareIcon = (host, to, first) => {
     if (!to || !to.length) return;
@@ -1448,11 +1465,12 @@
     if (st('balances', 'accounts') !== 'ok') return;
     el.replaceChildren();
     const every = acctList(), all = every.filter((a) => showClosed || a.active !== false), nClosed = every.filter((a) => a.active === false).length;
-    if (!all.length) return empty(el, 7, 'No accounts yet. Import a statement, record a balance, or press “+ Add account”.');
+    if (!all.length && !sharedIn().some((d) => /\|acct\|/.test(d.key || ''))) return empty(el, 7, 'No accounts yet. Import a statement, record a balance, or press “+ Add account”.');
     const head = document.createElement('tr'); ['Account', 'Type', 'Rate', 'Balance', 'As of', 'Interest / mo', ''].forEach((l, i) => { const th = document.createElement('th'); th.textContent = l; if (i < 2 || i === 4) th.className = 'fd-l'; head.append(th); }); el.append(head);
     const totals = {};
     for (const [kind, title] of KIND_GROUPS) {
-      const g = all.filter((a) => a.kind === kind).sort((a, b) => ((b.bal && b.bal.balance) || 0) - ((a.bal && a.bal.balance) || 0)); if (!g.length) continue;
+      const g = all.filter((a) => a.kind === kind).sort((a, b) => ((b.bal && b.bal.balance) || 0) - ((a.bal && a.bal.balance) || 0));
+      const shG = sharedIn().filter((d) => d.kind === kind && /\|acct\|/.test(d.key || '')); if (!g.length && !shG.length) continue;
       const gh = document.createElement('tr'); gh.className = 'fd-group'; const gc = td(title); gc.colSpan = 7; gh.append(gc); el.append(gh);
       let tot = 0, intr = 0;
       for (const a of g) {
@@ -1474,10 +1492,19 @@
           td(bal == null ? '–' : (debt ? '−' : '') + money2(bal), debt && bal ? 'fd-bad' : ''), td(a.bal ? `${a.bal.month}${a.bal.source && /Calculated/.test(a.bal.source) ? ' (calc.)' : ''}` : '–', 'fd-l fd-zero'),
           td(mi ? `${debt ? '−' : '+'}${money2(mi)}` : '–', mi ? (debt ? 'fd-bad' : 'fd-good') : ''));
         const c = document.createElement('td');
-        c.append(rbtn('Edit', () => { ae = { id: a.reg ? a.reg.id : null, match: a.reg ? a.reg.match || a.reg.name : a.name, name: a.name, kt: `${a.kind}:${a.type || (ATYPES[a.kind + ':checking'] ? 'checking' : '')}`, rate: a.rate ?? '', owner: a.owner || '', note: a.note || '', limit: a.limit ?? '', payment: a.payment ?? '', escrow: a.escrow ?? '', extra: a.extra ?? '', rateEnds: a.rateEnds || '', shareTo: (a.reg && a.reg.shareTo) || [], shareHist: !!(a.reg && a.reg.shareHist), active: a.active !== false };
+        c.append(rbtn('Edit', () => { ae = { book: book(), id: a.reg ? a.reg.id : null, match: a.reg ? a.reg.match || a.reg.name : a.name, name: a.name, kt: `${a.kind}:${a.type || (ATYPES[a.kind + ':checking'] ? 'checking' : '')}`, rate: a.rate ?? '', owner: a.owner || '', note: a.note || '', limit: a.limit ?? '', payment: a.payment ?? '', escrow: a.escrow ?? '', extra: a.extra ?? '', rateEnds: a.rateEnds || '', shareTo: (a.reg && a.reg.shareTo) || [], shareHist: !!(a.reg && a.reg.shareHist), active: a.active !== false };
           if (!ATYPES[ae.kt]) ae.kt = Object.keys(ATYPES).find((x) => x.startsWith(a.kind + ':')) || 'deposit:checking';
           dash.draw('acctEditor'); document.querySelector('#accounts')?.scrollIntoView({ behavior: 'smooth' }); }));
         tr.append(c); el.append(tr);
+      }
+      // accounts shared into this dashboard from another one: same list, marked ⇄ (counted here when "net worth" is ticked for them)
+      for (const d of shG) {
+        const debt = kind !== 'deposit' && kind !== 'investment', bal = Number(d.balance) || 0, inc = shIncl(d).nw; if (inc) tot += bal;
+        const from = (meBooks().find((b) => b.id === d.src) || {}).name || 'another dashboard';
+        const tr = document.createElement('tr'); tr.className = 'fd-sharedrow'; const nm = td(d.name + (d.owner && !String(d.name).startsWith(d.owner) ? ` (${d.owner})` : ''), 'fd-l');
+        const i = document.createElement('span'); i.className = 'fd-shared'; i.textContent = '⇄'; i.title = `Shared from ${from}${inc ? '' : ' (not counted in net worth here)'}`; i.setAttribute('aria-label', i.title); nm.append(i);
+        const sub = document.createElement('div'); sub.className = 'fd-zero'; sub.textContent = `From ${from}. Edit it there.`; nm.append(sub);
+        tr.append(nm, td(ATYPES[`${d.kind}:${d.type}`] || KIND_DEFAULT[d.kind] || d.kind, 'fd-l'), td('–'), td((debt ? '−' : '') + money2(bal), (debt && bal ? 'fd-bad' : '') + (inc ? '' : ' fd-zero')), td(d.asOf || ''), td('–'), td('')); el.append(tr);
       }
       totals[kind] = tot;
       const tr = document.createElement('tr'); tr.className = 'fd-total'; const debt = kind !== 'deposit' && kind !== 'investment';
@@ -1485,9 +1512,9 @@
     }
     if (totals.deposit != null && totals.credit) { const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.append(td('Net cash after cards', 'fd-l'), td(''), td(''), td(money2(totals.deposit - totals.credit)), td(''), td(''), td('')); el.append(tr); }
     { const acc = (totals.deposit || 0) + (totals.investment || 0) - (totals.credit || 0) - (totals.mortgage || 0) - (totals.loan || 0);
-      const own = assetsAll().reduce((t, a) => t + assetNow(a), 0), sh = sharedSum(['deposit', 'investment', 'asset'], 'nw') - sharedSum(['credit', 'mortgage', 'loan'], 'nw');
+      const own = assetsAll().reduce((t, a) => t + assetNow(a), 0), sh = sharedSum(['asset'], 'nw');
       const add = (l, v) => { const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.append(td(l, 'fd-l'), td(''), td(''), td(money2(v), v >= 0 ? 'fd-good' : 'fd-bad'), td(''), td(''), td('')); el.append(tr); };
-      if (own || sh) { add('Accounts only (cash + investments − debts)', acc); if (own) add('+ Home, vehicles & other', own); if (sh) add('+ Shared into this dashboard (net)', sh); }
+      if (own || sh) { add('Accounts only (cash + investments − debts)', acc); if (own) add('+ Home, vehicles & other', own); if (sh) add('+ Shared home, vehicles & other', sh); }
       add('Net worth', acc + own + sh); }
     if (nClosed) { const tr = document.createElement('tr'); const c = document.createElement('td'); c.colSpan = 7; c.append(rbtn(showClosed ? `Hide closed accounts (${nClosed})` : `Show closed accounts (${nClosed})`, () => { showClosed = !showClosed; dash.draw('acctRows'); })); tr.append(c); el.append(tr); }
   });
@@ -1804,8 +1831,8 @@
   // merged top tiles: cash flow (numbers or bars) and cash & investments (numbers or ring)
   dash.draw('kFlowViz', (el) => {
     el.replaceChildren(); const r = sumRow(); if (!r) return;
-    const mode = vGet('flowCard', 'num'); el.closest('.fd-card')?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
-    const tog = vToggle('flowCard', 'num', [['num', 'Numbers'], ['ring', 'Ring'], ['bars', 'Bars']], ['kFlowViz']);
+    const mode = vGet('flowCard', 'ring'); el.closest('.fd-card')?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
+    const tog = vToggle('flowCard', 'ring', [['num', 'Numbers'], ['ring', 'Ring'], ['bars', 'Bars']], ['kFlowViz']);
     if (mode === 'num') { el.append(tog); return; }
     if (mode === 'ring') {
       const inc = r.income, sp = r.income - r.net, s = inc >= sp
@@ -1831,8 +1858,8 @@
     const shC = sharedSum(['deposit'], 'cash'), shI = sharedSum(['investment'], 'cash'), shA = sharedSum(['asset'], 'nw'), shD = sharedSum(['credit', 'mortgage', 'loan'], 'nw');
     const cv = (c ? c.total : 0) + shC, iv = (i ? i.total : 0) + shI, card = el.closest('.fd-card'), av = assetsAll().reduce((t, x) => t + assetNow(x), 0) + shA;
     const h3 = card?.querySelector('h3'); if (h3) h3.textContent = av ? 'What you own' : 'Cash & investments';
-    const mode = vGet('assetCard', 'num'); card?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
-    const tog = vToggle('assetCard', 'num', [['num', 'Numbers'], ['ring', 'Ring']], ['kAssetViz']);
+    const mode = vGet('assetCard', 'ring'); card?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
+    const tog = vToggle('assetCard', 'ring', [['num', 'Numbers'], ['ring', 'Ring']], ['kAssetViz']);
     const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); nb.textContent = money0(cv + iv + av - debtTot() - shD); const dv = debtTot() + shD; nw.append('Net worth ', nb, ` = ${money0(cv + iv + av)} owned − ${money0(dv)} owed`);
     const hasHome = assetsAll().some((x) => /home|house|real|property/i.test(String(x.type || '') + ' ' + String(x.name || ''))) || sharedIn().some((d) => d.kind === 'asset' && /home|house|real|property/i.test(String(d.type || '') + ' ' + String(d.name || '')));
     const hasMort = (latestTotal(['mortgage'])[0]?.total || 0) + sharedSum(['mortgage'], 'nw') > 0;
@@ -1846,10 +1873,10 @@
   // 1. budget card: text or ring
   dash.draw('kBudgetRing', (el) => {
     el.replaceChildren(); const card = el.closest('.fd-card'); const r = budTot();
-    const mode = vGet('budgetCard', 'text'), canRing = r && r.categories;
+    const mode = vGet('budgetCard', 'ring'), canRing = r && r.categories;
     card?.querySelectorAll('[data-draw=kBudget],[data-draw=kBudgetSub]').forEach((p) => { p.hidden = mode === 'ring' && canRing; });
     if (!canRing) return;
-    const tog = vToggle('budgetCard', 'text', [['text', 'Numbers'], ['ring', 'Ring']], ['kBudgetRing']);
+    const tog = vToggle('budgetCard', 'ring', [['text', 'Numbers'], ['ring', 'Ring']], ['kBudgetRing']);
     if (mode !== 'ring') { el.append(tog); return; }
     const left = r.available - r.spent, over = left < 0, pace = r.elapsed != null ? r.elapsed : null;
     const color = over ? BAD : pace != null && r.spent / r.available > pace + 0.05 ? WARN : OK;
@@ -1874,9 +1901,9 @@
   };
   dash.draw('catViz', (el) => {
     if (st('cat_trend') !== 'ok') return;
-    el.replaceChildren(); const mode = vGet('cat', 'trend');
+    el.replaceChildren(); const mode = vGet('cat', matchMedia('(max-width: 640px)').matches ? 'ring' : 'trend');
     document.querySelectorAll('[data-draw=catChart]').forEach((c) => { c.hidden = mode === 'ring'; });
-    el.append(vToggle('cat', 'trend', [['trend', 'Trend'], ['ring', 'Share']], ['catViz', 'catChart']));
+    el.append(vToggle('cat', matchMedia('(max-width: 640px)').matches ? 'ring' : 'trend', [['trend', 'Trend'], ['ring', 'Share']], ['catViz', 'catChart']));
     if (mode !== 'ring') return;
     const s = catShare(), tot = s.reduce((t, x) => t + x.value, 0); if (!s.length) return;
     el.append(ringBox(ring(s, [money0(tot), 'spent'], { size: 180, width: 26, title: 'Spending by category', chart: 'ring-cat' }), legend(s, tot), ['Spending by category', s]));

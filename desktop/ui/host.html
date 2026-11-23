@@ -25,6 +25,9 @@
   .row small { display:block; color:var(--mut); }
   .mut { color:var(--mut); } .bad { color:var(--bad); } .ok { color:var(--ok); }
   button.b { font:inherit; font-weight:600; border:0; border-radius:7px; padding:7px 14px; background:var(--acc); color:#fff; cursor:pointer; white-space:nowrap; }
+  select.q { font:inherit; border:1px solid var(--line); border-radius:7px; padding:6px 30px 6px 12px; background:transparent; color:var(--fg); cursor:pointer; appearance:none; -webkit-appearance:none;
+    background-image:linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position:calc(100% - 15px) 55%, calc(100% - 10px) 55%; background-size:5px 5px; background-repeat:no-repeat; max-width:240px; text-overflow:ellipsis; }
+  select.q option { background:var(--bg, #1b1f24); color:var(--fg); }
   button.q { font:inherit; border:1px solid var(--line); border-radius:7px; padding:6px 12px; background:transparent; color:var(--fg); cursor:pointer; white-space:nowrap; }
   button:disabled { opacity:.5; cursor:default; }
   .sw { position:relative; width:42px; height:24px; flex:none; } .sw input { opacity:0; width:0; height:0; }
@@ -75,8 +78,8 @@
     </div>
     <div class="card">
       <h2>Data &amp; backups</h2>
-      <div class="row" style="flex-wrap:wrap"><div style="flex:1 1 260px">Also keep backups in a cloud folder<small id="cloudSub">Each daily backup is also copied to a folder that OneDrive, iCloud Drive, Google Drive or Dropbox syncs, so a copy is safe if this computer fails. Your cloud app does the uploading; nothing goes through us.</small></div>
-        <span style="display:flex;gap:6px;flex-wrap:wrap"><select id="cloudSel" class="q" style="max-width:220px"></select><button class="q" id="cloudOpen" type="button" hidden>Open</button></span></div>
+      <div class="row"><div>Also keep backups in a cloud folder<small id="cloudSub">Each daily backup is also copied to a folder that OneDrive, iCloud Drive, Google Drive or Dropbox syncs, so a copy is safe if this computer fails. Your cloud app does the uploading; nothing goes through us.</small></div>
+        <span style="display:flex;gap:6px;align-items:center;flex-shrink:0"><select id="cloudSel" class="q"></select><button class="q" id="cloudOpen" type="button" hidden>Open</button></span></div>
       <div class="row"><div>Data folder<small><code id="dir"></code></small></div><button class="q" id="openData" type="button">Open</button></div>
       <div class="row"><div>Back up now<small>A full copy goes in the data folder's <i>backups</i> folder. One is also made automatically every day.</small></div><button class="q" id="backup" type="button">Back up</button></div>
     </div>
