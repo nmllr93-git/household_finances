@@ -88,6 +88,9 @@
       <div class="row"><div>Also keep backups in a cloud folder<small id="cloudSub">Each daily backup is also copied to a folder that OneDrive, iCloud Drive, Google Drive or Dropbox syncs, so a copy is safe if this computer fails. Your cloud app does the uploading; nothing goes through us.</small></div>
         <span style="display:flex;gap:6px;align-items:center;flex-shrink:0"><select id="cloudSel" class="q"></select><button class="q" id="cloudOpen" type="button" hidden>Open</button></span></div>
       <div class="row"><div>Data folder<small><code id="dir"></code></small></div><button class="q" id="openData" type="button">Open</button></div>
+      <div class="row"><div>Restore a backup<small>Stop hosting, then copy a file from the <i>backups</i> folder over <i>finance.db</i> in the data folder (keep a copy of the current one first) and start hosting again. A backup is also made automatically the first time an update starts, before you use it.</small></div></div>
+      <div class="row" id="pwRow"><div>Forgot a password?<small>Set a new password for any login here, since you’re on the computer that runs Larenest. That login is signed out on every device.</small>
+        <span style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><select id="pwUser" class="q"></select><input id="pwNew" class="q" type="password" placeholder="New password (8+ characters)" autocomplete="new-password" style="min-width:12em"><button class="q" id="pwSet" type="button">Set password</button></span></div></div>
       <div class="row"><div>Back up now<small>A full copy goes in the data folder's <i>backups</i> folder. One is also made automatically every day.</small></div><button class="q" id="backup" type="button">Back up</button></div>
     </div>
   </div>
@@ -102,6 +105,11 @@
   let st = await A.hostState(), loadedUrl = '';
   const tab = (which) => { const d = which === 'dash'; $('t-dash').classList.toggle('on', d); $('t-opts').classList.toggle('on', !d); dash.hidden = !d; $('opts').hidden = d; try { localStorage.setItem('fd-hosttab', which); } catch (e) {} };
   $('t-dash').addEventListener('click', () => tab('dash')); $('t-opts').addEventListener('click', () => tab('opts'));
+  // forgotten password, reset on this computer
+  (async () => { try { const l = await A.logins(); $('pwUser').replaceChildren(...l.map((u) => new Option(u, u))); $('pwRow').hidden = !l.length; } catch (e) { $('pwRow').hidden = true; } })();
+  $('pwSet').addEventListener('click', async () => { const n = $('pwUser').value, p = $('pwNew').value;
+    if (p.length < 8) { say('Passwords need at least 8 characters.', 'bad'); return; }
+    try { await A.resetPassword({ name: n, password: p }); $('pwNew').value = ''; say('New password set for ' + n + '. Sign in with it on each device.', 'ok'); } catch (e) { say(e.message.replace(/^Error: /, ''), 'bad'); } });
   function render(s) {
     st = s;
     const others = s.running && s.mode === 'host';

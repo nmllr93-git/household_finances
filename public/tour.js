@@ -57,10 +57,36 @@
   if (!seen) { const wait = () => { if (window.__fdGo) return; if (document.getElementById('fd-title') && window.HF && window.HF.state && window.HF.state.bookId) show(); else setTimeout(wait, 500); }; setTimeout(wait, 1200); }
 })();
 
+// Diagnostic info for bug reports: app version, platform, connection, recent errors and sync status.
+// No transactions, balances, names or amounts; shown to you before you send it.
+(function () {
+  const ERR = []; const keep = (m) => { ERR.push(new Date().toISOString().slice(11, 19) + ' ' + String(m).slice(0, 160)); if (ERR.length > 8) ERR.shift(); };
+  window.addEventListener('error', (e) => keep('Error: ' + (e.message || 'script error') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')));
+  window.addEventListener('unhandledrejection', (e) => keep('Promise: ' + ((e.reason && e.reason.message) || e.reason)));
+  const f0 = window.fetch; if (f0) window.fetch = function (u, o) { const path = String((u && u.url) || u).replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+    return f0.apply(this, arguments).then((r) => { if (!r.ok && /^\/api\//.test(path)) keep(`HTTP ${r.status} ${(o && o.method) || 'GET'} ${path.replace(/\/books\/[^/]+/, '/books/…')}`); return r; },
+      (e) => { if (/^\/api\//.test(path)) keep(`Network ${path.replace(/\/books\/[^/]+/, '/books/…')}: ${e.message}`); throw e; }); };
+  window.FDDiag = async () => {
+    const plat = window.FDApp ? 'PC app' : /Android/i.test(navigator.userAgent) ? (window.FD_LOCAL ? 'Android (phone-only)' : 'Android') : /iPhone|iPad/i.test(navigator.userAgent) ? 'iPhone' : 'Web browser';
+    const L = ['Larenest diagnostic info', 'Platform: ' + plat, 'Device: ' + navigator.userAgent.slice(0, 140), 'Screen: ' + innerWidth + '×' + innerHeight];
+    try { const C = window.Capacitor, A = C && C.Plugins && C.Plugins.App; if (A && A.getInfo) { const i = await A.getInfo(); L.push('Phone app version: ' + i.version + ' (' + i.build + ')'); } } catch (e) {}
+    try { if (window.FDApp && FDApp.hostState) { const h = await FDApp.hostState(); if (h && h.version) L.push('PC app version: ' + h.version); } } catch (e) {}
+    try { const p = await (await f0('/api/ping', { cache: 'no-store' })).json(); L.push('Server (PC) version: ' + p.version + (p.tls ? ' (HTTPS available)' : '')); } catch (e) { L.push('Server: not reachable (' + e.message + ')'); }
+    L.push('Connection: ' + (window.FD_LOCAL ? 'phone-only' : location.protocol.replace(':', '') + (/^(localhost|127\.)/.test(location.hostname) ? ', on the PC itself' : /^100\.|\.ts\.net$/.test(location.hostname) ? ', Tailscale' : ', home network')));
+    const bid = window.HF && HF.state && HF.state.bookId;
+    for (const pv of ['simplefin', 'plaid']) { try { const r = await f0(`/api/books/${encodeURIComponent(bid || '')}/${pv}`, { cache: 'no-store' }); if (!r.ok) continue; const j = await r.json(); if (!j.connected) continue;
+      L.push(`${pv}: connected, last sync ${j.lastSync ? new Date(j.lastSync).toISOString().slice(0, 16).replace('T', ' ') : 'never'}${j.lastError ? ', last error: ' + String(j.lastError).slice(0, 120) : ''}`); } catch (e) {} }
+    try { L.push('Settings: look ' + (localStorage.getItem('fd-brand') === '0' ? 'classic' : 'Larenest') + ', widgets ' + (window.LarenestWidgetNative ? 'available' : 'n/a') + ', alerts ' + (localStorage.getItem('fd-alerts') || 'off')); } catch (e) {}
+    L.push('Recent problems: ' + (ERR.length ? '' : 'none')); ERR.forEach((x) => L.push('  ' + x));
+    return L.join('\n');
+  };
+})();
+
 // Feedback: an email to the developer, with the app and device filled in (nothing is sent without you pressing Send)
-window.FDFeedback = () => {
+window.FDFeedback = async () => {
   const plat = window.FDApp ? 'PC app' : /Android/i.test(navigator.userAgent) ? (window.FD_LOCAL ? 'Android (phone-only)' : 'Android') : /iPhone|iPad/i.test(navigator.userAgent) ? 'iPhone' : 'Web browser';
-  const body = `\n\n\n---\nLarenest on ${plat}\n${navigator.userAgent.slice(0, 160)}`;
+  let diag = ''; try { diag = await window.FDDiag(); } catch (e) { diag = 'Larenest on ' + plat; }
+  const body = `\n\n\n--- Diagnostic info (no financial data; delete it if you prefer) ---\n${diag}`.slice(0, 1800);
   const url = 'mailto:contact@larenest.app?subject=' + encodeURIComponent('Larenest feedback (' + plat + ')') + '&body=' + encodeURIComponent(body);
   try { if (window.FDApp || window.FDInApp) window.open(url); else location.href = url; } catch (e) {}
 };

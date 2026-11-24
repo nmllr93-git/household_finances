@@ -597,6 +597,8 @@ function start(opts = {}) {
   });
   SERVER = server;
   try { db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now()); } catch {}
+  // after an update (a new version starting for the first time), make a backup straight away
+  try { const ver = require('./package.json').version; if (CFG.lastVersion !== ver) { if (CFG.lastVersion) backup(); saveCfg({ lastVersion: ver }); } } catch (e) { console.error('Update backup skipped:', e.code || e.message); }
   try { const last = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort().pop();
     if (!last || Date.now() - fs.statSync(path.join(BACKUP_DIR, last)).mtimeMs > 864e5) backup(); } catch (e) { console.error('Backup skipped:', e.code || e.message); }
   if (!BTIMER) BTIMER = setInterval(() => { try { backup(); } catch (e) { console.error('Backup failed', e); } }, 864e5);
@@ -651,6 +653,14 @@ function inviteInfo(token) {
     books: (d.books || []).filter((b) => names.has(b.id)).map((b) => ({ name: names.get(b.id), role: b.role === 'view' ? 'view' : 'edit' })), newBook: d.newBook ? d.newBook.name : '' } };
 }
 
+// forgotten password: set a new one from the PC app (whoever can use this computer); signs that login out everywhere
+const logins = () => db.prepare('SELECT username FROM users ORDER BY username').all().map((r) => r.username);
+function resetPassword(name, pw) {
+  const u = String(name || '').toLowerCase();
+  if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(u)) throw new Error('There’s no login called ' + u + '.');
+  if (String(pw || '').length < 8) throw new Error('Passwords need at least 8 characters.');
+  setPassword(u, pw); return { user: u };
+}
 function addUser(name, pw, ids) {
   const u = String(name || '').toLowerCase();
   if (!/^[a-z0-9_.-]{2,32}$/.test(u)) throw new Error('Login names are 2–32 letters, numbers, dots, dashes or underscores.');
@@ -738,5 +748,5 @@ if (require.main === module) {
   const quit = () => stop().then(() => { try { db.close(); } catch {} process.exit(0); });
   process.on('SIGINT', quit); process.on('SIGTERM', quit);
 } else {
-  module.exports = { start, stop, info, setMode, addUser, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
+  module.exports = { start, stop, info, setMode, addUser, resetPassword, logins, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
 }

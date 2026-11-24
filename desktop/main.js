@@ -189,6 +189,8 @@ ipcMain.handle('fd:startHost', async (_e, o) => {
   return { ...INFO, books: await call('books') };
 });
 ipcMain.handle('fd:addUser', (_e, o) => call('addUser', o));
+ipcMain.handle('fd:logins', () => call('logins'));
+ipcMain.handle('fd:resetPassword', (e, o) => { if (!e.senderFrame || !/^file:/.test(e.senderFrame.url)) throw new Error('Not allowed'); return call('resetPassword', { name: o && o.name, password: o && o.password }); });
 ipcMain.handle('fd:openDashboard', async () => { await openDashboard(); return true; });
 ipcMain.handle('fd:useRemote', async () => { if (child) (intentional = true, await call('quit').catch(() => {})); S.role = 'remote'; saveSet(); buildTray(); await win.loadFile(path.join(__dirname, 'ui', 'connect.html')); });
 ipcMain.handle('fd:openHost', async (_e, url) => { S.role = 'remote'; S.remoteUrl = String(url).replace(/\/+$/, ''); saveSet(); await win.loadURL(S.remoteUrl + '/'); });

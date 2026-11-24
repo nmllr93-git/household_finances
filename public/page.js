@@ -3311,8 +3311,11 @@
     connectBox(el).catch(() => {});
     inviteBox(el).catch(() => {});
     if (!el.querySelector('.fd-helpbox')) { const h = document.createElement('div'); h.className = 'fd-rb fd-helpbox'; h.append(rhead('Help & feedback'));
-      const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Take the tour again', () => window.FDTour && window.FDTour(), false), rbtn('Send feedback', () => window.FDFeedback && window.FDFeedback(), false));
-      h.append(r, phMsg('Feedback opens an email to contact@larenest.app with your device filled in. Ideas, bugs and “this confused me” are all welcome.')); el.append(h); }
+      const r = document.createElement('div'); r.className = 'fd-rb-row'; const dmsg = phMsg('');
+      r.append(rbtn('Take the tour again', () => window.FDTour && window.FDTour(), false), rbtn('Send feedback', () => window.FDFeedback && window.FDFeedback(), false),
+        rbtn('Copy diagnostic info', async () => { const t = window.FDDiag ? await window.FDDiag() : ''; let ok = false; try { await navigator.clipboard.writeText(t); ok = true; } catch (e) {}
+          dmsg.className = 'fd-note'; dmsg.textContent = ok ? 'Copied. Paste it into your message. It has the app version, connection and recent errors, never your financial data.' : t; }, false));
+      h.append(r, dmsg, phMsg('Feedback opens an email to contact@larenest.app with diagnostic info added at the bottom (app version, connection, recent errors; never your financial data). Ideas, bugs and “this confused me” are all welcome.')); el.append(h); }
     privacyBox(el).catch(() => {});
     navMenuBox(el);
     activityBox(el).catch(() => {});

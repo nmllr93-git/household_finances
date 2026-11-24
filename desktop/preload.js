@@ -14,6 +14,8 @@ if (local) Object.assign(api, {
   canWrite: (dir) => ipcRenderer.invoke('fd:canWrite', dir),
   startHost: (o) => ipcRenderer.invoke('fd:startHost', o),
   addUser: (o) => ipcRenderer.invoke('fd:addUser', o),
+  logins: () => ipcRenderer.invoke('fd:logins'),
+  resetPassword: (o) => ipcRenderer.invoke('fd:resetPassword', o),
   openDashboard: () => ipcRenderer.invoke('fd:openDashboard'),
   useRemote: () => ipcRenderer.invoke('fd:useRemote'),
   hostState: () => ipcRenderer.invoke('fd:hostState'),
