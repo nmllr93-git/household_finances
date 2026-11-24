@@ -53,7 +53,7 @@ const PORT = Number(process.env.PORT || argOf('--port') || CFG.port || 8080);
 const HOST = process.env.HOST || (CFG.mode === 'local' ? '127.0.0.1' : '0.0.0.0');
 const saveCfg = (patch) => { Object.assign(CFG, patch); fs.writeFileSync(CFG_FILE, JSON.stringify(CFG, null, 2)); };
 const SESSION_DAYS = 60;
-const MAX_BODY = 1024 * 1024; // 1 MB
+const MAX_BODY = 2 * 1024 * 1024; // 2 MB (a 5,000-row statement fits)
 
 try { fs.mkdirSync(BACKUP_DIR, { recursive: true }); } catch (e) { console.error(`Can't create ${BACKUP_DIR}: ${e.code || e.message}`); }
 // "attempt to write a readonly database" means Windows won't let this user change the database files:

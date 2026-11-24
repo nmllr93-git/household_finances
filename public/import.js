@@ -365,12 +365,14 @@
     if (!String(fd.get('account') || '').trim()) { impMsg = 'Choose an account above (or add one with +) before saving.'; dash.draw('impDebug'); return; }
     impMsg = ''; dash.draw('impDebug');
     const bal = String(fd.get('balance') || '').trim();
-    const txns = S.parsed.slice(0, 2500).map((x) => ({ date: x.date, description: x.description, amount: x.amount }));
+    // refuse a too-large statement up front (with the count) rather than saving part of it
+    const MAXR = 5000; if (S.parsed.length > MAXR) { impMsg = `This file has ${S.parsed.length.toLocaleString()} transactions; one import can hold up to ${MAXR.toLocaleString()}. Nothing was saved. Download a shorter date range (a year at a time, say) and import each one.`; dash.draw('impDebug'); return; }
+    const txns = S.parsed.map((x) => ({ date: x.date, description: x.description, amount: x.amount }));
     const dates = txns.map((x) => x.date).sort();
     const doc = { book: fd.get('book'), accountKind: String(fd.get('kind')).split(':')[0], accountType: String(fd.get('kind')).split(':')[1] || '', accountName: String(fd.get('account') || S.fileName).slice(0, 60), owner: '',
       fileName: S.fileName.slice(0, 80), importedAt: new Date().toISOString(), rowCount: txns.length, dateFrom: dates[0] || S.asOf || null, dateTo: dates[dates.length - 1] || S.asOf || null,
       balance: bal === '' ? null : Number(bal), balanceMonth: String(fd.get('bmonth') || '') || (dates[dates.length - 1] || S.asOf || '').slice(0, 7), ...(S.pdf && S.asOf ? { asOf: S.asOf } : {}), txns };
-    if (JSON.stringify(doc).length > 230000) { show(IMP, 'fd-imp-big'); return; }
+    if (JSON.stringify(doc).length > 1500000) { show(IMP, 'fd-imp-big'); return; }
     const btn = form.querySelector('#fd-import-save'); if (btn) btn.disabled = true;
     try {
       const db = await claude.use('db');

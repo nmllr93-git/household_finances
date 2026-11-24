@@ -184,3 +184,13 @@ test('an older backup without photos keeps the dashboard\'s existing photos', as
   const r = await req('POST', `/api/books/${b}/restore`, ex); assert.equal(r.status, 200); assert.equal(r.json.legacy, true); assert.equal(r.json.missingPhotos, 0);
   await checkRefs(b);
 });
+
+// ---- review R4: a statement is saved whole or not at all ----
+test('imports: the largest allowed statement saves every row; one more row is refused and nothing is saved', async () => {
+  const b = books()[0]; const n0 = (await req('GET', `/api/books/${b}/data`)).json.imports.length;
+  const rows = (n) => Array.from({ length: n }, (_, i) => ({ date: '2025-01-' + String(1 + (i % 28)).padStart(2, '0'), description: 'STORE PURCHASE NUMBER ' + i + ' WITH A LONGISH DESCRIPTION', amount: (i % 97) + 0.25 }));
+  const ok = await req('POST', `/api/books/${b}/imports`, { accountName: 'Big', txns: rows(5000) }); assert.equal(ok.status, 201);
+  const saved = (await req('GET', `/api/books/${b}/data`)).json.imports.find((x) => x.id === ok.json.id); assert.equal((Array.isArray(saved.txns) ? saved.txns : JSON.parse(saved.txns)).length, 5000);
+  const big = await req('POST', `/api/books/${b}/imports`, { accountName: 'Big', txns: rows(5001) }); assert.equal(big.status, 413); assert.match(big.json.error, /5,001 transactions/);
+  assert.equal((await req('GET', `/api/books/${b}/data`)).json.imports.length, n0 + 1);
+});

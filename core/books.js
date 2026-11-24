@@ -18,6 +18,7 @@
   else root.FDCore = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
+  const MAX_IMPORT_ROWS = 5000; // per statement import; bigger files are refused with a clear message, never trimmed
   const COLLECTIONS = ['imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares', 'receipts'];
   const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_FILE = 3 * 1024 * 1024; // bytes after decoding
@@ -72,7 +73,9 @@
       return { book: label, type: d.type === 'income' ? 'income' : 'expense', date: str(d.date, 10), amount: num(d.amount),
         vendor: str(d.vendor, 40), category: str(d.category, 40), note: str(d.note, 120), createdAt: new Date().toISOString() };
     }
-    const txns = Array.isArray(d.txns) ? d.txns.slice(0, 2500).map((t) => ({ date: str(t.date, 10), description: str(t.description, 120), amount: num(t.amount) })) : [];
+    // never cut a statement short: too many rows is refused (before anything is saved) with the count, see MAX_IMPORT_ROWS
+    if (Array.isArray(d.txns) && d.txns.length > MAX_IMPORT_ROWS) throw Object.assign(new Error(`This statement has ${d.txns.length.toLocaleString('en-US')} transactions; one import can hold up to ${MAX_IMPORT_ROWS.toLocaleString('en-US')}. Download a shorter date range (a year at a time, say) and import each one.`), { status: 413, rows: d.txns.length });
+    const txns = Array.isArray(d.txns) ? d.txns.map((t) => ({ date: str(t.date, 10), description: str(t.description, 120), amount: num(t.amount) })) : [];
     return { book: label, accountKind: ['deposit', 'credit', 'investment', 'mortgage', 'loan'].includes(d.accountKind) ? d.accountKind : 'deposit',
       accountName: str(d.accountName, 60), owner: str(d.owner, 30), fileName: str(d.fileName, 80), importedAt: new Date().toISOString(),
       rowCount: txns.length, dateFrom: str(d.dateFrom, 10), dateTo: str(d.dateTo, 10), balance: num(d.balance), balanceMonth: str(d.balanceMonth, 7), asOf: str(d.asOf, 10), accountType: str(d.accountType, 20), txns };
@@ -108,7 +111,7 @@
       const now = new Date().toISOString(), idMap = new Map(), staged = [];
       for (const [c, list] of Object.entries(body.docs)) {
         if (!COLLECTIONS.includes(c) || !Array.isArray(list)) continue;
-        for (const d of list) { const { id, created, createdBy, ...rest } = d || {}; const doc = cleanDoc(c, rest, book.label); if (rest.createdAt) doc.createdAt = String(rest.createdAt).slice(0, 40);
+        for (const d of list) { const { id, created, createdBy, ...rest } = d || {}; let doc; try { doc = cleanDoc(c, rest, book.label); } catch (e) { if (e.status) return reply(400, { error: 'This backup can\u2019t be restored as it is: ' + e.message }); throw e; } if (rest.createdAt) doc.createdAt = String(rest.createdAt).slice(0, 40);
           const nid = store.newId(); if (id) idMap.set(c + ':' + String(id), nid);
           staged.push({ c, nid, doc, created: created || now, createdBy: createdBy || user }); }
       }
@@ -135,8 +138,9 @@
         safetyBackup: safety ? String(safety).split(/[\\/]/).pop() : '' });
     }
     async function addDoc(book, coll, body, user) {
-      const json = JSON.stringify(cleanDoc(coll, body || {}, book.label));
-      if (json.length > 400000) return reply(413, { error: 'Too large' });
+      let doc; try { doc = cleanDoc(coll, body || {}, book.label); } catch (e) { if (e.status) return reply(e.status, { error: e.message, rows: e.rows, maxRows: MAX_IMPORT_ROWS }); throw e; }
+      const json = JSON.stringify(doc);
+      if (json.length > (coll === 'imports' ? 1500000 : 400000)) return reply(413, { error: coll === 'imports' ? 'This statement is too large to save in one go. Download a shorter date range and import each one.' : 'Too large' });
       const id = store.newId();
       await store.insertDoc({ id, bookId: book.id, coll, json, created: new Date().toISOString(), createdBy: user });
       return reply(201, { id });
@@ -164,5 +168,5 @@
     return { data, exportBook, restore, addDoc, handle };
   }
 
-  return { COLLECTIONS, SEED_SETS, cleanDoc, createBookApi };
+  return { COLLECTIONS, SEED_SETS, MAX_IMPORT_ROWS, cleanDoc, createBookApi };
 });
