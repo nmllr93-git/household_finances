@@ -65,16 +65,21 @@
 
   const api = (method, url, body) => window.FDStore.json(method, url, body);
 
+  // Every load gets a number; only the newest one may change what's shown. A slow answer for an earlier load (of this
+  // dashboard or another one) is ignored, whether it succeeded or failed.
+  let loadSeq = 0;
   async function load(bookId) {
+    const seq = ++loadSeq;
     S.bookId = bookId;
     for (const id of RAW) S.status[id] = 'loading';
     S.version++; schedule();
     try {
       const d = await api('GET', `/api/books/${encodeURIComponent(bookId)}/data`);
-      if (S.bookId !== bookId) return;
+      if (seq !== loadSeq) return;
       for (const id of RAW) { S.raw[id] = d[id] || []; S.status[id] = 'ok'; }
       lostBanner(false);
     } catch (e) {
+      if (seq !== loadSeq) return;
       for (const id of RAW) { S.status[id] = 'error'; S.error[id] = e.message; }
       if (e instanceof TypeError && !window.FD_LOCAL) lostBanner(true); // network failure: the host can't be reached
     }
@@ -101,15 +106,17 @@
   const dbShim = {
     collection(p) {
       return { async add(doc) {
-        const r = await api('POST', `/api/books/${encodeURIComponent(S.bookId)}/${collOf(p)}`, doc);
-        await load(S.bookId); return { id: r.id };
+        const book = S.bookId; // the dashboard this action started in, even if another is opened meanwhile
+        const r = await api('POST', `/api/books/${encodeURIComponent(book)}/${collOf(p)}`, doc);
+        if (S.bookId === book) await load(book); return { id: r.id };
       } };
     },
     doc(p) {
       const parts = String(p).split('/');
       return { async delete() {
-        await api('DELETE', `/api/books/${encodeURIComponent(S.bookId)}/${parts[parts.length - 2]}/${encodeURIComponent(parts[parts.length - 1])}`);
-        await load(S.bookId);
+        const book = S.bookId;
+        await api('DELETE', `/api/books/${encodeURIComponent(book)}/${parts[parts.length - 2]}/${encodeURIComponent(parts[parts.length - 1])}`);
+        if (S.bookId === book) await load(book);
       } };
     },
   };
