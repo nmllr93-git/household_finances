@@ -605,7 +605,8 @@ const lanAddrs = () => { const o = String(process.env.LARENEST_ADDRESSES || '').
 // start({ mode, port, quiet }) → Promise<info>. Used by `node server.js` and by the desktop app (require('./server.js')).
 function start(opts = {}) {
   if (SERVER) return Promise.resolve(info());
-  const mode = opts.mode || CFG.mode, port = Number(opts.port || PORT), host = opts.host || (process.env.HOST && !opts.mode ? process.env.HOST : mode === 'local' ? '127.0.0.1' : '0.0.0.0'), log = opts.quiet ? () => {} : console.log;
+  let port = opts.port === 0 ? 0 : Number(opts.port || PORT);
+  const mode = opts.mode || CFG.mode, host = opts.host || (process.env.HOST && !opts.mode ? process.env.HOST : mode === 'local' ? '127.0.0.1' : '0.0.0.0'), log = opts.quiet ? () => {} : console.log;
   let nUsers = 0; try { nUsers = db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch (e) { if (/readonly/i.test(e.message)) return Promise.reject(new Error(WRITE_HELP)); throw e; }
   if (nUsers === 0) {
     // headless first run (Docker, a Linux service): the first login can come from the environment
@@ -650,6 +651,7 @@ function start(opts = {}) {
   const ready = new Promise((resolve, reject) => {
     front.once('error', (e) => { SERVER = null; FRONT = null; reject(e.code === 'EADDRINUSE' ? Object.assign(new Error(`Port ${port} is already in use. Close the other program or pick another port.`), { code: 'EADDRINUSE' }) : e); });
     front.listen(port, host, () => {
+      port = front.address().port; // the real port when 0 was asked for
       if (host !== '127.0.0.1') { tsCertCheck(); if (!TSTIMER) { TSTIMER = setInterval(tsCertCheck, 12 * 3600e3); if (TSTIMER.unref) TSTIMER.unref(); } }
       RUN = { mode, port, host, since: Date.now() };
       log(`Larenest is running on http://localhost:${port}`);
