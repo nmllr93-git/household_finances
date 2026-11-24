@@ -3,10 +3,25 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.30
+- Encrypt the data folder (optional, Settings → Backup & privacy): a password protects transactions, budgets, receipts, Google Sheets history and the activity log. You get a one-time recovery key; change the password any time; turn it off again
+- Unlock automatically when this computer starts (host setting). Without it, after a restart the app shows an unlock page and bank sync, email summaries and backups wait until someone unlocks. Docker/Linux can unlock at startup with HF_ENC_PASSWORD. Backups made before encryption can be deleted from the same place
+- Tiles now show charts: trend lines for account balances and net worth, month bars for spending, income and savings rate, a meter for budget used, and short lists (top categories, unusual spending, budgets closest to their limit, subscriptions, upcoming paydays and bills, vendors without a category). Your own report tiles show bars or their top items
+- Choosing a tab now opens at the top of that tab, with its tiles
 - Getting started: "Connect your phone" only shows on a computer, and ticks itself off once a phone opens the dashboard. **Dismiss** removes the list from that dashboard on every device (⚙ Settings can bring it back); Hide folds it to one line on this device
 - Needs attention: **Dismiss** any alert, on every device. It comes back only if what it's about changes (for example, a newer statement that also goes stale). "Show them again" restores them
 - After dismissing an account's alert, **Don't check this account** stops statement and balance warnings for it for good (**Check again** under the alerts turns them back on)
+- Small phones and foldables: the menu bar fits from 344px wide; tabs become drop-down menus below 1060px so ⚙ and ✎ always fit; grids shrink inside narrow sections
+
+## Android 1.6.10
+- Encrypt the data folder (optional, Settings → Backup & privacy): a password protects transactions, budgets, receipts, Google Sheets history and the activity log. You get a one-time recovery key; change the password any time; turn it off again
+- Unlock automatically when this computer starts (host setting). Without it, after a restart the app shows an unlock page and bank sync, email summaries and backups wait until someone unlocks. Docker/Linux can unlock at startup with HF_ENC_PASSWORD. Backups made before encryption can be deleted from the same place
+- Tiles now show charts: trend lines for account balances and net worth, month bars for spending, income and savings rate, a meter for budget used, and short lists (top categories, unusual spending, budgets closest to their limit, subscriptions, upcoming paydays and bills, vendors without a category). Your own report tiles show bars or their top items
+- Choosing a tab now opens at the top of that tab, with its tiles
+- Getting started: "Connect your phone" only shows on a computer, and ticks itself off once a phone opens the dashboard. **Dismiss** removes the list from that dashboard on every device (⚙ Settings can bring it back); Hide folds it to one line on this device
+- Needs attention: **Dismiss** any alert, on every device. It comes back only if what it's about changes (for example, a newer statement that also goes stale). "Show them again" restores them
+- After dismissing an account's alert, **Don't check this account** stops statement and balance warnings for it for good (**Check again** under the alerts turns them back on)
+- Small phones and foldables: the menu bar fits from 344px wide; tabs become drop-down menus below 1060px so ⚙ and ✎ always fit; grids shrink inside narrow sections
 
 ## Desktop 1.0.29
 - Tiles for each tab: Accounts, Expenses, Budget, Planning and Transactions each get their own row of tiles at the top; click one to jump to the section behind it
