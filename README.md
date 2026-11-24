@@ -141,6 +141,7 @@ Also check two Windows settings:
 - If other devices need to reach the PC, stop it from sleeping: Settings → System → Power.
 
 ### B2. Install on Linux or macOS
+**Linux:** the easiest options are Docker (`ghcr.io/nmllr93-git/larenest`, with a ready `deploy/docker-compose.yml`) or the one-line installer (`curl -fsSL https://larenest.app/install.sh | sudo bash`), which sets Larenest up as a service that starts on boot. Both are covered in [docs/LINUX.md](docs/LINUX.md). By hand, on Linux or macOS:
 ```bash
 # Node.js 22.13+ from https://nodejs.org or your package manager
 unzip household-finance.zip && cd household-finance
@@ -149,7 +150,7 @@ node server.js add-budget sam "Sam – Personal"  # optional: create another
 node server.js add-user alex personal,shared    # prompts for a password
 node server.js                                  # start (Ctrl+C to stop)
 ```
-To keep it running after reboots, run it as a service, for example a systemd unit that runs `node /path/to/server.js` as your user, with `Restart=on-failure`.
+To keep it running after reboots on Linux, use the installer above; it creates a hardened systemd service.
 
 ### B3. Command-line reference
 Run these from the app folder. Commands that change logins can be run while the server is running.
