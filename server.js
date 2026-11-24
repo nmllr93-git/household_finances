@@ -153,8 +153,8 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const SECURITY = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY',
-  // Teller Connect and Plaid Link run in their own frames from their own sites, only when you connect a bank with your own keys
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.teller.io https://cdn.plaid.com; frame-src https://teller.io https://*.teller.io https://cdn.plaid.com https://*.plaid.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.teller.io https://*.plaid.com; frame-ancestors 'none'",
+  // Plaid Link runs in their own frames from their own sites, only when you connect a bank with your own keys
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.plaid.com; frame-src https://cdn.plaid.com https://*.plaid.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.plaid.com; frame-ancestors 'none'",
 };
 function send(res, code, body, headers = {}) {
   const isObj = body !== null && typeof body === 'object' && !Buffer.isBuffer(body);
@@ -248,20 +248,20 @@ const SIMPLEFIN = require('./core/simplefin.js').createSimpleFin({
   addDoc: async (id, coll, doc) => { const book = db.prepare('SELECT id, name, label FROM books WHERE id = ?').get(id); const r = await BOOKS.handle('POST', [coll], book, async () => doc, 'SimpleFIN');
     try { logActivity('SimpleFIN', id, 'POST', coll, r, null); } catch {} },
 });
-// ---------- your own Teller / Plaid keys (core/banklinks.js); keys and connections in private files, not in backups ----------
+// ---------- your own Plaid keys (core/banklinks.js); keys and connections in private files, not in backups ----------
 const BK_FILE = path.join(DATA_DIR, 'banklink-keys.json');
 const bankKeys = () => { try { return JSON.parse(fs.readFileSync(BK_FILE, 'utf8')) || {}; } catch { return {}; } };
 const privWrite = (f, obj) => { fs.writeFileSync(f, JSON.stringify(obj)); try { fs.chmodSync(f, 0o600); } catch {} };
-// plain HTTPS, with a client certificate when Teller needs one (mutual TLS)
+// plain HTTPS to the bank-sync service
 const tlsRequest = (method, url, headers, body, tls) => new Promise((resolve, reject) => {
   const u = new URL(url); const r = require('node:https').request({ method, hostname: u.hostname, path: u.pathname + u.search, headers: { 'User-Agent': 'Larenest', ...headers, ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}) }, ...(tls ? { cert: tls.cert, key: tls.key } : {}), timeout: 60000 }, (res) => {
     let t = ''; res.setEncoding('utf8'); res.on('data', (c) => { t += c; if (t.length > 20e6) r.destroy(new Error('Response too large')); }); res.on('end', () => resolve({ status: res.statusCode, text: t })); });
-  r.on('timeout', () => r.destroy(new Error('Timed out'))); r.on('error', (e) => reject(new Error(/certificate|key|PEM|asn1/i.test(e.message) ? 'Your Teller certificate or private key couldn’t be used: ' + e.message : 'Couldn’t reach the bank-sync service: ' + e.message)));
+  r.on('timeout', () => r.destroy(new Error('Timed out'))); r.on('error', (e) => reject(new Error(/certificate|key|PEM|asn1/i.test(e.message) ? 'A certificate problem reaching the bank-sync service: ' + e.message : 'Couldn’t reach the bank-sync service: ' + e.message)));
   if (body) r.write(body); r.end(); });
 const BANKLINKS = require('./core/banklinks.js'), BANKSYNC = {};
-for (const [id, make] of [['teller', BANKLINKS.createTeller], ['plaid', BANKLINKS.createPlaid]]) {
+for (const [id, make] of [['plaid', BANKLINKS.createPlaid]]) {
   const file = path.join(DATA_DIR, id + '.json'), all = () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')) || {}; } catch { return {}; } };
-  const label = id === 'teller' ? 'Teller' : 'Plaid';
+  const label = 'Plaid';
   BANKSYNC[id] = { all, engine: require('./core/simplefin.js').createBankSync({
     provider: make({ request: tlsRequest, keys: bankKeys }),
     load: (b) => all()[b] || null,
@@ -415,20 +415,14 @@ async function api(req, res, url) {
   }
   if (parts[1] === 'keys' && parts[2] === 'test' && req.method === 'POST') { const b = await readJson(req); return send(res, 200, await MARKET.testKey(String(b.id || ''), String(b.key || ''))); }
   if (parts[1] === 'bankkeys') {
-    // your own Teller / Plaid keys: only the server owner sees or changes them; the secrets themselves are never sent back
+    // your own Plaid keys: only the server owner sees or changes them; the secrets themselves are never sent back
     const owner = ownerName(), k = bankKeys(), canEdit = user === owner;
-    const show = () => ({ canEdit, owner, teller: { appId: k.teller?.appId || '', env: k.teller?.env || 'development', hasCert: !!(k.teller?.cert && k.teller?.key) }, plaid: { clientId: k.plaid?.clientId ? '••••' + k.plaid.clientId.slice(-4) : '', env: k.plaid?.env || 'production', hasSecret: !!k.plaid?.secret } });
+    const show = () => ({ canEdit, owner, plaid: { clientId: k.plaid?.clientId ? '••••' + k.plaid.clientId.slice(-4) : '', env: k.plaid?.env || 'production', hasSecret: !!k.plaid?.secret } });
     if (req.method === 'GET') return send(res, 200, show());
     if (req.method !== 'POST') return send(res, 405, { error: 'Not allowed' });
     if (!canEdit) return send(res, 403, { error: `Only ${owner} (who set up this server) can change bank-sync keys.` });
-    const b = await readJson(req), pem = (v, re) => { v = String(v || '').trim(); if (!v) return ''; if (!re.test(v) || v.length > 20000) throw Object.assign(new Error('That doesn’t look like a PEM file. Open it in a text editor and paste everything, including the BEGIN and END lines.'), { code: 400 }); return v; };
+    const b = await readJson(req);
     try {
-      if (b.teller) { const t = { ...(k.teller || {}) }, x = b.teller;
-        if (typeof x.appId === 'string') t.appId = x.appId.trim().replace(/[^\w-]/g, '').slice(0, 80);
-        if (['sandbox', 'development', 'production'].includes(x.env)) t.env = x.env;
-        if (typeof x.cert === 'string' && x.cert.trim()) t.cert = pem(x.cert, /-----BEGIN CERTIFICATE-----/);
-        if (typeof x.key === 'string' && x.key.trim()) t.key = pem(x.key, /-----BEGIN (RSA |EC )?PRIVATE KEY-----/);
-        if (x.clear) delete k.teller; else k.teller = t; }
       if (b.plaid) { const pl = { ...(k.plaid || {}) }, x = b.plaid;
         if (typeof x.clientId === 'string' && x.clientId.trim()) pl.clientId = x.clientId.trim().replace(/[^\w-]/g, '').slice(0, 80);
         if (typeof x.secret === 'string' && x.secret.trim()) pl.secret = x.secret.trim().replace(/[^\w-]/g, '').slice(0, 120);
@@ -502,7 +496,7 @@ async function api(req, res, url) {
     if (parts[3] === 'activity' && req.method === 'GET') return send(res, 200, db.prepare('SELECT at, username, action, coll, summary FROM activity WHERE book_id = ? ORDER BY at DESC LIMIT 300').all(bookId));
     const writing = req.method !== 'GET';
     if (writing && roleOf(user, bookId) === 'view' && parts[3] !== 'shares') return send(res, 403, { error: 'This login can view this dashboard but not change it.' });
-    if (parts[3] === 'teller' || parts[3] === 'plaid') { const r = await BANKSYNC[parts[3]].engine.handle(req.method, parts.slice(4), bookId, getBody); return send(res, r.status, r.body); }
+    if (parts[3] === 'plaid') { const r = await BANKSYNC[parts[3]].engine.handle(req.method, parts.slice(4), bookId, getBody); return send(res, r.status, r.body); }
     if (parts[3] === 'simplefin') { const r = await SIMPLEFIN.handle(req.method, parts.slice(4), bookId, getBody); return send(res, r.status, r.body); }
     if (parts[3] === 'widgets' && req.method === 'GET') {
       // the phone's home-screen widgets: same numbers as the dashboard, computed here so a widget can refresh without the app open

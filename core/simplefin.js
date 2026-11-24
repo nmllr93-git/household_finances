@@ -8,7 +8,7 @@
 //   load(bookId) / save(bookId, state)                     connection state per dashboard (kept OUT of backups)
 //   bookData(bookId) → { imports: [...], accounts: [...] } the dashboard's statements and account list (duplicate checks)
 //   addDoc(bookId, coll, doc)                              save a document the same way the app does
-//   provider (optional)                                    another aggregator (Teller, Plaid: core/banklinks.js) with the
+//   provider (optional)                                    another aggregator (Plaid: core/banklinks.js) with the
 //                                                          same shape as the SimpleFIN one below: { id, label, multi, connect,
 //                                                          pull, start?, disconnect?, autoGap?, manualGap?, emptyNote? }.
 //                                                          pull() returns accounts in SimpleFIN's format, so the import logic is shared.
@@ -90,7 +90,7 @@
     }
     const view = (st) => ({
       provider: P.id, label: P.label, multi: !!P.multi, banks: P.multi && st && Array.isArray(st.access) ? st.access.map((x) => x.institution || 'Bank') : [],
-      repair: (st && Array.isArray(st.repair) ? st.repair : []).map((x) => ({ enrollment: String(x.enrollment || ''), institution: String(x.institution || 'Bank') })), connected: !!(st && st.access && (!Array.isArray(st.access) || st.access.length)), lastSync: (st && st.lastSync) || null, lastError: (st && st.lastError) || '', notes: (st && st.notes) || [], kinds: KINDS,
+      connected: !!(st && st.access && (!Array.isArray(st.access) || st.access.length)), lastSync: (st && st.lastSync) || null, lastError: (st && st.lastError) || '', notes: (st && st.notes) || [], kinds: KINDS,
       accounts: Object.entries((st && st.accounts) || {}).map(([id, a]) => ({ id, name: a.name, org: a.org, map: a.map, kind: a.kind, skip: !!a.skip, review: !!a.review, flip: !!a.flip, synced: (a.seen || []).length })),
     });
 
@@ -142,7 +142,7 @@
           }
           m.lastBal = bal; added += txns.length;
         }
-        st.lastSync = now; st.lastError = ''; st.notes = res.errors; st.repair = res.repair || [];
+        st.lastSync = now; st.lastError = ''; st.notes = res.errors;
         await env.save(bookId, st);
         return { added, statements: docs, notes: res.errors };
       } finally { busy.delete(bookId); }
@@ -155,16 +155,16 @@
       if (method === 'DELETE') { if (P.disconnect && st.access) { try { await P.disconnect(st.access); } catch {} } await env.save(bookId, null); return { status: 200, body: { ok: true } }; }
       if (method !== 'POST') return { status: 405, body: { error: 'Not allowed' } };
       try {
-        if (rest[0] === 'start') { if (!P.start) return { status: 400, body: { error: 'Nothing to start.' } }; const sb = (await getBody().catch(() => null)) || {}; return { status: 200, body: await P.start(bookId, sb) }; }
+        if (rest[0] === 'start') { if (!P.start) return { status: 400, body: { error: 'Nothing to start.' } }; return { status: 200, body: await P.start(bookId) }; }
         if (rest[0] === 'sync') return { status: 200, body: { ...(await sync(bookId, false)), ...view(await env.load(bookId)) } };
         const b = (await getBody()) || {};
         if (b.token || b.connect) {
           // Save the connection as soon as SimpleFIN hands it over: a setup token works only once, so a problem
           // fetching accounts afterwards (no banks linked yet, subscription not active) must not lose it.
-          // (Teller and Plaid add one bank login at a time, so those keep a list and keep the accounts already set up.)
+          // (Plaid adds one bank login at a time, so those keep a list and keep the accounts already set up.)
           const access = await P.connect(b, P.multi ? st.access : null), next = P.multi ? { ...st, access, accounts: st.accounts || {} } : { access, accounts: {} };
           await env.save(bookId, next);
-          try { const res = await P.pull(access, Date.now() / 1000 - 86400); refreshList(next, res.accounts); next.notes = res.errors; next.repair = res.repair || []; next.lastError = ''; }
+          try { const res = await P.pull(access, Date.now() / 1000 - 86400); refreshList(next, res.accounts); next.notes = res.errors; next.lastError = ''; }
           catch (e) { next.lastError = e.message; }
           if (!Object.keys(next.accounts).length && !next.lastError && P.emptyNote) next.notes = [...(next.notes || []), P.emptyNote];
           await env.save(bookId, next); return { status: 200, body: view(next) };

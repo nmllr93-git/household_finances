@@ -2627,7 +2627,7 @@
     'credit:card': 'Credit card', 'credit:loc': 'Line of credit', 'mortgage:mortgage': 'Mortgage', 'loan:heloc': 'Home equity (HELOC)', 'loan:auto': 'Auto loan', 'loan:student': 'Student loan', 'loan:personal': 'Personal loan', 'loan:other': 'Other loan',
     'investment:brokerage': 'Brokerage', 'investment:401k': '401(k)', 'investment:403b': '403(b)', 'investment:457b': '457(b)', 'investment:roth_ira': 'Roth IRA', 'investment:trad_ira': 'Traditional IRA', 'investment:rollover_ira': 'Rollover IRA',
     'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment' };
-  const SYNC_P = { simplefin: { id: 'simplefin', label: 'SimpleFIN' }, teller: { id: 'teller', label: 'Teller', multi: true }, plaid: { id: 'plaid', label: 'Plaid', multi: true } };
+  const SYNC_P = { simplefin: { id: 'simplefin', label: 'SimpleFIN' }, plaid: { id: 'plaid', label: 'Plaid', multi: true } };
   const syncBox = async (host, P = SYNC_P.simplefin) => {
     const tk = '__sync_' + P.id, tok = {}; host[tk] = tok; const bid = myBookId(); if (!bid) return;
     const url = `/api/books/${encodeURIComponent(bid)}/${P.id}`;
@@ -2635,17 +2635,15 @@
     let st; try { st = await call(''); } catch (e) { return; }
     if (host[tk] !== tok || host.querySelector('.fd-syncbox-' + P.id)) return;
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-syncbox fd-syncbox-' + P.id; host.append(box);
-    // Teller Connect / Plaid Link: load their script only when you press Connect, then hand the result to this server
+    // Plaid Link: load its script only when you press Connect, then hand the result to this server
     const widget = async (msg, enrollment) => {
       msg.className = 'fd-note'; msg.textContent = `Opening ${P.label}…`;
       const cfg = await call('/start', 'POST', enrollment ? { enrollment } : {});
-      const src = cfg.kind === 'teller' ? 'https://cdn.teller.io/connect/connect.js' : 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+      const src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
       if (!document.querySelector(`script[src="${src}"]`)) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error(`Couldn’t load ${P.label}. Check this device’s internet connection.`)); document.head.append(sc); });
       const done = async (connect) => { msg.textContent = 'Saving the connection…'; try { st = await call('', 'POST', { connect }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
       msg.textContent = '';
-      // selectAccount: you tick which accounts to share in Teller's own window; enrollmentId: sign in again to a disconnected bank, keeping its connection
-      if (cfg.kind === 'teller') window.TellerConnect.setup({ applicationId: cfg.applicationId, environment: cfg.environment, products: ['transactions', 'balance'], selectAccount: 'multiple', ...(cfg.enrollmentId ? { enrollmentId: cfg.enrollmentId } : {}), onSuccess: (e) => done(e), onExit: () => { msg.textContent = ''; } }).open();
-      else window.Plaid.create({ token: cfg.linkToken, onSuccess: (pub, md) => done({ publicToken: pub, institution: (md && md.institution && md.institution.name) || '' }), onExit: () => {} }).open();
+      window.Plaid.create({ token: cfg.linkToken, onSuccess: (pub, md) => done({ publicToken: pub, institution: (md && md.institution && md.institution.name) || '' }), onExit: () => {} }).open();
     };
     const ro = document.body.classList.contains('fd-readonly');
     const draw = () => {
@@ -2686,10 +2684,6 @@
       box.append(phMsg(`Connected. Last sync: ${when}. New posted transactions are added about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}; pending ones wait until they post. Rules, categories and duplicate checks work the same as for imported statements.`));
       if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
       if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
-      // a bank that needs you to sign in again (password changed, new security code…): reconnect it in place
-      if (P.id === 'teller' && (st.repair || []).length && !ro) for (const rp of st.repair) { if (!rp.enrollment) continue;
-        const w = document.createElement('div'); w.className = 'fd-rb-row'; const n = phMsg(`${rp.institution} needs you to sign in again (for example after a password change). Your accounts and settings stay as they are.`); n.className = 'fd-note fd-bad';
-        const m2 = phMsg(''); w.append(rbtn(`Reconnect ${rp.institution}`, () => widget(m2, rp.enrollment).catch((e) => { m2.className = 'fd-note fd-bad'; m2.textContent = e.message; }), false), m2); box.append(n, w); }
       for (const n of st.notes || []) box.append(phMsg(P.label + ': ' + n));
       if ((st.accounts || []).some((a) => a.review)) { const w = phMsg('New accounts found. Untick any you don’t want, check the names and types, then press Save accounts. Nothing is brought in from them until you do.'); w.className = 'fd-note fd-warn'; box.append(w); }
       const draft = {};
@@ -2737,12 +2731,11 @@
     draw();
   };
 
-  // Your own Teller / Plaid keys (server owner), and a bank-sync box for each one that's set up
+  // Your own Plaid keys (server owner), and a bank-sync box for each one that's set up
   const bankKeysBox = async (host) => {
     if (window.FD_LOCAL || host.querySelector('.fd-bkbox')) return; const tok = {}; host.__bk = tok;
     let k; try { k = await FDStore.json('GET', '/api/bankkeys'); } catch (e) { return; }
     if (host.__bk !== tok || host.querySelector('.fd-bkbox')) return;
-    if (k.teller.appId) syncBox(host, SYNC_P.teller).catch(() => {});
     if (k.plaid.hasSecret) syncBox(host, SYNC_P.plaid).catch(() => {});
     if (!k.canEdit) return;
     const box = document.createElement('details'); box.className = 'fd-rb fd-bkbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Your own Plaid keys (advanced)'; box.append(sm);
@@ -2751,31 +2744,6 @@
     const inp = (ph, type) => { const i = document.createElement(type === 'area' ? 'textarea' : 'input'); i.className = 'fd-in'; i.placeholder = ph; i.autocomplete = 'off'; i.spellcheck = false; if (type === 'area') { i.rows = 3; i.style.fontFamily = 'monospace'; i.style.fontSize = '12px'; } else if (type) i.type = type; return i; };
     const sel = (opts, v) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([a, b]) => x.append(new Option(b, a))); x.value = v; return x; };
     const save = async (bodyObj, done) => { msg.className = 'fd-note'; msg.textContent = 'Saving…'; try { await FDStore.json('POST', '/api/bankkeys', bodyObj); msg.className = 'fd-note fd-good'; msg.textContent = done; setTimeout(() => location.reload(), 1200); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
-    // Teller closed its API to new sign-ups in 2026: its section only shows for someone who already set it up
-    if (k.teller.appId) { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Teller' + (k.teller.appId ? ' · set up' : ''); box.append(h);
-      box.append(phMsg('Free for up to 100 bank logins (one login can hold checking, savings and a card). You need a free Teller developer account; it takes about 10 minutes. It works while Larenest runs on this computer (not in phone-only mode). SimpleFIN stays the simplest choice if you’d rather not.'));
-      { const g = document.createElement('details'); g.className = 'fd-sfguide fd-tlguide'; const gs = document.createElement('summary'); gs.textContent = 'Show me step by step'; g.append(gs);
-        [['Create a free Teller account', 'Go to teller.io and sign up for a developer account, then confirm your email.'],
-          ['Copy your Application ID', 'In the Teller Dashboard, open Application Settings and copy the Application ID (it starts with “app_”). Paste it below.'],
-          ['Make a certificate', 'Open Certificates and create a new certificate. Download the file it gives you (teller.zip) and unzip it: inside are a certificate and a private key. Keep them private; they work like a password for your Teller account.'],
-          ['Add the two files here', 'Press “Choose certificate files” below and select both files from the unzipped folder (or paste their contents). Leave Environment on Development, which is free with real banks, and press Save Teller keys.'],
-          ['Connect your banks', 'A “Teller” bank-sync box appears in Settings. Press Connect a bank, pick your bank and sign in in Teller’s own window (Larenest never sees your bank password), then tick the accounts you want to share. Back in Larenest, check the names and types and press Save accounts. Nothing is brought in until you save. Repeat for each bank.'],
-          ['If a bank stops syncing', 'Banks sometimes ask you to sign in again, for example after you change your password. Larenest shows a Reconnect button for that bank: sign in again in Teller’s window and syncing carries on with the same accounts and settings.']].forEach(([h, t], n) => {
-          const f = document.createElement('figure'); f.className = 'fd-sfstep'; const c = document.createElement('figcaption'); const bb = document.createElement('b'); bb.textContent = `${n + 1}. ${h}`; c.append(bb, ' ', t); f.append(c); g.append(f); });
-        box.append(g); }
-      const a = inp('app_…'); a.value = k.teller.appId; const e = sel([['development', 'Development (real banks, free, up to 100)'], ['sandbox', 'Sandbox (test data only)'], ['production', 'Production (paid)']], k.teller.env);
-      const c = inp(k.teller.hasCert ? 'Certificate saved. Paste a new one to replace it.' : '-----BEGIN CERTIFICATE-----', 'area'), pk = inp(k.teller.hasCert ? 'Private key saved. Paste a new one to replace it.' : '-----BEGIN PRIVATE KEY-----', 'area');
-      // pick both files from the unzipped teller.zip at once; each is recognized by what's inside
-      const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.accept = '.pem,.crt,.key,.txt'; fi.hidden = true;
-      const fmsg = phMsg('');
-      fi.addEventListener('change', async () => { let got = [];
-        for (const f of fi.files) { const t = (await f.text()).trim(); if (/BEGIN CERTIFICATE/.test(t)) { c.value = t; got.push('certificate'); } else if (/BEGIN (RSA |EC )?PRIVATE KEY/.test(t)) { pk.value = t; got.push('private key'); } }
-        fmsg.className = 'fd-note' + (got.length === 2 ? ' fd-good' : ' fd-bad'); fmsg.textContent = got.length === 2 ? '✓ Found the certificate and the private key. Now press Save Teller keys.' : got.length ? `Found the ${got[0]} only. Choose both files together.` : 'Those don’t look like Teller certificate files. Choose the two files from the unzipped teller.zip.'; fi.value = ''; });
-      const pick = rbtn('Choose certificate files…', () => fi.click(), false);
-      box.append(field('Application ID', a), field('Environment', e), fi, pick, fmsg, field('Certificate (or paste it)', c), field('Private key (or paste it)', pk));
-      const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(rbtn('Save Teller keys', () => save({ teller: { appId: a.value, env: e.value, cert: c.value, key: pk.value } }, 'Saved. Reloading…'), false));
-      if (k.teller.appId) r.append(rbtn('Remove Teller keys', () => { if (confirm('Remove your Teller keys? Banks connected through Teller stop syncing.')) save({ teller: { clear: true } }, 'Removed. Reloading…'); }, false));
-      const l = document.createElement('a'); l.href = 'https://teller.io'; l.target = '_blank'; l.rel = 'noopener'; l.textContent = 'teller.io ↗'; r.append(l); box.append(r); }
     // Plaid
     { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Plaid' + (k.plaid.hasSecret ? ' · set up' : ''); box.append(h);
       box.append(phMsg('Sign up at dashboard.plaid.com, then copy your client ID and the secret for the environment you’ll use (Developers → Keys).'));
@@ -2849,7 +2817,7 @@
     if (window.FDDataMap) box.append(window.FDDataMap(!!window.FD_LOCAL)); box.open = true;
     if (window.FDConnSecurity) { box.append(rhead('How your connection is protected'), window.FDConnSecurity()); }
     const NAMES = { finnhub: 'Finnhub', fmp: 'Financial Modeling Prep', fred: 'FRED', bls: 'Bureau of Labor Statistics', eia: 'Energy Information Administration' };
-    const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)'); if (bk && bk.teller.appId) on.push('Teller (your own keys)'); if (bk && bk.plaid.hasSecret) on.push('Plaid (your own keys)');
+    const on = Object.entries(keys).filter(([, v]) => v).map(([k]) => NAMES[k] || k); if (sf) on.push('SimpleFIN Bridge (bank sync)'); if (bk && bk.plaid.hasSecret) on.push('Plaid (your own keys)');
     [window.FD_LOCAL ? 'Everything you enter is stored only on this phone, in the app’s private storage. Uninstalling the app deletes it, so keep a backup file somewhere safe.' : 'Everything you enter is stored only on the computer that runs Larenest, in its data folder. Phones and other computers just display it.',
       'Only the optional data services you turn on are contacted, directly from here. They get stock symbols, a VIN or your API key, never your financial information. Bank sync (SimpleFIN) only brings your bank data in; nothing is sent back.',
       on.length ? 'Turned on here: ' + on.join(', ') + '.' : 'Turned on here: none.',
