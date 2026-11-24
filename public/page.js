@@ -448,7 +448,8 @@
     income: T('Income', 'cashflow', () => { const r = sumRow(); return r && [money0(r.income), `${rangeLabel()} · net ${money0(r.net)}`, r.net < 0 ? 'bad' : 'good']; }),
     saveRate: T('Savings rate', 'cashflow', () => { const r = sumRow(); if (!r || !(r.income > 0)) return null; const p = Math.round((r.net / r.income) * 100); return [p + '%', `of income kept · ${rangeLabel()}`, p < 0 ? 'bad' : p >= 10 ? 'good' : '']; }),
     topCat: T('Top category this month', 'categories', () => { if (st('txns') !== 'ok') return null; const by = {}; for (const t of expM(nowM())) { const c = t.category || 'Uncategorized'; if (/^(transfer)$/i.test(c)) continue; by[c] = (by[c] || 0) + (Number(t.amount) || 0); }
-      const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0]; return top ? [top[0], money0(top[1]) + ' so far'] : ['—', 'nothing spent yet']; }),
+      const srt = Object.entries(by).sort((a, b) => b[1] - a[1]), un = by.Uncategorized || 0, top = srt.find(([c]) => c !== 'Uncategorized') || srt[0]; // a real category beats "Uncategorized"
+      return top ? [top[0], money0(top[1]) + ' so far' + (top[0] !== 'Uncategorized' && un > top[1] ? ` · ${money0(un)} uncategorized` : '')] : ['—', 'nothing spent yet']; }),
     unusual: T('Unusual this month', 'unusual', () => { if (st('txns') !== 'ok') return null; const pm = prevMonths(6), cur = {}, past = {};
       for (const t of expM(nowM())) { const c = t.category || 'Uncategorized'; cur[c] = (cur[c] || 0) + Number(t.amount || 0); }
       for (const m of pm) for (const t of expM(m)) { const c = t.category || 'Uncategorized'; past[c] = (past[c] || 0) + Number(t.amount || 0) / pm.length; }
