@@ -68,13 +68,17 @@ jobs:
           node ../../scripts/release-notes.js Desktop "$V" > notes.md
           gh release create "v$V" --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" --title "Desktop $V" --notes-file notes.md --latest *.exe *.blockmap latest.yml
 
-  # Mac: unsigned for now (first open: System Settings → Privacy & Security → Open Anyway). Two downloads:
-  # Apple Silicon (arm64) and Intel (x64), each with a matching built-in Node. Added to the same release.
+  # Mac: Apple Silicon (arm64) and Intel (x64), each with a matching built-in Node. Added to the same release.
+  # Signed with the Developer ID certificate and notarized by Apple when these secrets exist:
+  #   MAC_CERT_P12 (base64 .p12), MAC_CERT_PASSWORD, and the App Store Connect key APPSTORE_KEY_ID, APPSTORE_ISSUER_ID, APPSTORE_KEY_P8.
+  # Without them it builds unsigned (first open: System Settings → Privacy & Security → Open Anyway).
   mac:
     needs: windows
     # by hand only: pushes to the release branch build Windows alone
     if: inputs.mac_publish || inputs.mac_test
     runs-on: macos-latest
+    env:
+      HAS_CERT: ${{ secrets.MAC_CERT_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,16 +87,35 @@ jobs:
       - run: sed -i '' "s/GITHUB_OWNER/${GITHUB_REPOSITORY_OWNER}/" desktop/package.json
       - run: npm install
         working-directory: desktop
+      - name: Signing and notarizing setup
+        shell: bash
+        env: { P8: "${{ secrets.APPSTORE_KEY_P8 }}", KID: "${{ secrets.APPSTORE_KEY_ID }}", ISS: "${{ secrets.APPSTORE_ISSUER_ID }}", P12: "${{ secrets.MAC_CERT_P12 }}", PW: "${{ secrets.MAC_CERT_PASSWORD }}" }
+        run: |
+          if [ "$HAS_CERT" = "true" ]; then
+            echo "$P12" | tr -d ' \r\n' > "$RUNNER_TEMP/cert.b64"
+            { echo "CSC_LINK=$(cat "$RUNNER_TEMP/cert.b64")"; echo "CSC_KEY_PASSWORD=$PW"; } >> "$GITHUB_ENV"
+            if [ -n "$P8" ] && [ -n "$KID" ] && [ -n "$ISS" ]; then
+              printf '%s' "$P8" > "$RUNNER_TEMP/AuthKey.p8"
+              { echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"; echo "APPLE_API_KEY_ID=$KID"; echo "APPLE_API_ISSUER=$ISS"; echo "MAC_FLAGS=-c.mac.notarize=true"; } >> "$GITHUB_ENV"
+              echo "Signing with Developer ID and notarizing with the App Store Connect key."
+            else echo "Signing with Developer ID (no App Store Connect key, so not notarized)."; fi
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"; echo "MAC_FLAGS=-c.mac.identity=null" >> "$GITHUB_ENV"
+            echo "No MAC_CERT_P12 secret: building unsigned."
+          fi
       - name: Build for Apple Silicon
         working-directory: desktop
-        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
-        run: node scripts/prepare.js && npx electron-builder --mac --arm64 --publish never
+        run: node scripts/prepare.js && npx electron-builder --mac --arm64 --publish never $MAC_FLAGS
       - name: Build for Intel Macs
         working-directory: desktop
-        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
         run: |
           NV=$(node -v); curl -fsSL "https://nodejs.org/dist/$NV/node-$NV-darwin-x64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
-          FD_NODE_BIN="$RUNNER_TEMP/node-$NV-darwin-x64/bin/node" node scripts/prepare.js && npx electron-builder --mac --x64 --publish never
+          FD_NODE_BIN="$RUNNER_TEMP/node-$NV-darwin-x64/bin/node" node scripts/prepare.js && npx electron-builder --mac --x64 --publish never $MAC_FLAGS
+      - name: Check the signature
+        if: env.HAS_CERT == 'true'
+        working-directory: desktop/dist
+        run: |
+          for a in mac-arm64/Larenest.app mac/Larenest.app; do [ -d "$a" ] && codesign --verify --deep --strict --verbose=2 "$a" && spctl -a -vvv -t exec "$a" || true; done
       - name: Keep the Mac test build as a download
         if: ${{ !inputs.mac_publish }}
         uses: actions/upload-artifact@v4

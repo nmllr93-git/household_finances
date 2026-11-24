@@ -77,8 +77,12 @@
       ],
       "icon": "icons/icon-512.png",
       "category": "public.app-category.finance",
-      "identity": null,
-      "artifactName": "Larenest-${version}-mac-${arch}.${ext}"
+      "artifactName": "Larenest-${version}-mac-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
     },
     "dmg": {
       "artifactName": "Larenest-${version}-mac-${arch}.${ext}"
