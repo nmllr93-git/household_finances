@@ -3397,8 +3397,9 @@
   });
 
   // ---- non-cash assets: home, vehicles, other (value entered by hand, vehicles depreciate) ----
-  const ASSET_T = { home: ['Home', 0, 12], vehicle: ['Vehicle', 15, 6], other: ['Other', 0, 12] };
-  const assetNow = (a) => { const yrs = a.asOf ? Math.max(0, (Date.now() - Date.parse(a.asOf)) / (365.25 * 864e5)) : 0; return Math.max(0, Number(a.value) * Math.pow(1 - (Number(a.depr) || 0) / 100, yrs)); };
+  const ASSET_T = { home: ['Home', 0, 12], vehicle: ['Vehicle', 15, 3], other: ['Other', 0, 12] };
+  // vehicles follow an age curve with a mileage adjustment (vehicle.js); homes and other assets use their yearly %
+  const assetNow = (a) => { if (window.FDVehicle) return window.FDVehicle.valueNow(a); const yrs = a.asOf ? Math.max(0, (Date.now() - Date.parse(a.asOf)) / (365.25 * 864e5)) : 0; return Math.max(0, Number(a.value) * Math.pow(1 - (Number(a.depr) || 0) / 100, yrs)); };
   const assetsAll = () => (prefGet('assets', []) || []).filter((a) => Number(a.value) > 0);
   const debtTot = () => ['mortgage', 'loan', 'credit'].reduce((t, k) => t + (latestTotal([k])[0]?.total || 0), 0);
   let asEd = null;
@@ -3414,10 +3415,36 @@
       row('Name', rin(asEd.name, asEd.type === 'vehicle' ? 'e.g. 2021 Honda CR-V' : asEd.type === 'home' ? 'e.g. Our house' : 'e.g. Boat', (v) => { asEd.name = v; }));
       const val = rin(asEd.value, asEd.type === 'home' ? 'assessed or estimated value' : 'e.g. from kbb.com', (v) => { asEd.value = v; }); val.inputMode = 'decimal'; row('Value ($)', val);
       const dt = rin(asEd.asOf, '', (v) => { asEd.asOf = v; }); dt.type = 'date'; row('Value as of', dt);
-      const dp = rin(asEd.depr, '0', (v) => { asEd.depr = v; asEd._autoDepr = false; }); dp.type = 'number'; dp.min = '0'; dp.max = '50'; dp.style.maxWidth = '6em'; row('Loses value per year (%)', dp);
+      const V = window.FDVehicle, isV = asEd.type === 'vehicle' && V;
+      if (isV) {
+        const yr = rin(asEd.year || (V.yearOf(asEd) || ''), 'e.g. 2018', (v) => { asEd.year = v; }); yr.inputMode = 'numeric'; yr.style.maxWidth = '6em'; row('Model year', yr);
+        const md = document.createElement('select'); md.className = 'dash-select'; [['typical', 'Typical curve (recommended)'], ['well', 'Holds value well (trucks, many Toyotas & Hondas)'], ['fast', 'Loses value fast (luxury, many EVs)'], ['fixed', 'A fixed % per year']].forEach(([v, t]) => md.append(new Option(t, v))); md.value = asEd.mode || 'typical';
+        md.addEventListener('change', () => { asEd.mode = md.value; dash.draw('assetView'); }); row('How it loses value', md);
+        const ds = V.describe({ ...asEd, mode: asEd.mode || 'typical' }); if (ds && asEd.mode !== 'fixed') { const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = ds + '. Losses ease as cars get older: steep in the first years, a few % a year after about 7.'; box.append(n); }
+      }
+      if (!isV || asEd.mode === 'fixed') { const dp = rin(asEd.depr, '0', (v) => { asEd.depr = v; asEd._autoDepr = false; }); dp.type = 'number'; dp.min = '0'; dp.max = '50'; dp.style.maxWidth = '6em'; row('Loses value per year (%)', dp); }
+      if (isV) {
+        // odometer readings, and an estimate of miles per month used between readings
+        asEd.odo = Array.isArray(asEd.odo) ? asEd.odo.slice() : [];
+        const od = document.createElement('div'); od.className = 'fd-rb-row';
+        const mi = rin('', 'miles on the odometer', () => {}); mi.inputMode = 'numeric'; mi.style.maxWidth = '11em';
+        const md2 = rin(new Date().toLocaleDateString('en-CA'), '', () => {}); md2.type = 'date';
+        const add = rbtn('Add reading', () => { const n = Number(String(mi.value).replace(/[^0-9]/g, '')); if (!(n > 0)) return; asEd.odo = asEd.odo.filter((r) => r.d !== md2.value).concat([{ d: md2.value, mi: n }]).sort((a, b) => (a.d < b.d ? -1 : 1)).slice(-24); dash.draw('assetView'); }, false);
+        od.append(mi, md2, add); row('Odometer', od);
+        const now = V.milesAt(asEd), pc = V.pace(asEd), info = document.createElement('p'); info.className = 'fd-note';
+        info.textContent = (now ? `${now.estimated ? '≈ ' : ''}${now.mi.toLocaleString()} miles now${now.estimated ? ` (last reading ${now.base.mi.toLocaleString()} on ${new Date(now.base.d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}. ` : 'No readings yet. ')
+          + (pc.from === 'readings' ? `You drive about ${pc.perMonth.toLocaleString()} miles a month, worked out from your readings.` : `Between readings it assumes ${pc.perMonth.toLocaleString()} miles a month${pc.from === 'default' ? ' (about average)' : ''}; two readings a month or more apart replace this with your own pace.`);
+        box.append(info);
+        if (pc.from !== 'readings') { const mp = rin(asEd.mpm || '', '1000', (v) => { asEd.mpm = v; }); mp.inputMode = 'numeric'; mp.style.maxWidth = '7em'; row('Miles per month (estimate)', mp); }
+        if (asEd.odo.length) { const l = document.createElement('div'); l.className = 'fd-chips'; asEd.odo.slice(-6).forEach((r) => { const c = document.createElement('button'); c.type = 'button'; c.className = 'fd-chip'; c.title = 'Remove this reading'; c.textContent = `${new Date(r.d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: ${r.mi.toLocaleString()} ✕`; c.addEventListener('click', () => { asEd.odo = asEd.odo.filter((x) => x !== r); dash.draw('assetView'); }); l.append(c); }); box.append(l); }
+        // check the value on a free site and type it in; the estimate continues from there
+        const lk = document.createElement('div'); lk.className = 'fd-rb-row'; const lb = document.createElement('span'); lb.className = 'fd-rb-lbl'; lb.textContent = 'Check its value'; lk.append(lb);
+        V.lookups().forEach(([t, u]) => { const a = document.createElement('a'); a.href = u; a.target = '_blank'; a.rel = 'noopener'; a.textContent = t + ' ↗'; lk.append(a); }); box.append(lk);
+        const n2 = document.createElement('p'); n2.className = 'fd-note'; n2.textContent = 'Use the private-party or trade-in value, enter it in Value ($) above with today’s date, and add today’s odometer reading. The estimate continues from that number. Reminder every 3 months.'; box.append(n2);
+      }
       if (asEd.type === 'vehicle') { const vi = rin(asEd.vin, '17 characters', (v) => { asEd.vin = v.toUpperCase(); }); const vr = document.createElement('div'); vr.className = 'fd-rb-row'; vr.style.flexWrap = 'nowrap'; const vm = document.createElement('span'); vm.className = 'fd-zero';
         const lk = rbtn('Look up', async () => { vm.textContent = 'Looking up…'; try { const r = await FDStore.fetch('/api/vehicle?vin=' + encodeURIComponent(asEd.vin || ''), {}); const v = await r.json(); if (!r.ok || v.error || !v.make) throw new Error(v.error || 'Not found');
-          const nm = [v.year, v.make, v.model, v.trim].filter(Boolean).join(' '); if (!String(asEd.name || '').trim()) asEd.name = nm; vm.textContent = `${nm}${v.recalls.length ? ` · ${v.recalls.length} recall${v.recalls.length === 1 ? '' : 's'} listed for this model` : ' · no recalls listed'}`; const ni = box.querySelector('input[placeholder="e.g. 2021 Honda CR-V"]'); if (ni && !ni.value) ni.value = asEd.name; }
+          const nm = [v.year, v.make, v.model, v.trim].filter(Boolean).join(' '); if (!String(asEd.name || '').trim()) asEd.name = nm; if (v.year && !asEd.year) asEd.year = Number(v.year); vm.textContent = `${nm}${v.recalls.length ? ` · ${v.recalls.length} recall${v.recalls.length === 1 ? '' : 's'} listed for this model` : ' · no recalls listed'}`; const ni = box.querySelector('input[placeholder="e.g. 2021 Honda CR-V"]'); if (ni && !ni.value) ni.value = asEd.name; }
           catch (e) { vm.textContent = 'Couldn’t look that VIN up (' + e.message + ').'; } });
         vr.append(vi, lk, vm); row('VIN (optional)', vr); }
       if (asEd.type === 'home') { const ms = document.createElement('select'); ms.className = 'dash-select'; ms.append(new Option('None', ''), ...acctList().filter((a) => a.kind === 'mortgage' || a.kind === 'loan').map((a) => new Option(a.name, a.name))); ms.value = asEd.loan || ''; ms.addEventListener('change', () => { asEd.loan = ms.value; }); row('Mortgage (for equity)', ms); }
@@ -3430,12 +3457,12 @@
         if (!(num$ > 0)) { msg.textContent = 'Enter a value (numbers only, e.g. 350000).'; return; }
         asEd.value = num$;
         const a = { type: asEd.type, name: String(asEd.name).trim().slice(0, 60), value: Number(asEd.value), asOf: asEd.asOf || new Date().toLocaleDateString('en-CA'), depr: Number(asEd.depr) || 0, vin: (asEd.vin || '').slice(0, 17), loan: asEd.loan || '', shareTo: asEd.shareTo || [] };
+        if (asEd.type === 'vehicle') Object.assign(a, { year: Number(asEd.year) || (window.FDVehicle ? FDVehicle.yearOf(asEd) : 0) || 0, mode: asEd.mode || 'typical', odo: (asEd.odo || []).slice(-24), mpm: Number(String(asEd.mpm || '').replace(/[^0-9]/g, '')) || 0 });
         const next = list.slice(); if (asEd.i == null) next.push(a); else next[asEd.i] = a; await saveAll(next); dash.draw('assetView');
       }, false);
       const bar = document.createElement('div'); bar.className = 'fd-rb-row'; bar.append(sv, rbtn('Cancel', () => { asEd = null; dash.draw('assetView'); }));
       if (asEd.i != null) bar.append(rbtn('Delete', async () => { const next = list.slice(); next.splice(asEd.i, 1); await saveAll(next); dash.draw('assetView'); }));
       box.append(bar, msg);
-      if (asEd.type === 'vehicle') { const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'There’s no free vehicle-value service, so look the value up on kbb.com or edmunds.com. The app lowers it by the yearly % until you update it, and reminds you every 6 months.'; box.append(n); }
       el.append(box); return;
     }
     el.append(rbtn('+ Add home, vehicle or other asset', () => { asEd = { i: null, type: 'home', name: '', value: '', asOf: new Date().toLocaleDateString('en-CA'), depr: 0, _autoDepr: true, vin: '', loan: '' }; dash.draw('assetView'); }, false));
@@ -3446,8 +3473,9 @@
       const now = assetNow(a), loan = a.loan ? acctList().find((x) => x.name === a.loan) : null, owed = loan && loan.bal ? loan.bal.balance : 0;
       const ageM = a.asOf ? (Date.now() - Date.parse(a.asOf)) / (30.4 * 864e5) : 99, stale = ageM > ASSET_T[a.type || 'other'][2];
       const tr = document.createElement('tr'); tr.className = 'fd-click'; tr.title = 'Edit';
-      const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = a.name; shareIcon(b, a.shareTo); const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = ASSET_T[a.type || 'other'][0] + (a.depr ? ` · −${a.depr}%/yr` : '') + (a.vin ? ` · VIN ${a.vin}` : ''); nm.append(b, sub);
-      const up = td(a.asOf ? new Date(a.asOf + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + (stale ? ' · time to update' : '') : '–', stale ? 'fd-bad' : 'fd-zero');
+      const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = a.name; shareIcon(b, a.shareTo); const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; const vm = a.type === 'vehicle' && window.FDVehicle && FDVehicle.milesAt(a), curve = a.type === 'vehicle' && window.FDVehicle && a.mode !== 'fixed' && FDVehicle.yearOf(a);
+      sub.textContent = ASSET_T[a.type || 'other'][0] + (curve ? ' · age curve' : a.depr ? ` · −${a.depr}%/yr` : '') + (vm ? ` · ${vm.estimated ? '≈' : ''}${vm.mi.toLocaleString()} mi` : '') + (a.vin ? ` · VIN ${a.vin}` : ''); nm.append(b, sub);
+      const up = td(a.asOf ? new Date(a.asOf + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + (stale ? (a.type === 'vehicle' ? ' · check value & miles' : ' · time to update') : '') : '–', stale ? 'fd-bad' : 'fd-zero');
       tr.append(nm, td(money0(now)), td(owed ? money0(owed) : '–'), td(money0(now - owed), now - owed >= 0 ? 'fd-good' : 'fd-bad'), up);
       tr.addEventListener('click', () => { asEd = { i, ...a, _autoDepr: false }; dash.draw('assetView'); });
       tb.append(tr);
