@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a37">
+<title>Unlock · Larenest</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main id="dash-root" class="fd">
+  <form class="fd-card hf-login" id="hf-unlock" autocomplete="off">
+    <h1>Data is locked</h1>
+    <p class="fd-note">This server keeps its data encrypted. Type the encryption password (or the recovery key) to unlock it.</p>
+    <label class="fd-field"><span id="hf-ul-lbl">Encryption password</span><input type="password" name="secret" autocomplete="current-password" required></label>
+    <button class="fd-btn" type="submit">Unlock</button>
+    <button class="fd-btn fd-quiet fd-sm" type="button" id="hf-ul-rk">Use the recovery key instead</button>
+    <p class="fd-msg err" id="hf-err" hidden></p>
+  </form>
+</main>
+<script src="store.js"></script>
+<script src="showpw.js"></script>
+<script src="unlock.js"></script>
+</body>
+</html>

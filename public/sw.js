@@ -1,8 +1,8 @@
 // Keeps the app's screens available offline-ish and quick to open.
 // Budget data (/api/...) is never cached: it always comes fresh from the server.
-const CACHE = 'hf-v139';
-const SHELL = ['/', '/index.html', '/login.html', '/app.css', '/store.js', '/local.js', '/runtime.js', '/charts.js', '/calcs.js', '/page.js', '/import.js', '/brand.js', '/tour.js', '/vehicle.js',
-  '/app.js', '/login.js', '/showpw.js', '/sample.js', '/vendor/qr/qr.js', '/vendor/d3.min.js', '/manifest.webmanifest', '/icons/icon-192.png'];
+const CACHE = 'hf-v140';
+const SHELL = ['/', '/index.html', '/login.html', '/unlock.html', '/app.css', '/store.js', '/local.js', '/runtime.js', '/charts.js', '/calcs.js', '/page.js', '/import.js', '/brand.js', '/tour.js', '/vehicle.js',
+  '/app.js', '/login.js', '/unlock.js', '/showpw.js', '/sample.js', '/vendor/qr/qr.js', '/vendor/d3.min.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

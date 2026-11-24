@@ -3084,6 +3084,45 @@
     draw();
   };
 
+  // Encryption at rest (server owner): password-protect the data folder, recovery key, unlock automatically on this computer
+  const encBox = async (host) => {
+    if (window.FD_LOCAL || host.querySelector('.fd-encbox')) return; const tok = {}; host.__enc = tok;
+    let E; try { E = await FDStore.json('GET', '/api/encryption'); } catch (e) { return; }
+    if (host.__enc !== tok || host.querySelector('.fd-encbox') || !E.canEdit) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-encbox'; host.append(box);
+    const pw = (ph, ac = 'new-password') => { const i = document.createElement('input'); i.type = 'password'; i.className = 'fd-in'; i.placeholder = ph; i.autocomplete = ac; return i; };
+    const msg = phMsg(''); const bad = (e) => { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; };
+    const call = async (what, body) => { msg.className = 'fd-note'; msg.textContent = 'Working…'; E = { ...E, ...(await FDStore.json('POST', '/api/encryption/' + what, body)) }; msg.textContent = ''; return E; };
+    const showKey = (k) => { const d = document.createElement('div'); d.className = 'fd-enckey';
+      const c = document.createElement('code'); c.textContent = k;
+      d.append(phMsg('Your recovery key. Write it down or print it and keep it somewhere safe. It is shown only this once, and it is the only way back in if the password is forgotten. Larenest has no copy and cannot reset it.'), c,
+        rbtn('Copy', () => navigator.clipboard?.writeText(k)), rbtn('I’ve saved it', () => draw(), false)); box.append(d); };
+    const draw = () => {
+      box.replaceChildren(rhead('Encrypt the data folder')); const f = document.createElement('div'); f.className = 'fd-encform';
+      if (!E.on) {
+        box.append(phMsg('Scrambles your transactions, balances, receipts and history on this computer with a password, so a copied data folder or backup can’t be read without it. The app works the same once unlocked.'));
+        const a = pw('Password (8+ characters)'), b = pw('Type it again');
+        f.append(a, b, rbtn('Turn on encryption', async () => { if (a.value !== b.value) return bad(new Error('The two passwords don’t match.'));
+          try { const r = await call('enable', { newPassword: a.value }); draw(); showKey(r.recovery); } catch (e) { bad(e); } }, false));
+        box.append(f, msg); return;
+      }
+      box.append(phMsg(`On since ${new Date(E.since).toLocaleDateString()}. Financial data in the database is encrypted with your password.`));
+      const auto = document.createElement('label'); auto.className = 'fd-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = E.autoUnlock;
+      cb.addEventListener('change', async () => { try { await call('auto', { on: cb.checked }); draw(); } catch (e) { cb.checked = !cb.checked; bad(e); } });
+      auto.append(cb, ' Unlock automatically when this computer starts');
+      box.append(auto, phMsg(E.autoUnlock ? 'The unlock key is kept in your user folder on this computer, outside the data folder: copies and backups still need the password.' : 'After every restart someone has to open the app and type the password before anyone can use it.'));
+      if (E.plainBackups) box.append(phMsg(`${E.plainBackups} backup${E.plainBackups > 1 ? 's' : ''} from before encryption still ${E.plainBackups > 1 ? 'hold' : 'holds'} readable data.`),
+        rbtn('Delete those backups', async () => { if (!confirm('Delete the backups made before encryption was turned on? Newer backups are kept.')) return; try { await call('purge-backups', {}); draw(); } catch (e) { bad(e); } }));
+      const cur = pw('Current password', 'current-password'), nw = pw('New password'), rk = document.createElement('label'); rk.className = 'fd-check'; const rkc = document.createElement('input'); rkc.type = 'checkbox'; rk.append(rkc, ' Also make a new recovery key');
+      const ch = document.createElement('details'); const chs = document.createElement('summary'); chs.textContent = 'Change password'; ch.append(chs, cur, nw, rk,
+        rbtn('Change', async () => { try { const r = await call('password', { password: cur.value, newPassword: nw.value, newRecovery: rkc.checked }); draw(); msg.className = 'fd-note fd-good'; msg.textContent = 'Password changed.'; box.append(msg); if (r.recovery) showKey(r.recovery); } catch (e) { bad(e); } }, false));
+      const off = pw('Password or recovery key', 'current-password'); const od = document.createElement('details'); const ods = document.createElement('summary'); ods.textContent = 'Turn off encryption'; od.append(ods, off,
+        rbtn('Turn off', async () => { if (!confirm('Store the data unencrypted again?')) return; const v = off.value; try { await call('disable', /^[A-Za-z2-9]{4}(-?[A-Za-z2-9]{4}){5}$/.test(v.trim()) ? { recovery: v } : { password: v }); draw(); } catch (e) { bad(e); } }));
+      box.append(ch, od, msg);
+    };
+    draw();
+  };
+
   // Your own Plaid keys (server owner), and a bank-sync box for each one that's set up
   const bankKeysBox = async (host) => {
     if (window.FD_LOCAL || host.querySelector('.fd-bkbox')) return; const tok = {}; host.__bk = tok;
@@ -3570,7 +3609,7 @@
     if (/ fd-(bkbox|actbox|navmenubox) /.test(c)) return 'adv';
     if (/ fd-emailbox /.test(c)) return 'notify';
     if (/ fd-(qrbox|invbox) /.test(c)) return 'people';
-    if (/ fd-(backup|privbox) /.test(c)) return 'backup';
+    if (/ fd-(backup|privbox|encbox) /.test(c)) return 'backup';
     if (/ fd-phonebox /.test(c)) return 'phone';
     return 'dash'; };
   const setGroups = (el) => {
@@ -3674,6 +3713,7 @@
     emailBox(el).catch(() => {});
     syncBox(el).catch(() => {});
     bankKeysBox(el).catch(() => {});
+    encBox(el).catch(() => {});
     connectBox(el).catch(() => {});
     inviteBox(el).catch(() => {});
     if (!el.querySelector('.fd-helpbox')) { const h = document.createElement('div'); h.className = 'fd-rb fd-helpbox'; h.append(rhead('Help & feedback'));

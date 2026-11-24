@@ -22,6 +22,7 @@
     async json(method, path, body) {
       const r = await FDStore.fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
       if (r.status === 401) { location.href = 'login.html'; throw new Error('Signed out'); }
+      if (r.status === 423) { location.href = 'unlock.html'; throw new Error('Locked'); }
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
       return r.json();
     },

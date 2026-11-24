@@ -67,6 +67,16 @@ const WRITE_HELP = `The server can't save to ${DATA_DIR}. Windows is blocking ch
 let DB_WRITABLE = true;
 try { fs.accessSync(DATA_DIR, fs.constants.W_OK); } catch { DB_WRITABLE = false; }
 const db = new DatabaseSync(DB_FILE);
+// ---- encryption at rest (optional; core/crypt.js). Reads decrypt automatically; the few writes of financial data encrypt. ----
+const CRYPT = require('./core/crypt');
+let DEK = null; // the data key, in memory only while unlocked
+{ const prep = db.prepare.bind(db);
+  const dec = (r) => { if (!r || !DEK) return r; for (const k in r) { const v = r[k]; if (CRYPT.isEncStr(v)) r[k] = CRYPT.decStr(DEK, v); else if (CRYPT.isEncBuf(v)) r[k] = CRYPT.decBuf(DEK, v); } return r; };
+  db.prepare = (sql) => { const st = prep(sql); if (!/^\s*SELECT/i.test(sql)) return st; const g = st.get.bind(st), al = st.all.bind(st); st.get = (...x) => dec(g(...x)); st.all = (...x) => al(...x).map(dec); return st; }; }
+let ENC_ON = false; // set once the enc_meta table is read
+const lockedErr = () => Object.assign(new Error('The data is locked. Unlock it with the encryption password first.'), { code: 423 });
+const E = (s) => (DEK ? CRYPT.encStr(DEK, s) : ENC_ON ? (() => { throw lockedErr(); })() : s);
+const EB = (b) => (DEK ? CRYPT.encBuf(DEK, b) : ENC_ON ? (() => { throw lockedErr(); })() : b);
 const SCHEMA = `
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
@@ -83,6 +93,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS docs_book ON docs (book_id, coll);
   CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE, mime TEXT NOT NULL, data BLOB NOT NULL, created TEXT NOT NULL, created_by TEXT);
   CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, data TEXT NOT NULL, created_by TEXT, created TEXT NOT NULL, expires INTEGER NOT NULL, used_by TEXT);
+  CREATE TABLE IF NOT EXISTS enc_meta (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS activity (at TEXT NOT NULL, username TEXT, book_id TEXT NOT NULL, action TEXT NOT NULL, coll TEXT, summary TEXT);
   CREATE INDEX IF NOT EXISTS activity_book ON activity (book_id, at);
 `;
@@ -131,6 +142,67 @@ function newSession(username) {
   db.prepare('INSERT INTO sessions (token, username, expires) VALUES (?, ?, ?)').run(token, username, Date.now() + SESSION_DAYS * 864e5);
   return token;
 }
+// ---------- encryption at rest: turn on/off, unlock, change password, unlock automatically on this computer ----------
+const encRec = () => { const r = db.prepare('SELECT json FROM enc_meta WHERE id = 1').get(); return r ? JSON.parse(r.json) : null; };
+const encSave = (rec) => { if (rec) db.prepare('INSERT OR REPLACE INTO enc_meta (id, json) VALUES (1, ?)').run(JSON.stringify(rec)); else db.prepare('DELETE FROM enc_meta').run(); };
+// The automatic-unlock key lives outside the data folder, so a copy of the data folder (or a backup) can't open itself.
+const AUTO_DIR = process.env.HF_KEY_DIR || path.join(os.homedir(), '.larenest-keys');
+const autoFile = () => path.join(AUTO_DIR, 'unlock-' + crypto.createHash('sha256').update(path.resolve(DATA_DIR)).digest('hex').slice(0, 16) + '.key');
+const autoKey = (make) => { try { return Buffer.from(fs.readFileSync(autoFile(), 'utf8').trim(), 'base64'); } catch { if (!make) return null; }
+  const k = crypto.randomBytes(32); fs.mkdirSync(AUTO_DIR, { recursive: true, mode: 0o700 }); fs.writeFileSync(autoFile(), k.toString('base64'), { mode: 0o600 }); return k; };
+const ENC_COLS = [['docs', 'id', 'json', 's'], ['seed', 'rowid', 'json', 's'], ['activity', 'rowid', 'summary', 's'], ['files', 'id', 'data', 'b']];
+function encConvert(on) { // rewrite every financial value encrypted (on) or plain (off); DEK must be set
+  db.exec('BEGIN');
+  try {
+    for (const [t, k, c, kind] of ENC_COLS) {
+      const up = db.prepare(`UPDATE ${t} SET ${c} = ? WHERE ${k} = ?`);
+      for (const r of db.prepare(`SELECT ${k} AS k, ${c} AS v FROM ${t}`).all()) { // already decrypted by the read wrapper
+        if (r.v == null) continue;
+        up.run(on ? (kind === 'b' ? CRYPT.encBuf(DEK, r.v) : CRYPT.encStr(DEK, r.v)) : r.v, r.k);
+      }
+    }
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  // squeeze the old copies out of the database file and its journal
+  try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); db.exec('VACUUM'); db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch {}
+}
+const encStatus = () => { const r = encRec(); return { on: !!r, locked: !!r && !DEK, since: r?.since || null, autoUnlock: !!(r && r.auto && autoKey(false)), plainBackups: r ? plainBackups().length : 0 }; };
+function encStartup() {
+  const r = encRec(); ENC_ON = !!r; if (!r) return;
+  if (r.auto) { const k = autoKey(false); if (k) DEK = CRYPT.autoUnwrap(r.auto, k); }
+  if (!DEK && process.env.HF_ENC_PASSWORD) DEK = CRYPT.unwrap(r, { password: process.env.HF_ENC_PASSWORD }); // Docker/servers: unlock from a secret
+  if (!DEK) console.log('Data is encrypted and locked. Open the app to unlock it.');
+}
+const pwOk = (p) => typeof p === 'string' && p.length >= 8;
+function encEnable(password) {
+  if (encRec()) throw Object.assign(new Error('Encryption is already on.'), { code: 409 });
+  if (!pwOk(password)) throw Object.assign(new Error('Use a password of at least 8 characters.'), { code: 400 });
+  const recovery = CRYPT.newRecoveryKey();
+  DEK = CRYPT.newDek(); encConvert(true); encSave(CRYPT.wrapAll(DEK, password, recovery)); ENC_ON = true;
+  return recovery;
+}
+function encDisable(secret) {
+  const r = encRec(); if (!r) return;
+  const k = CRYPT.unwrap(r, secret); if (!k) throw Object.assign(new Error('Wrong password or recovery key.'), { code: 403 });
+  DEK = k; encConvert(false); encSave(null); ENC_ON = false; DEK = null;
+  try { fs.unlinkSync(autoFile()); } catch {}
+}
+function encUnlock(secret) { const r = encRec(); if (!r) return true; const k = CRYPT.unwrap(r, secret); if (!k) return false; DEK = k; return true; }
+function encChange(secret, newPassword, newRecovery) {
+  const r = encRec(); const k = r && CRYPT.unwrap(r, secret); if (!k) throw Object.assign(new Error('Wrong password or recovery key.'), { code: 403 });
+  if (!pwOk(newPassword)) throw Object.assign(new Error('Use a password of at least 8 characters.'), { code: 400 });
+  const recovery = newRecovery ? CRYPT.newRecoveryKey() : null;
+  const out = CRYPT.wrapAll(k, newPassword, recovery, r); encSave(out); DEK = k; return recovery;
+}
+function encAuto(on) {
+  const r = encRec(); if (!r || !DEK) throw lockedErr();
+  if (on) r.auto = CRYPT.autoWrap(DEK, autoKey(true)); else { delete r.auto; try { fs.unlinkSync(autoFile()); } catch {} }
+  encSave(r);
+}
+// backups written before encryption was turned on still hold readable data
+const plainBackups = () => { const r = encRec(); if (!r) return []; const t = Date.parse(r.since);
+  try { return fs.readdirSync(BACKUP_DIR).filter((f) => /\.db$/.test(f)).map((f) => path.join(BACKUP_DIR, f)).filter((f) => fs.statSync(f).mtimeMs < t); } catch { return []; } };
+encStartup();
 function sessionUser(req) {
   const m = /(?:^|;\s*)hf_session=([^;]+)/.exec(req.headers.cookie || '');
   if (!m) return null;
@@ -198,21 +270,21 @@ const { cleanDoc } = CORE;
 const BOOKS_STORE = {
   seedRows: (bookId) => db.prepare('SELECT dataset, json FROM seed WHERE book_id = ?').all(bookId),
   listDocs: (bookId, coll) => db.prepare('SELECT id, json, created, created_by FROM docs WHERE book_id = ? AND coll = ? ORDER BY created').all(bookId, coll),
-  insertDoc: (r) => db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, r.json, r.created, r.createdBy),
+  insertDoc: (r) => db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, E(r.json), r.created, r.createdBy),
   deleteDoc: (bookId, coll, id) => db.prepare('DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = ?').run(id, bookId, coll),
   replaceBookDocs: (bookId, rows) => {
     db.exec('BEGIN');
     try { db.prepare('DELETE FROM docs WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
-      for (const r of rows) ins.run(r.id, bookId, r.coll, r.json, r.created, r.createdBy); db.exec('COMMIT'); }
+      for (const r of rows) ins.run(r.id, bookId, r.coll, E(r.json), r.created, r.createdBy); db.exec('COMMIT'); }
     catch (e) { db.exec('ROLLBACK'); throw e; }
   },
   // restore: documents and photos replaced in ONE transaction (files null = keep this book's photos as they are)
   replaceBook: (bookId, rows, files) => {
     db.exec('BEGIN');
     try { db.prepare('DELETE FROM docs WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
-      for (const r of rows) ins.run(r.id, bookId, r.coll, r.json, r.created, r.createdBy);
+      for (const r of rows) ins.run(r.id, bookId, r.coll, E(r.json), r.created, r.createdBy);
       if (files) { db.prepare('DELETE FROM files WHERE book_id = ?').run(bookId); const fi = db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
-        for (const f of files) fi.run(f.id, bookId, f.mime, Buffer.from(f.data, 'base64'), new Date().toISOString(), ''); }
+        for (const f of files) fi.run(f.id, bookId, f.mime, EB(Buffer.from(f.data, 'base64')), new Date().toISOString(), ''); }
       if (BOOKS_STORE._failAfterDocs) throw new Error('test: forced failure during photo replacement');
       db.exec('COMMIT'); }
     catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -227,12 +299,12 @@ const BOOKS_STORE = {
   },
   newId: () => crypto.randomBytes(10).toString('base64url'),
   backup: () => { const f = backup(); if (!f) throw new Error('the backup didn’t complete'); return f; },
-  putFile: (f) => db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(f.id, f.bookId, f.mime, Buffer.from(f.data, 'base64'), f.created, f.createdBy),
+  putFile: (f) => db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(f.id, f.bookId, f.mime, EB(Buffer.from(f.data, 'base64')), f.created, f.createdBy),
   getFile: (bookId, id) => { const r = db.prepare('SELECT mime, data FROM files WHERE id = ? AND book_id = ?').get(id, bookId); return r ? { mime: r.mime, data: Buffer.from(r.data).toString('base64') } : null; },
   deleteFile: (bookId, id) => db.prepare('DELETE FROM files WHERE id = ? AND book_id = ?').run(id, bookId),
   listFiles: (bookId) => db.prepare('SELECT id, mime, data FROM files WHERE book_id = ?').all(bookId).map((r) => ({ id: r.id, mime: r.mime, data: Buffer.from(r.data).toString('base64') })),
   replaceBookFiles: (bookId, files) => { db.exec('BEGIN'); try { db.prepare('DELETE FROM files WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
-    for (const f of files) ins.run(f.id, bookId, f.mime, Buffer.from(f.data, 'base64'), new Date().toISOString(), ''); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } },
+    for (const f of files) ins.run(f.id, bookId, f.mime, EB(Buffer.from(f.data, 'base64')), new Date().toISOString(), ''); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } },
 };
 const BOOKS = CORE.createBookApi(BOOKS_STORE);
 
@@ -343,7 +415,7 @@ function logActivity(user, bookId, method, coll, r, before) {
   else if (method === 'POST') { const row = r.body && r.body.id && db.prepare('SELECT json FROM docs WHERE id = ?').get(r.body.id); doc = row ? JSON.parse(row.json) : null; action = `added ${/^[aeiou]/.test(NOUN[coll] || '') ? 'an' : 'a'} ${NOUN[coll] || coll}`; }
   else if (method === 'DELETE') { doc = before ? JSON.parse(before.json) : null; action = `removed ${/^[aeiou]/.test(NOUN[coll] || '') ? 'an' : 'a'} ${NOUN[coll] || coll}`; }
   if (!action) return;
-  db.prepare('INSERT INTO activity (at, username, book_id, action, coll, summary) VALUES (?, ?, ?, ?, ?, ?)').run(new Date().toISOString(), user, bookId, action, coll, String(describeDoc(coll, doc)).slice(0, 200));
+  db.prepare('INSERT INTO activity (at, username, book_id, action, coll, summary) VALUES (?, ?, ?, ?, ?, ?)').run(new Date().toISOString(), user, bookId, action, coll, E(String(describeDoc(coll, doc)).slice(0, 200)));
   db.prepare("DELETE FROM activity WHERE book_id = ? AND at < ?").run(bookId, new Date(Date.now() - 400 * 864e5).toISOString());
 }
 
@@ -389,6 +461,17 @@ async function api(req, res, url) {
   // ping: lets the desktop/phone connect screen confirm an address really is this app (no login, no data)
   if (parts[1] === 'ping') { res.setHeader('Access-Control-Allow-Origin', '*'); if (!CFG.serverId) { try { saveCfg({ serverId: crypto.randomBytes(9).toString('base64url') }); } catch {} } return send(res, 200, { app: 'household-finances', version: require('./package.json').version, id: CFG.serverId || '', name: os.hostname(), tls: SELFTLS ? { fp: SELFTLS.fp } : null, tsUrl: tsHttps().url }); }
 
+  // encryption: status and unlock work without signing in (the password is the permission); everything else waits for unlock
+  if (parts[1] === 'encryption' && (parts[2] === 'status' || parts[2] === 'unlock')) {
+    if (parts[2] === 'status') return send(res, 200, encStatus());
+    if (req.method !== 'POST') return send(res, 405, { error: 'Use POST' });
+    if (tooMany(ip)) return send(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });
+    const b = await readJson(req);
+    if (!encUnlock({ password: b.password ?? null, recovery: b.recovery ?? null })) { noteFail(ip); return send(res, 403, { error: 'Wrong password or recovery key.' }); }
+    fails.delete(ip); return send(res, 200, encStatus());
+  }
+  if (ENC_ON && !DEK) return send(res, 423, { error: 'The data on this server is encrypted and locked.', locked: true });
+
   if (parts[1] === 'login' && req.method === 'POST') {
     if (tooMany(ip)) return send(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });
     const { username, password } = await readJson(req);
@@ -427,6 +510,19 @@ async function api(req, res, url) {
   // Writes must come from this site's own pages.
   if (req.method !== 'GET' && req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) return send(res, 403, { error: 'Bad origin' });
 
+  if (parts[1] === 'encryption') { // turn on/off, change password, automatic unlock: server owner only
+    const owner = ownerName();
+    if (req.method === 'GET') return send(res, 200, { ...encStatus(), canEdit: user === owner, owner });
+    if (user !== owner) return send(res, 403, { error: `Only ${owner} (who set up this server) can change encryption.` });
+    const b = await readJson(req), sec = { password: b.password ?? null, recovery: b.recovery ?? null };
+    if (parts[2] === 'enable') { const recovery = encEnable(String(b.newPassword || '')); return send(res, 200, { ...encStatus(), recovery }); }
+    if (parts[2] === 'disable') { encDisable(sec); return send(res, 200, encStatus()); }
+    if (parts[2] === 'password') { const recovery = encChange(sec, String(b.newPassword || ''), !!b.newRecovery); return send(res, 200, { ...encStatus(), recovery }); }
+    if (parts[2] === 'auto') { encAuto(!!b.on); return send(res, 200, encStatus()); }
+    if (parts[2] === 'lock') { if (encRec()) DEK = null; return send(res, 200, encStatus()); }
+    if (parts[2] === 'purge-backups') { let n = 0; for (const f of plainBackups()) { try { fs.unlinkSync(f); n++; } catch {} } return send(res, 200, { ...encStatus(), removed: n }); }
+    return send(res, 404, { error: 'Not found' });
+  }
   if (parts[1] === 'dividends' && req.method === 'GET') {
     const syms = [...new Set(String(url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter((x) => /^[A-Z0-9.\-^]{1,12}$/.test(x)))].slice(0, 40);
     return send(res, 200, { dividends: await MARKET.dividends(syms) });
@@ -667,8 +763,8 @@ function start(opts = {}) {
   try { const ver = require('./package.json').version; if (CFG.lastVersion !== ver) { if (CFG.lastVersion) backup(); saveCfg({ lastVersion: ver }); } } catch (e) { console.error('Update backup skipped:', e.code || e.message); }
   try { const last = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.db')).sort().pop();
     if (!last || Date.now() - fs.statSync(path.join(BACKUP_DIR, last)).mtimeMs > 864e5) backup(); } catch (e) { console.error('Backup skipped:', e.code || e.message); }
-  if (!BTIMER) BTIMER = setInterval(() => { try { backup(); } catch (e) { console.error('Backup failed', e); } }, 864e5);
-  if (!DTIMER) { DTIMER = setInterval(() => { checkDigests().catch(() => {}); sfSyncAll(); }, 15 * 60e3); setTimeout(sfSyncAll, 60e3).unref?.(); if (DTIMER.unref) DTIMER.unref(); }
+  if (!BTIMER) BTIMER = setInterval(() => { if (ENC_ON && !DEK) return; try { backup(); } catch (e) { console.error('Backup failed', e); } }, 864e5);
+  if (!DTIMER) { DTIMER = setInterval(() => { if (ENC_ON && !DEK) return; checkDigests().catch(() => {}); sfSyncAll(); }, 15 * 60e3); setTimeout(() => { if (!(ENC_ON && !DEK)) sfSyncAll(); }, 60e3).unref?.(); if (DTIMER.unref) DTIMER.unref(); }
   return ready;
 }
 
@@ -706,7 +802,7 @@ function createBook(name, shared) {
   while (db.prepare('SELECT 1 FROM books WHERE id = ?').get(id)) id = `${base.slice(0, 20)}-${n++}`;
   const sort = db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 n FROM books').get().n;
   db.prepare('INSERT INTO books (id, name, label, sort) VALUES (?, ?, ?, ?)').run(id, nm, shared ? 'Shared' : 'Personal', sort);
-  for (const ds of ['sheet_history', 'sheet_balances', 'sheet_budgets']) db.prepare('INSERT INTO seed (book_id, dataset, json) VALUES (?, ?, ?)').run(id, ds, '[]');
+  for (const ds of ['sheet_history', 'sheet_balances', 'sheet_budgets']) db.prepare('INSERT INTO seed (book_id, dataset, json) VALUES (?, ?, ?)').run(id, ds, E('[]'));
   return { id, name: nm };
 }
 // "Invite someone": a one-time link (good for 7 days) that lets a new person choose their own login and password.
@@ -792,7 +888,7 @@ async function cli(cmd, args) {
     if (db.prepare('SELECT 1 FROM books WHERE id = ?').get(id)) { db.prepare('UPDATE books SET name = ? WHERE id = ?').run(name, id); console.log(`Renamed ${id} to "${name}".`); return; }
     const sort = db.prepare('SELECT COALESCE(MAX(sort), -1) + 1 n FROM books').get().n;
     db.prepare('INSERT INTO books (id, name, label, sort) VALUES (?, ?, ?, ?)').run(id, name, /shared/i.test(id + name) ? 'Shared' : 'Personal', sort);
-    for (const ds of ['sheet_history', 'sheet_balances', 'sheet_budgets']) db.prepare('INSERT INTO seed (book_id, dataset, json) VALUES (?, ?, ?)').run(id, ds, '[]');
+    for (const ds of ['sheet_history', 'sheet_balances', 'sheet_budgets']) db.prepare('INSERT INTO seed (book_id, dataset, json) VALUES (?, ?, ?)').run(id, ds, E('[]'));
     console.log(`Created budget ${id} ("${name}"). Give a login access with: node server.js add-user <name> ${id},...`);
   } else if (cmd === 'where') {
     console.log(`Data folder:   ${DATA_DIR}\nDatabase:      ${path.join(DATA_DIR, 'finance.db')}\nSettings:      ${CFG_FILE}\nAPI keys:      ${path.join(DATA_DIR, 'api-keys.json')}\nBackups:       ${BACKUP_DIR}\nMode:          ${CFG.mode} (${HOST}:${PORT})`);
