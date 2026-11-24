@@ -3688,6 +3688,9 @@
     const sel = (opts, val, on) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([v, t]) => x.append(new Option(t, v))); x.value = val; x.addEventListener('change', () => on(x.value)); return x; };
     box.append(rhead(`Settings for the ${book()} dashboard`));
     if (prefGet('gsDismissed', false)) row('Getting started list', rbtn('Show it again', () => { prefSet('gsDismissed', false).then(() => { try { localStorage.removeItem('fd-gs-hide-' + book()); } catch (e) {} dash.draw('gettingStarted'); dash.draw('settingsView'); }); }));
+    if (window.FDApp && FDApp.checkUpdates) { const w = document.createElement('span'); w.className = 'fd-updrow'; const v = document.createElement('span'); v.className = 'fd-zero';
+      FDApp.version?.().then((x) => { v.textContent = 'Version ' + x; }).catch(() => {});
+      w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), ' ', v); row('Desktop app', w, 'Checks automatically once a day. This only updates the app on this computer.'); }
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
     if (s.type === 'shared') {
       const w = document.createElement('div'); w.className = 'fd-people';

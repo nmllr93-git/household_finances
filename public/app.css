@@ -667,3 +667,5 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-tmeter + .fd-taxis + .fd-tlhead { margin-top: 8px; }
 .fd-gtile .fd-tviz:has(> .fd-tsvg) { flex: 1 1 auto; }
 .fd-gtile .fd-tviz > .fd-tsvg { flex: 1 1 52px; height: auto; min-height: 52px; max-height: 140px; }
+.fd-updrow { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fd-updrow .fd-zero { font-size: 13px; color: var(--color-fg-muted); }
