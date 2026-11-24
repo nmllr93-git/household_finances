@@ -3036,7 +3036,7 @@
   const KIND_NAMES = { 'deposit:checking': 'Checking', 'deposit:savings': 'Savings', 'deposit:hysa': 'High-yield savings', 'deposit:money_market': 'Money market', 'deposit:cd': 'CD', 'deposit:cash_mgmt': 'Cash management',
     'credit:card': 'Credit card', 'credit:loc': 'Line of credit', 'mortgage:mortgage': 'Mortgage', 'loan:heloc': 'Home equity (HELOC)', 'loan:auto': 'Auto loan', 'loan:student': 'Student loan', 'loan:personal': 'Personal loan', 'loan:other': 'Other loan',
     'investment:brokerage': 'Brokerage', 'investment:401k': '401(k)', 'investment:403b': '403(b)', 'investment:457b': '457(b)', 'investment:roth_ira': 'Roth IRA', 'investment:trad_ira': 'Traditional IRA', 'investment:rollover_ira': 'Rollover IRA',
-    'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment' };
+    'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment', 'investment:roth_401k': 'Roth 401(k)', 'investment:solo_401k': 'Solo 401(k)', 'investment:tsp': 'TSP (Thrift Savings Plan)', 'investment:esa': 'Coverdell ESA', 'investment:utma': 'UTMA / UGMA (custodial)', 'investment:able': 'ABLE account', 'investment:annuity': 'Annuity', 'investment:treasury': 'Treasury bonds (TreasuryDirect)', 'deposit:fsa': 'FSA' };
   const SYNC_P = { simplefin: { id: 'simplefin', label: 'SimpleFIN' }, plaid: { id: 'plaid', label: 'Plaid', multi: true } };
   const syncBox = async (host, P = SYNC_P.simplefin) => {
     const tk = '__sync_' + P.id, tok = {}; host[tk] = tok; const bid = myBookId(); if (!bid) return;

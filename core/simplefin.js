@@ -22,7 +22,7 @@
   const KINDS = ['deposit:checking', 'deposit:savings', 'deposit:hysa', 'deposit:money_market', 'deposit:cd', 'deposit:cash_mgmt', 'credit:card', 'credit:loc',
     'mortgage:mortgage', 'loan:heloc', 'loan:auto', 'loan:student', 'loan:personal', 'loan:other', 'investment:brokerage', 'investment:401k', 'investment:403b',
     'investment:457b', 'investment:roth_ira', 'investment:trad_ira', 'investment:rollover_ira', 'investment:sep_ira', 'investment:hsa', 'investment:529',
-    'investment:pension', 'investment:crypto', 'investment:other'];
+    'investment:pension', 'investment:crypto', 'investment:other', 'investment:roth_401k', 'investment:solo_401k', 'investment:tsp', 'investment:esa', 'investment:utma', 'investment:able', 'investment:annuity', 'investment:treasury', 'deposit:fsa'];
   const OWED = /^(credit|mortgage|loan):/;
   const b64 = (s) => (typeof Buffer !== 'undefined' ? Buffer.from(s, 'utf8').toString('base64') : btoa(unescape(encodeURIComponent(s))));
   const unb64 = (s) => (typeof Buffer !== 'undefined' ? Buffer.from(s, 'base64').toString('utf8') : decodeURIComponent(escape(atob(s))));

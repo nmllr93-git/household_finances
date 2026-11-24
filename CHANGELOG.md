@@ -3,6 +3,9 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- More account types: Roth 401(k), Solo 401(k), TSP, Coverdell ESA, UTMA/UGMA, ABLE account, annuity and Treasury bonds (investments), and FSA (cash)
+
 ## Desktop 1.0.30
 - Encrypt the data folder (optional, Settings → Backup & privacy): a password protects transactions, budgets, receipts, Google Sheets history and the activity log. You get a one-time recovery key; change the password any time; turn it off again
 - Unlock automatically when this computer starts (host setting). Without it, after a restart the app shows an unlock page and bank sync, email summaries and backups wait until someone unlocks. Docker/Linux can unlock at startup with HF_ENC_PASSWORD. Backups made before encryption can be deleted from the same place
