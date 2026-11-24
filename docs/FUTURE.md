@@ -24,6 +24,7 @@ Keep the focus on US accounts and US dollars, but let the app's wording appear i
 ## Pro tier (deciding)
 - A one-time license key that can be moved to a new device, for one device or host at a time. No company account, ever.
 - Everyone using the app before Pro launches gets a free Pro key.
+- Draft split between free and Pro: [PRO-TIERS.md](PRO-TIERS.md).
 
 ## Smaller items
 - Owner-only "Reset password" for other logins from the web Settings page (today it only works on the host computer).
