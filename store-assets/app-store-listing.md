@@ -52,6 +52,7 @@ Side business? Covered
 • Totals by IRS Schedule C line, profit and loss, and a tax packet for your preparer
 • Quarterly estimated tax reminders, a mileage log and missing-receipt flags
 • Hidden until you add a business
+• Organizes your records for a tax professional; Larenest doesn't prepare or file taxes
 
 Make it yours
 • Arrange every tab: move, resize, add or remove sections and tiles

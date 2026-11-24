@@ -39,6 +39,7 @@ Larenest is a budget, bills and net-worth tracker that keeps your money data wit
 • Totals by IRS Schedule C line, profit and loss, and CSV or PDF for your tax preparer
 • Quarterly estimated tax reminders, a mileage log and missing-receipt flags
 • Hidden until you add a business
+• Organizes your records for a tax professional; Larenest doesn't prepare or file taxes
 
 **Make it yours**
 • Arrange every tab: move, resize, add or remove sections and tiles
