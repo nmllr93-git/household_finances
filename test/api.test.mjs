@@ -194,3 +194,50 @@ test('imports: the largest allowed statement saves every row; one more row is re
   const big = await req('POST', `/api/books/${b}/imports`, { accountName: 'Big', txns: rows(5001) }); assert.equal(big.status, 413); assert.match(big.json.error, /5,001 transactions/);
   assert.equal((await req('GET', `/api/books/${b}/data`)).json.imports.length, n0 + 1);
 });
+
+// ---- import history and undo: preview the dependents, remove only what's confirmed, all or nothing ----
+async function undoFixture(b) {
+  const imp = await req('POST', `/api/books/${b}/imports`, { accountName: 'Undo checking', accountKind: 'deposit', source: 'csv', fileRows: 3, skipped: 1,
+    reconcile: { opening: 100, closing: 35.5, expected: 35.5, diff: 0, from: '2026-04-01', to: '2026-04-30' }, txns: [{ date: '2026-04-01', description: 'A', amount: 4.5 }, { date: '2026-04-02', description: 'B', amount: 60 }] });
+  const e = await req('POST', `/api/books/${b}/edits`, { txKey: `i:${imp.json.id}:1`, category: 'Groceries' });
+  const f = await req('POST', `/api/books/${b}/files`, { mime: 'image/png', data: PNG });
+  const r = await req('POST', `/api/books/${b}/receipts`, { txKey: `i:${imp.json.id}:0`, fileId: f.json.id, name: 'r.png', mime: 'image/png', size: 70 });
+  return { id: imp.json.id, edit: e.json.id, receipt: r.json.id, file: f.json.id };
+}
+test('imports keep their history details (source, counts, statement check)', async () => {
+  const b = books()[0]; const x = await undoFixture(b);
+  const d = (await req('GET', `/api/books/${b}/data`)).json.imports.find((i) => i.id === x.id);
+  assert.equal(d.source, 'csv'); assert.equal(d.fileRows, 3); assert.equal(d.skipped, 1); assert.equal(d.reconcile.diff, 0); assert.equal(d.reconcile.from, '2026-04-01');
+});
+test('undo removes the import and only the edits and receipts you confirm', async () => {
+  const b = books()[0]; const x = await undoFixture(b);
+  const r = await req('POST', `/api/books/${b}/undo-import`, { importId: x.id, edits: [x.edit], receipts: [] });
+  assert.equal(r.status, 200); assert.equal(r.json.removed.edits, 1); assert.equal(r.json.keptReceipts, 1);
+  const j = (await req('GET', `/api/books/${b}/data`)).json;
+  assert.ok(!j.imports.some((i) => i.id === x.id)); assert.ok(!j.edits.some((e) => e.id === x.edit)); assert.ok(j.receipts.some((e) => e.id === x.receipt));
+  assert.equal((await req('GET', `/api/books/${b}/files/${x.file}`)).status, 200);
+  // importing the same rows again works after undo
+  const again = await req('POST', `/api/books/${b}/imports`, { accountName: 'Undo checking', txns: [{ date: '2026-04-01', description: 'A', amount: 4.5 }] }); assert.equal(again.status, 201);
+});
+test('undo with a receipt removes its photo; a failure changes nothing; a stale list is refused', async () => {
+  const b = books()[0]; const x = await undoFixture(b);
+  srv._store._failRemove = true;
+  try { assert.equal((await req('POST', `/api/books/${b}/undo-import`, { importId: x.id, edits: [x.edit], receipts: [x.receipt] })).status, 500); } finally { srv._store._failRemove = false; }
+  let j = (await req('GET', `/api/books/${b}/data`)).json; assert.ok(j.imports.some((i) => i.id === x.id)); assert.ok(j.edits.some((e) => e.id === x.edit));
+  assert.equal((await req('POST', `/api/books/${b}/undo-import`, { importId: x.id, edits: ['nope'] })).status, 409);
+  const r = await req('POST', `/api/books/${b}/undo-import`, { importId: x.id, edits: [x.edit], receipts: [x.receipt] }); assert.equal(r.status, 200); assert.equal(r.json.removed.photos, 1);
+  assert.equal((await req('GET', `/api/books/${b}/files/${x.file}`)).status, 404);
+  assert.equal((await req('POST', `/api/books/${books()[1]}/undo-import`, { importId: 'x' }, cookieC)).status, 403); // view-only login
+});
+
+// ---- backup health: check a backup without restoring it ----
+test('verify-backup checks a backup and changes nothing', async () => {
+  const b = books()[1]; // restored earlier from a clean fixture (the first dashboard now holds receipts left on purpose by the undo test)
+  const ex = (await req('GET', `/api/books/${b}/export`)).json; const before = JSON.stringify((await req('GET', `/api/books/${b}/export`)).json.docs);
+  const v = await req('POST', `/api/books/${b}/verify-backup`, ex); assert.equal(v.status, 200); assert.equal(v.json.ok, true); assert.equal(v.json.legacy, false);
+  assert.equal(v.json.documents, v.json.declared); assert.equal(v.json.photos, ex.files.length);
+  const broken = JSON.parse(JSON.stringify(ex)); broken.files = []; const v2 = await req('POST', `/api/books/${b}/verify-backup`, broken);
+  assert.equal(v2.json.ok, false); assert.ok(v2.json.missingPhotos >= 1);
+  assert.equal((await req('POST', `/api/books/${b}/verify-backup`, { nope: 1 })).status, 400);
+  assert.equal(JSON.stringify((await req('GET', `/api/books/${b}/export`)).json.docs), before);
+});

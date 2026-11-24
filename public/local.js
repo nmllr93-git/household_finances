@@ -42,6 +42,10 @@
       const s = t.objectStore('docs'); (await req2p(s.getAll())).filter((d) => d.bookId === bookId).forEach((d) => s.delete(d.id)); rows.forEach((r) => s.put({ ...r, bookId }));
       if (files) { const s2 = t.objectStore('files'); (await req2p(s2.getAll())).filter((f) => f.bookId === bookId).forEach((f) => s2.delete(f.id)); files.forEach((f) => s2.put({ ...f, bookId, created: new Date().toISOString() })); }
       if (window.__fdFailRestore) t.abort(); }),
+    removeMany: (bookId, docs, fileIds) => tx(['docs', 'files'], 'readwrite', async (t) => { const s = t.objectStore('docs'), s2 = t.objectStore('files');
+      for (const x of docs) { const d = await req2p(s.get(x.id)); if (d && d.bookId === bookId && d.coll === x.coll) s.delete(x.id); }
+      for (const id of fileIds || []) { const f = await req2p(s2.get(id)); if (f && f.bookId === bookId) s2.delete(id); }
+      if (window.__fdFailRemove) t.abort(); }),
     putFile: (f) => tx(['files'], 'readwrite', (t) => { t.objectStore('files').put(f); }),
     getFile: async (bookId, id) => { const f = await tx(['files'], 'readonly', (t) => req2p(t.objectStore('files').get(id))); return f && f.bookId === bookId ? { mime: f.mime, data: f.data } : null; },
     deleteFile: (bookId, id) => tx(['files'], 'readwrite', async (t) => { const s2 = t.objectStore('files'); const f = await req2p(s2.get(id)); if (f && f.bookId === bookId) s2.delete(id); }),
@@ -125,6 +129,12 @@
         if (method === 'GET') return json(200, { canEdit: true, owner: 'you', set: Object.fromEntries(KEYS.map((k) => [k, mask(cur[k])])), fromEnv: {} });
         const b = await body(); for (const k of KEYS) if (typeof b[k] === 'string') { const v = b[k].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[k] = v; else delete cur[k]; }
         await kvSet('apikeys', cur); KEYMEM = cur; (await marketReady).resetKeys(); return json(200, { ok: true });
+      }
+      case 'backup-health': { // phone-only: snapshots kept inside the app, and the last backup file saved elsewhere
+        const snaps = (await all('backups')).sort((a, b) => b.at - a.at), last = snaps[0], exp = await kvGet('lastExport').catch(() => null);
+        return json(200, { kind: 'phone', count: snaps.length, keep: 14, latest: last ? { name: last.id, at: new Date(last.at).toISOString(), photos: !!last.photos, why: last.why } : null,
+          photos: false, photoNote: 'Daily snapshots leave receipt photos out to save space; the one taken before a restore keeps them. A downloaded backup file includes photos.',
+          lastExport: exp ? new Date(exp).toISOString() : null, cloud: { on: false }, check: null, canCheck: false, inApp: 'Snapshots live inside the app: uninstalling the app or clearing its storage removes them. Keep a downloaded backup file somewhere else too.' });
       }
       case 'quotes': { const m = await marketReady; return json(200, { sources: m.sources(), quotes: await m.quotes(symList(url, 60)) }); }
       case 'dividends': return json(200, { dividends: await (await marketReady).dividends(symList(url, 40)) });

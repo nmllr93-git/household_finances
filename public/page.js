@@ -3337,7 +3337,47 @@
           if (!r.ok) throw new Error(out.error || r.status); rmsg.className = 'fd-note fd-good'; rmsg.textContent = `Restored ${out.restored} items${out.photos != null ? ` and ${out.photos} photo${out.photos === 1 ? '' : 's'}` : ''}.` + (out.unresolved ? ` ${out.unresolved} edit${out.unresolved === 1 ? '' : 's'} pointed at transactions that weren’t in the backup and were kept as they were.` : '') + (out.missingPhotos ? ` ${out.missingPhotos} receipt photo${out.missingPhotos === 1 ? ' wasn’t' : 's weren’t'} in the backup.` : '') + (out.legacy ? ' (An older backup without photos: your current receipt photos were kept.)' : '') + ' Reloading…'; setTimeout(() => location.reload(), out.unresolved || out.missingPhotos || out.legacy ? 7000 : 1200); }
         catch (e) { rs.disabled = false; armed = false; rs.textContent = 'Restore from backup…'; rmsg.className = 'fd-note fd-bad'; rmsg.textContent = 'Restore failed: ' + e.message; }
       });
-      const br = document.createElement('div'); br.className = 'fd-rb-row'; br.append(dl, fi, rs); bk.append(br, rmsg); el.append(bk);
+      const br = document.createElement('div'); br.className = 'fd-rb-row'; br.append(dl, fi, rs); bk.append(br, rmsg);
+      // check the chosen file without restoring it: the same checks a restore makes, then stop
+      const vmsg = document.createElement('p'); vmsg.className = 'fd-note';
+      const vb = rbtn('Check this file (doesn’t restore)', async () => {
+        const f = fi.files && fi.files[0]; if (!f) { vmsg.className = 'fd-note fd-bad'; vmsg.textContent = 'Choose a backup file first.'; return; }
+        let j; try { j = JSON.parse(await f.text()); } catch { vmsg.className = 'fd-note fd-bad'; vmsg.textContent = 'That file isn’t a backup from this app (it isn’t readable JSON).'; saveVerify({ ok: false, file: f.name, detail: 'not readable' }); return; }
+        vmsg.className = 'fd-note'; vmsg.textContent = 'Checking…';
+        try { const v = await FDStore.json('POST', `/api/books/${encodeURIComponent(myBookId())}/verify-backup`, j);
+          const parts = [`${v.documents} of ${v.declared} items readable`, v.photos == null ? 'no photos in this file (an older backup)' : `${v.photos} photo${v.photos === 1 ? '' : 's'}`];
+          if (v.unresolved) parts.push(`${v.unresolved} edit${v.unresolved === 1 ? '' : 's'} or receipt${v.unresolved === 1 ? '' : 's'} pointing at transactions not in the file`);
+          if (v.missingPhotos) parts.push(`${v.missingPhotos} receipt photo${v.missingPhotos === 1 ? '' : 's'} missing`);
+          vmsg.className = 'fd-note ' + (v.ok ? 'fd-good' : 'fd-bad'); vmsg.textContent = (v.ok ? 'This backup looks complete: ' : 'This backup has problems: ') + parts.join(', ') + `${v.exportedAt ? '. Made ' + v.exportedAt.slice(0, 10) : ''}. Nothing was changed.`;
+          saveVerify({ ok: v.ok, file: f.name, exportedAt: v.exportedAt, documents: v.documents, photos: v.photos, detail: v.ok ? '' : parts.slice(2).join(', ') || 'incomplete' }); drawHealth();
+        } catch (e) { vmsg.className = 'fd-note fd-bad'; vmsg.textContent = 'Couldn’t check it: ' + e.message; }
+      }, false);
+      const vr = document.createElement('div'); vr.className = 'fd-rb-row'; vr.append(vb); bk.append(vr, vmsg);
+      const VK = 'fd-verify:' + myBookId();
+      const saveVerify = (x) => { try { localStorage.setItem(VK, JSON.stringify({ ...x, at: new Date().toISOString() })); } catch {} };
+      const hb = document.createElement('div'); hb.className = 'fd-health'; bk.append(hb);
+      const ago = (iso) => { if (!iso) return 'never'; const d = (Date.now() - Date.parse(iso)) / 864e5; return d < 1 ? 'today' : d < 2 ? 'yesterday' : `${Math.floor(d)} days ago`; };
+      const line = (state, label, text) => { const r = document.createElement('div'); r.className = 'fd-health-row is-' + state; const b = document.createElement('b'); b.textContent = label; const t = document.createElement('span'); t.textContent = text; r.append(b, t); return r; };
+      async function drawHealth() {
+        let h; try { h = await FDStore.json('GET', '/api/backup-health'); } catch { hb.replaceChildren(); return; }
+        let fv = null; try { fv = JSON.parse(localStorage.getItem(VK) || 'null'); } catch {}
+        const rowsH = [rhead('Backup health')];
+        if (h.kind === 'server') {
+          const age = h.latest ? (Date.now() - Date.parse(h.latest.at)) / 864e5 : 99;
+          rowsH.push(line(age < 2 ? 'ok' : 'warn', 'Server copies', h.latest ? `${h.count} kept (newest ${ago(h.latest.at)}, ${(h.latest.bytes / 1048576).toFixed(1)} MB). Full database copies of every dashboard, receipt photos included.${h.folder ? ' Folder: ' + h.folder : ''}` : 'None yet. The first one is made within a day of starting.'));
+          rowsH.push(h.cloud && h.cloud.on ? line(h.cloud.error ? 'bad' : 'ok', 'Cloud folder', h.cloud.error ? 'Last copy failed: ' + h.cloud.error : `Last copied ${ago(h.cloud.lastCopy)}${h.cloud.folder ? ' to ' + h.cloud.folder : ''}. ${h.cloud.note}`)
+            : line('warn', 'Cloud folder', 'Off. Copies stay on this computer only. Turn it on in the PC app’s Host options to keep a copy in OneDrive, iCloud Drive, Google Drive or Dropbox.'));
+          const c = h.check; rowsH.push(line(!c ? 'warn' : c.ok ? 'ok' : 'bad', 'Last check of a server copy', !c ? 'Never checked.' : c.ok ? `Opened and readable ${ago(c.at)} (${c.docs} items, ${c.files} photos, ${c.books} dashboard${c.books === 1 ? '' : 's'}).` : `Failed ${ago(c.at)}: ${c.detail}`));
+        } else {
+          rowsH.push(line(h.latest ? 'ok' : 'warn', 'Snapshots on this phone', h.latest ? `${h.count} kept (newest ${ago(h.latest.at)}). ${h.photoNote} ${h.inApp}` : 'None yet.'));
+          rowsH.push(line(h.lastExport && Date.now() - Date.parse(h.lastExport) < 30 * 864e5 ? 'ok' : 'warn', 'Backup file saved elsewhere', h.lastExport ? `Last downloaded ${ago(h.lastExport)}. Where it went (Drive, Files, email) is up to you; the app can’t see it.` : 'Never. Use Download backup and keep the file off this phone.'));
+        }
+        rowsH.push(line(!fv ? 'warn' : fv.ok ? 'ok' : 'bad', 'Last check of a backup file', !fv ? 'Never on this device. Choose a backup file above and press Check.' : `${fv.ok ? 'Complete' : 'Problems: ' + fv.detail} · ${fv.file} · checked ${ago(fv.at)}`));
+        hb.replaceChildren(...rowsH);
+        if (h.canCheck) hb.append(rbtn('Check the newest server copy', async () => { try { await FDStore.json('POST', '/api/backup-health/check'); } catch (e) {} drawHealth(); }, false));
+      }
+      drawHealth();
+      el.append(bk);
     }
     const tip = document.createElement('p'); tip.className = 'fd-note'; tip.textContent = 'Tip: the ⚙ on any chart changes that chart’s colors. Settings, colors and custom reports are saved on the server, so they follow you to every device.'; box.append(tip);
     el.append(box);
@@ -3762,20 +3802,47 @@
     }
   });
 
-  // ---- saved imports ----
+  // ---- import history: what came in, from where, whether it added up, and undo ----
   dash.draw('importRows', (el) => {
     el.replaceChildren();
     if (st('imports') !== 'ok') return;
     const r = rows('imports').slice().sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)));
-    if (!r.length) return empty(el, 8, 'Nothing imported yet. Use the forms above to add your first statement.');
+    if (!r.length) return empty(el, 9, 'Nothing imported yet. Use the forms above to add your first statement.');
+    const SRC = { csv: 'CSV', ofx: 'OFX/QFX', pdf: 'PDF', sync: 'Bank sync', manual: 'Typed' };
     for (const x of r) {
       const tr = document.createElement('tr'); tr.dataset.key = enc(x.id);
-      tr.append(td(String(x.importedAt || '').slice(0, 10)), td(x.book, 'fd-l'), td(x.accountName || '', 'fd-l'), td(x.fileName || '—', 'fd-l'),
-        td(String(x.rowCount ?? 0)), td(x.balance == null || x.balance === '' ? '—' : money2(Number(x.balance))), td(x.balanceMonth || '—'));
+      const n = Array.isArray(x.txns) ? x.txns.length : Number(x.rowCount || 0);
+      const rowsTxt = String(n) + (x.skipped ? ` (+${x.skipped} skipped)` : '');
+      const rc = x.reconcile; const chk = td(!rc ? '—' : rc.diff ? `Off ${money2(Math.abs(rc.diff))}` : 'Adds up'); if (rc) chk.className = rc.diff ? 'fd-bad' : 'fd-good';
+      if (rc) chk.title = `Opening ${money2(rc.opening)}, expected ${money2(rc.expected)}, statement ${money2(rc.closing)}`;
+      tr.append(td(String(x.importedAt || '').slice(0, 10)), td(x.book, 'fd-l'), td(x.accountName || '', 'fd-l'), td((x.fileName || '—') + (x.source ? ` · ${SRC[x.source] || x.source}` : ''), 'fd-l'),
+        td(rowsTxt), td(x.balance == null || x.balance === '' ? '—' : money2(Number(x.balance))), td(x.balanceMonth || '—'), chk);
       const c = document.createElement('td'); const b = document.createElement('button');
-      b.type = 'button'; b.className = 'fd-btn fd-quiet fd-sm'; b.textContent = 'Remove';
-      b.addEventListener('click', async () => { b.disabled = true; try { const d = await db(); await d.doc('data/household/imports/' + x.id).delete(); } catch { b.disabled = false; b.textContent = 'Not removed'; } });
+      b.type = 'button'; b.className = 'fd-btn fd-quiet fd-sm'; b.textContent = 'Undo…';
+      b.addEventListener('click', () => { const nx = tr.nextElementSibling; if (nx && nx.classList.contains('fd-undo-row')) { nx.remove(); return; } tr.after(undoPanel(x, n)); });
       c.append(b); tr.append(c); el.append(tr);
     }
   });
+  // Shows exactly what undo would remove, and asks about edits and receipts on these transactions (left alone unless ticked).
+  function undoPanel(x, n) {
+    const tr = document.createElement('tr'); tr.className = 'fd-undo-row'; const cell = document.createElement('td'); cell.colSpan = 9; tr.append(cell);
+    const pre = `i:${x.id}:`, edits = rows('edits').filter((e) => String(e.txKey || '').startsWith(pre)), recs = rows('receipts').filter((e) => String(e.txKey || '').startsWith(pre));
+    const box = document.createElement('div'); box.className = 'fd-rb';
+    const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = `Undo this import of ${x.accountName || 'an account'}?`; box.append(h);
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Removes the ${n} transaction${n === 1 ? '' : 's'} it added${x.balance != null && x.balance !== '' ? ' and its balance' : ''}. You can import the file again afterwards.`; box.append(p);
+    const opt = (label, list) => { if (!list.length) return null; const l = document.createElement('label'); l.className = 'fd-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; l.append(cb, ' ' + label); box.append(l); return cb; };
+    const cbE = opt(`Also remove ${edits.length} change${edits.length === 1 ? '' : 's'} you made to these transactions (categories, splits, ignores)`, edits);
+    const cbR = opt(`Also remove ${recs.length} receipt${recs.length === 1 ? '' : 's'} attached to them, photos included`, recs);
+    if (cbE || cbR) { const k = document.createElement('p'); k.className = 'fd-note'; k.textContent = 'Unticked, they’re kept but won’t show (nothing points at them) until restored from a backup.'; box.append(k); }
+    const msg = document.createElement('p'); msg.className = 'fd-note';
+    const go = document.createElement('button'); go.type = 'button'; go.className = 'fd-btn fd-sm fd-danger'; go.textContent = 'Undo import';
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'fd-btn fd-sm fd-quiet'; no.textContent = 'Cancel'; no.addEventListener('click', () => tr.remove());
+    go.addEventListener('click', async () => {
+      go.disabled = true; msg.className = 'fd-note'; msg.textContent = 'Undoing…';
+      try { const out = await FDStore.json('POST', `/api/books/${encodeURIComponent(window.HF.state.bookId)}/undo-import`, { importId: x.id, edits: cbE && cbE.checked ? edits.map((e) => e.id) : [], receipts: cbR && cbR.checked ? recs.map((e) => e.id) : [] });
+        msg.className = 'fd-note fd-good'; msg.textContent = `Undone: ${out.rows} transactions removed${out.removed.edits ? `, ${out.removed.edits} changes` : ''}${out.removed.receipts ? `, ${out.removed.receipts} receipts` : ''}.`; window.HF.load(window.HF.state.bookId);
+      } catch (e) { go.disabled = false; msg.className = 'fd-note fd-bad'; msg.textContent = 'Not undone: ' + e.message; }
+    });
+    const row = document.createElement('div'); row.className = 'fd-rb-row'; row.append(go, no); box.append(row, msg); cell.append(box); return tr;
+  }
 })();

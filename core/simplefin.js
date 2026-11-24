@@ -139,7 +139,7 @@
           const asOf = a['balance-date'] ? day(a['balance-date']) : new Date().toISOString().slice(0, 10), [kind, type] = m.kind.split(':');
           for (let i = 0; i < Math.max(1, txns.length); i += 2000) {
             const part = txns.slice(i, i + 2000), last = i + 2000 >= txns.length;
-            await env.addDoc(bookId, 'imports', { accountKind: kind, accountType: type || '', accountName: m.map, owner: '', fileName: P.label + ' sync', importedAt: new Date().toISOString(),
+            await env.addDoc(bookId, 'imports', { accountKind: kind, accountType: type || '', accountName: m.map, owner: '', fileName: P.label + ' sync', source: 'sync', importedAt: new Date().toISOString(),
               rowCount: part.length, dateFrom: part.length ? part[0].date : asOf, dateTo: part.length ? part[part.length - 1].date : asOf,
               balance: last ? bal : null, balanceMonth: asOf.slice(0, 7), asOf, txns: part });
             docs++;

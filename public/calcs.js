@@ -16,6 +16,24 @@ function makeDupeChecker() {
 }
 if (typeof window !== 'undefined') window.FDDupeChecker = makeDupeChecker;
 
+// Statement reconciliation: does opening balance + this statement's activity land on the closing balance?
+// Works in cents. Rows use the stored sign (positive = money out). Deposit accounts: money out lowers the balance.
+// Credit accounts: balances are what you owe, so money out (purchases) raises it. Never changes any data; it only reports.
+function reconcileStatement({ kind, opening, closing, rows, from, to }) {
+  const c = (x) => Math.round(Number(x) * 100);
+  if (!['deposit', 'credit'].includes(kind)) return { ok: false, reason: 'kind' };
+  if (opening === '' || opening == null || closing === '' || closing == null || !isFinite(Number(opening)) || !isFinite(Number(closing))) return { ok: false, reason: 'missing' };
+  const inP = (rows || []).filter((t) => t && t.date && (!from || t.date >= from) && (!to || t.date <= to) && isFinite(Number(t.amount)));
+  const out = inP.reduce((s, t) => s + c(t.amount), 0);
+  const sign = kind === 'credit' ? 1 : -1;
+  const exp = c(opening) + sign * out, diff = c(closing) - exp; // positive diff: the statement says more than the rows explain
+  // Rows that would explain the gap: one row missing (|amount| = |diff|) or entered with the wrong sign (2 × |amount| = |diff|).
+  const cand = !diff ? [] : inP.filter((t) => { const a = Math.abs(c(t.amount)); return a === Math.abs(diff) || 2 * a === Math.abs(diff); })
+    .map((t) => ({ ...t, why: Math.abs(c(t.amount)) === Math.abs(diff) ? 'same amount as the gap (missing or extra?)' : 'half the gap (sign flipped?)' }));
+  return { ok: true, count: inP.length, expected: exp / 100, closing: c(closing) / 100, opening: c(opening) / 100, diff: diff / 100, balanced: diff === 0, candidates: cand.slice(0, 8) };
+}
+if (typeof window !== 'undefined') window.FDReconcile = reconcileStatement;
+
 dash.calc('all_txns', {
   title: 'All transactions, cleaned (including ignored ones)',
   description: 'Sheet rows, imported statement rows and manual entries, each with a cleaned-up vendor name. For any book and month with imported statement transactions, the imports replace the sheet rows. Your rules are applied next, then your edits to single transactions (including splits). Transactions you ignored, or that an ignore rule matches, are marked as ignored.',

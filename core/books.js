@@ -12,6 +12,7 @@
 //   replaceBookDocs(bookId, rows)        → atomically delete all of the book's docs and insert rows (same shape as insertDoc)
 //   newId()                              → short random id
 //   backup()                             → optional; returns a name/path of a full safety copy (taken before restore)
+//   removeMany(bookId, [{coll,id}], fileIds) → delete those docs and photos in one transaction (undo an import)
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -26,6 +27,11 @@
   const str = (v, n) => String(v ?? '').slice(0, n);
   const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
   const TYPES_OK = ['expense', 'income', 'transfer'];
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  function cleanRecon(r) { // the statement check saved with an import (see reconcileStatement in calcs.js); a record, never applied to the ledger
+    if (!r || typeof r !== 'object' || num(r.opening) === null || num(r.closing) === null) return null;
+    return { opening: num(r.opening), closing: num(r.closing), expected: num(r.expected), diff: num(r.diff), from: DAY.test(r.from || '') ? r.from : null, to: DAY.test(r.to || '') ? r.to : null, checkedAt: str(r.checkedAt, 30) };
+  }
   function cleanDoc(coll, d, label) {
     const now = new Date().toISOString();
     if (coll === 'edits') {
@@ -78,7 +84,8 @@
     const txns = Array.isArray(d.txns) ? d.txns.map((t) => ({ date: str(t.date, 10), description: str(t.description, 120), amount: num(t.amount), ...(t && t.id ? { id: str(t.id, 80) } : {}) })) : []; // id: the bank's own transaction id, when the file or sync has one
     return { book: label, accountKind: ['deposit', 'credit', 'investment', 'mortgage', 'loan'].includes(d.accountKind) ? d.accountKind : 'deposit',
       accountName: str(d.accountName, 60), owner: str(d.owner, 30), fileName: str(d.fileName, 80), importedAt: new Date().toISOString(),
-      rowCount: txns.length, dateFrom: str(d.dateFrom, 10), dateTo: str(d.dateTo, 10), balance: num(d.balance), balanceMonth: str(d.balanceMonth, 7), asOf: str(d.asOf, 10), accountType: str(d.accountType, 20), txns };
+      rowCount: txns.length, dateFrom: str(d.dateFrom, 10), dateTo: str(d.dateTo, 10), balance: num(d.balance), balanceMonth: str(d.balanceMonth, 7), asOf: str(d.asOf, 10), accountType: str(d.accountType, 20), txns,
+      source: ['csv', 'ofx', 'pdf', 'sync', 'manual'].includes(d.source) ? d.source : '', fileRows: num(d.fileRows), skipped: num(d.skipped), reconcile: cleanRecon(d.reconcile) };
   }
 
   const parse = (r) => { let j = {}; try { j = JSON.parse(r.json); } catch (e) {} return { id: r.id, ...j }; };
@@ -106,12 +113,16 @@
     //  3. A safety copy of the current data (photos included) must succeed first, or nothing is touched.
     //  4. Replace documents and photos together in one transaction (store.replaceBook), so a failure changes nothing.
     // Backups without a "files" list (older ones) keep this book's existing photos where receipts still match them.
-    async function restore(book, body, user) {
+    async function restore(book, body, user) { return stageRestore(book, body, user, false); }
+    // Check a backup without changing anything: the same staging as a restore, then stop. Used by Backup health.
+    async function verify(book, body, user) { return stageRestore(book, body, user, true); }
+    async function stageRestore(book, body, user, dryRun) {
       if (!body || typeof body.docs !== 'object' || !body.docs) return reply(400, { error: 'That doesn\u2019t look like a backup file from this app.' });
       const now = new Date().toISOString(), idMap = new Map(), staged = [];
       for (const [c, list] of Object.entries(body.docs)) {
         if (!COLLECTIONS.includes(c) || !Array.isArray(list)) continue;
         for (const d of list) { const { id, created, createdBy, ...rest } = d || {}; let doc; try { doc = cleanDoc(c, rest, book.label); } catch (e) { if (e.status) return reply(400, { error: 'This backup can\u2019t be restored as it is: ' + e.message }); throw e; } if (rest.createdAt) doc.createdAt = String(rest.createdAt).slice(0, 40);
+          if (c === 'imports' && rest.importedAt && !isNaN(Date.parse(rest.importedAt))) doc.importedAt = String(rest.importedAt).slice(0, 30); // import history keeps when it really happened
           const nid = store.newId(); if (id) idMap.set(c + ':' + String(id), nid);
           staged.push({ c, nid, doc, created: created || now, createdBy: createdBy || user }); }
       }
@@ -128,6 +139,10 @@
         if (x.c === 'receipts' && x.doc.fileId) { if (hasFiles) { const n = fileMap.get(x.doc.fileId); if (n) x.doc.fileId = n; else missingPhotos++; } else if (!keepIds.has(x.doc.fileId)) missingPhotos++; }
       }
       const rows = staged.map((x) => ({ id: x.nid, bookId: book.id, coll: x.c, json: JSON.stringify(x.doc), created: x.created, createdBy: x.createdBy }));
+      if (dryRun) { const counts = {}; for (const x of staged) counts[x.c] = (counts[x.c] || 0) + 1;
+        const declared = Object.values(body.docs).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0);
+        return reply(200, { ok: unresolved === 0 && missingPhotos === 0 && rows.length === declared, documents: rows.length, declared, counts, photos: files ? files.length : null, photosDeclared: hasFiles ? body.files.length : null,
+          unresolved, missingPhotos, legacy: !hasFiles, exportedAt: str(body.exportedAt, 30), book: body.book && body.book.name ? str(body.book.name, 60) : '', checkedAt: now }); }
       let safety = '';
       if (store.backup) { try { safety = await store.backup(); } catch (e) { return reply(500, { error: 'Restore stopped before changing anything: the safety copy of your current data couldn\u2019t be made. ' + e.message }); } }
       try {
@@ -136,6 +151,22 @@
       } catch (e) { return reply(500, { error: 'Restore failed; nothing was changed. ' + e.message }); }
       return reply(200, { ok: true, restored: rows.length, photos: files ? files.length : null, unresolved, missingPhotos, legacy: !hasFiles,
         safetyBackup: safety ? String(safety).split(/[\\/]/).pop() : '' });
+    }
+    // Undo an import: the statement, plus the edits and receipts on its transactions only when the request lists them
+    // (the app shows them first and asks). One transaction (store.removeMany), so it's all or nothing.
+    async function undoImport(book, body) {
+      const id = str(body && body.importId, 40); if (!id) return reply(400, { error: 'Which import?' });
+      const imps = (await store.listDocs(book.id, 'imports')).map(parse); const batch = imps.find((x) => x.id === id);
+      if (!batch) return reply(404, { error: 'That import isn\u2019t in this dashboard any more.' });
+      const pre = `i:${id}:`, deps = async (c) => (await store.listDocs(book.id, c)).map(parse).filter((x) => String(x.txKey || '').startsWith(pre));
+      const edits = await deps('edits'), receipts = await deps('receipts');
+      const want = (k) => new Set(Array.isArray(body[k]) ? body[k].map((x) => String(x)) : []);
+      const wE = want('edits'), wR = want('receipts');
+      if ([...wE].some((x) => !edits.some((e) => e.id === x)) || [...wR].some((x) => !receipts.some((r) => r.id === x))) return reply(409, { error: 'The list of edits and receipts changed since you looked. Open Undo again to see the current list.' });
+      const docs = [{ coll: 'imports', id }, ...edits.filter((e) => wE.has(e.id)).map((e) => ({ coll: 'edits', id: e.id })), ...receipts.filter((r) => wR.has(r.id)).map((r) => ({ coll: 'receipts', id: r.id }))];
+      const fileIds = receipts.filter((r) => wR.has(r.id) && r.fileId).map((r) => r.fileId);
+      try { await store.removeMany(book.id, docs, fileIds); } catch (e) { return reply(500, { error: 'Undo failed; nothing was changed. ' + e.message }); }
+      return reply(200, { ok: true, removed: { imports: 1, edits: wE.size, receipts: wR.size, photos: fileIds.length }, keptEdits: edits.length - wE.size, keptReceipts: receipts.length - wR.size, rows: (batch.txns || []).length });
     }
     async function addDoc(book, coll, body, user) {
       let doc; try { doc = cleanDoc(coll, body || {}, book.label); } catch (e) { if (e.status) return reply(e.status, { error: e.message, rows: e.rows, maxRows: MAX_IMPORT_ROWS }); throw e; }
@@ -153,6 +184,8 @@
       if (a === 'data' && method === 'GET') return reply(200, await data(book.id));
       if (a === 'export' && method === 'GET') return reply(200, await exportBook(book), { download: `${book.id}-${new Date().toISOString().slice(0, 10)}.json` });
       if (a === 'restore' && method === 'POST') return restore(book, await getBody(60 * 1024 * 1024), user);
+      if (a === 'verify-backup' && method === 'POST') return verify(book, await getBody(60 * 1024 * 1024), user);
+      if (a === 'undo-import' && method === 'POST' && store.removeMany) return undoImport(book, await getBody());
       if (a === 'files' && store.putFile) {
         if (method === 'POST' && !b) { const f = await getBody(5 * 1024 * 1024); const mime = String(f && f.mime || ''), data = String(f && f.data || '').replace(/^data:[^,]*,/, '');
           if (!IMAGE_TYPES.includes(mime)) return reply(400, { error: 'Receipts must be a JPEG, PNG or WebP photo.' });
@@ -165,7 +198,7 @@
       if (COLLECTIONS.includes(a) && method === 'DELETE' && b) { await store.deleteDoc(book.id, a, b); return reply(200, { ok: true }); }
       return reply(404, { error: 'Not found' });
     }
-    return { data, exportBook, restore, addDoc, handle };
+    return { data, exportBook, restore, verify, undoImport, addDoc, handle };
   }
 
   return { COLLECTIONS, SEED_SETS, MAX_IMPORT_ROWS, cleanDoc, createBookApi };

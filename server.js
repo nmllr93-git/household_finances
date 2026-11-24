@@ -217,6 +217,14 @@ const BOOKS_STORE = {
       db.exec('COMMIT'); }
     catch (e) { db.exec('ROLLBACK'); throw e; }
   },
+  removeMany: (bookId, docs, fileIds) => {
+    db.exec('BEGIN');
+    try { const d = db.prepare('DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = ?'); for (const x of docs) d.run(x.id, bookId, x.coll);
+      const f = db.prepare('DELETE FROM files WHERE id = ? AND book_id = ?'); for (const id of fileIds || []) f.run(id, bookId);
+      if (BOOKS_STORE._failRemove) throw new Error('test: forced failure during undo');
+      db.exec('COMMIT'); }
+    catch (e) { db.exec('ROLLBACK'); throw e; }
+  },
   newId: () => crypto.randomBytes(10).toString('base64url'),
   backup: () => { const f = backup(); if (!f) throw new Error('the backup didn’t complete'); return f; },
   putFile: (f) => db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(f.id, f.bookId, f.mime, Buffer.from(f.data, 'base64'), f.created, f.createdBy),
@@ -488,6 +496,12 @@ async function api(req, res, url) {
     }
   }
   if (parts[1] === 'me' && req.method === 'GET') return send(res, 200, { username: user, books: userBooks(user) });
+  // Backup health: what's kept where, and the last time a copy was checked. Folder paths only for the owner.
+  if (parts[1] === 'backup-health') {
+    const isOwner = user === ownerName();
+    if (req.method === 'POST' && parts[2] === 'check') { if (!isOwner) return send(res, 403, { error: `Only ${ownerName()} (who set up this server) can check the server's backup files.` }); return send(res, 200, backupHealth(true, isOwner)); }
+    if (req.method === 'GET') return send(res, 200, backupHealth(false, isOwner));
+  }
   // addresses other devices can use (for the "Connect a phone" QR code); empty when the server only listens on this computer
   if (parts[1] === 'invites') {
     if (user !== ownerName()) return send(res, 403, { error: `Only ${ownerName()} (who set up this server) can invite people.` });
@@ -560,6 +574,26 @@ function setCloudDir(dir) {
   saveCfg({ cloudDir: dir, cloudError: '' });
   if (dir) { const latest = fs.readdirSync(BACKUP_DIR).filter((f) => /^finance-.*\.db$/.test(f)).sort().pop(); cloudCopy(latest ? path.join(BACKUP_DIR, latest) : backup()); }
   return cloudInfo();
+}
+// Open the newest backup copy read-only and make sure it's a whole, readable database (PRAGMA integrity_check),
+// then count what's in it. A copy in the cloud folder only proves the file was written there, not that the
+// provider uploaded it, so that's reported separately.
+function checkBackupFile(file) {
+  let c; try { c = new DatabaseSync(file, { readOnly: true });
+    const ic = c.prepare('PRAGMA integrity_check').get(); const ok = ic && Object.values(ic)[0] === 'ok';
+    const docs = c.prepare('SELECT COUNT(*) n FROM docs').get().n, files = c.prepare('SELECT COUNT(*) n FROM files').get().n, books = c.prepare('SELECT COUNT(*) n FROM books').get().n;
+    return { ok, detail: ok ? '' : String(Object.values(ic || {})[0] || 'integrity check failed').slice(0, 200), docs, files, books };
+  } catch (e) { return { ok: false, detail: e.message.slice(0, 200) }; } finally { try { c && c.close(); } catch {} }
+}
+function backupHealth(runCheck, showPaths) {
+  const list = (() => { try { return fs.readdirSync(BACKUP_DIR).filter((f) => /^finance-.*\.db$/.test(f)).sort(); } catch { return []; } })();
+  const latest = list.length ? list[list.length - 1] : '', lf = latest ? path.join(BACKUP_DIR, latest) : '';
+  const st = lf ? fs.statSync(lf) : null;
+  if (runCheck && lf) { const r = checkBackupFile(lf); saveCfg({ backupCheck: { at: new Date().toISOString(), file: latest, ...r } }); }
+  const cl = cloudInfo();
+  return { kind: 'server', count: list.length, keep: 30, latest: latest ? { name: latest, at: st.mtime.toISOString(), bytes: st.size } : null, photos: true,
+    folder: showPaths ? BACKUP_DIR : '', cloud: { on: !!cl.dir, folder: showPaths ? cl.target : '', lastCopy: cl.last, error: cl.error, note: 'A copy written to the cloud folder shows the file got there. Whether the provider has uploaded it is up to its app.' },
+    check: CFG.backupCheck || null, canCheck: showPaths };
 }
 const cloudInfo = () => ({ dir: CFG.cloudDir || '', target: cloudTarget(), last: CFG.cloudLast || '', error: CFG.cloudError || '' });
 

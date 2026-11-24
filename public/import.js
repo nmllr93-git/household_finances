@@ -138,8 +138,46 @@
   const refresh = () => {
     parseRows();
     document.querySelectorAll('#fd-import-save').forEach((b) => { b.disabled = !S.grid.length && !S.pdf; });
-    dash.draw('importPreview');
+    dash.draw('importPreview'); dash.draw('impRecon');
   };
+  // ---- saved column choices, per account (this device only): reused when the same bank's file layout comes back ----
+  const mapKey = (book, acct) => 'fd-impmap:' + book + '|' + String(acct || '').trim().toLowerCase();
+  const sig = () => S.header.map((h) => String(h).trim().toLowerCase()).join('|');
+  const curAcct = () => { const fm = document.querySelector('#fd-import-form'); const f = fm ? new FormData(fm) : null; return f ? [String(f.get('book') || ''), String(f.get('account') || '')] : ['', '']; };
+  function saveMap(book, acct) { if (S.pdf || S.ofx || !S.header.length) return; try { localStorage.setItem(mapKey(book, acct), JSON.stringify({ sig: sig(), cols: S.cols, sign: S.sign, savedAt: new Date().toISOString() })); } catch {} }
+  function applyMap() {
+    S.mapUsed = false; if (S.pdf || S.ofx || !S.header.length) return false;
+    const [book, acct] = curAcct(); if (!acct) return false;
+    let m = null; try { m = JSON.parse(localStorage.getItem(mapKey(book, acct)) || 'null'); } catch {}
+    if (!m || m.sig !== sig() || !m.cols) return false;
+    const w = S.header.length, ok = (i) => Number.isInteger(i) && i >= -1 && i < w;
+    if (!Object.values(m.cols).every(ok)) return false;
+    S.cols = { ...S.cols, ...m.cols }; S.sign = ['auto', 'neg', 'pos'].includes(m.sign) ? m.sign : 'auto'; S.mapUsed = true; return true;
+  }
+  S.saveMap = saveMap; S.applyMap = applyMap;
+  document.querySelectorAll('#fd-import-form input[name=account]').forEach((i) => i.addEventListener('change', () => { if (S.grid.length && applyMap()) { refresh(); fillBalance(); } else dash.draw('importPreview'); }));
+
+  // ---- reconciliation (optional): opening + activity vs the ending balance ----
+  const reconNow = () => {
+    const fm = document.querySelector('#fd-import-form'); if (!fm || !window.FDReconcile) return null;
+    const f = new FormData(fm), kind = String(f.get('kind') || '').split(':')[0];
+    const op = String(f.get('opening') || '').trim(), cl = String(f.get('balance') || '').trim();
+    if (op === '' && cl === '') return null;
+    return window.FDReconcile({ kind, opening: op, closing: cl, rows: S.parsed, from: String(f.get('pfrom') || ''), to: String(f.get('pto') || '') });
+  };
+  S.reconNow = reconNow;
+  dash.draw('impRecon', (el) => {
+    el.replaceChildren(); const r = reconNow(); if (!r) return;
+    const p = document.createElement('p'); p.className = 'fd-msg';
+    if (!r.ok) { p.classList.add('fd-note'); p.textContent = r.reason === 'kind' ? 'Checking a statement works for checking, savings and credit card accounts.' : 'Type both the opening and the ending balance to check the statement.'; el.append(p); return; }
+    if (r.balanced) { p.classList.add('ok'); p.textContent = `Adds up: ${money2(r.opening)} opening and ${r.count} transactions gives ${money2(r.expected)}, the same as the ending balance.`; el.append(p); return; }
+    p.classList.add('err'); p.textContent = `Off by ${money2(Math.abs(r.diff))}: ${money2(r.opening)} opening and ${r.count} transactions gives ${money2(r.expected)}, but the statement ends at ${money2(r.closing)}. Nothing has been changed.`;
+    el.append(p);
+    if (r.candidates.length) { const h = document.createElement('p'); h.className = 'fd-note'; h.textContent = 'Rows worth checking:'; const ul = document.createElement('ul'); ul.className = 'fd-list';
+      for (const t of r.candidates) { const li = document.createElement('li'); li.textContent = `${t.date} · ${t.description} · ${money2(Math.abs(t.amount))} ${t.amount > 0 ? 'out' : 'in'}: ${t.why}`; ul.append(li); } el.append(h, ul); }
+    else { const h = document.createElement('p'); h.className = 'fd-note'; h.textContent = 'No single row explains the gap. Check the column choices, the “Purchases appear as” setting, the period dates, or whether rows are missing from the file.'; el.append(h); }
+  });
+  document.querySelectorAll('#fd-import-form input[name=opening], #fd-import-form input[name=pfrom], #fd-import-form input[name=pto], #fd-import-form input[name=balance], #fd-import-form select[name=kind]').forEach((i) => i.addEventListener('input', () => dash.draw('impRecon')));
 
   // ---- preview drawing ----
   dash.draw('importPreview', (el) => {
@@ -178,6 +216,7 @@
       sum.textContent = `${p.length} transactions from ${dates[0]} to ${dates[dates.length - 1]}: ${money2(out)} out, ${money2(inn)} in${S.flip ? ' (amounts flipped so purchases count as money out)' : ''}. Check that a purchase shows as “out” below.`;
     }
     el.append(sum);
+    if (S.mapUsed) { const m = document.createElement('p'); m.className = 'fd-note'; m.textContent = 'Using the column choices you saved last time for this account.'; el.append(m); }
     if (p.length) {
       const fm = document.querySelector('#fd-import-form');
       const acct = fm ? String(new FormData(fm).get('account') || '') : '';
@@ -331,8 +370,8 @@
       if (String(rd.result || '').startsWith('%PDF')) { readPdf(f); return; } // a PDF without a .pdf name or type (some phones)
       S.text = String(rd.result || ''); S.fileName = f.name;
       if (/<OFX>|OFXHEADER/i.test(S.text.slice(0, 4000))) { readOfx(S.text); return; }
-      S.grid = parseCSV(S.text); S.sign = 'auto';
-      detect(); refresh(); fillBalance();
+      S.grid = parseCSV(S.text); S.sign = 'auto'; S.ofx = false;
+      detect(); applyMap(); refresh(); fillBalance();
     };
     rd.readAsText(f);
   }));
@@ -347,7 +386,7 @@
       const desc = [tag(b, 'NAME'), tag(b, 'MEMO')].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' ').replace(/&amp;/g, '&').slice(0, 120);
       rows.push([date, desc || tag(b, 'TRNTYPE') || 'Transaction', amt < 0 ? String(-amt) : '', amt > 0 ? String(amt) : '', tag(b, 'FITID')]); // FITID: the bank's id, so overlapping downloads aren't counted twice
     }
-    S.pdf = null; dash.draw('pdfPick');
+    S.pdf = null; S.ofx = true; dash.draw('pdfPick');
     S.grid = rows.length ? [['Date', 'Description', 'Debit', 'Credit', 'FITID'], ...rows] : []; S.sign = 'auto';
     if (S.grid.length) detect(); refresh();
     const lb = text.match(/<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|<\/CCSTMTRS>)/i);
@@ -384,7 +423,9 @@
     const dates = txns.map((x) => x.date).sort();
     const doc = { book: fd.get('book'), accountKind: String(fd.get('kind')).split(':')[0], accountType: String(fd.get('kind')).split(':')[1] || '', accountName: String(fd.get('account') || S.fileName).slice(0, 60), owner: '',
       fileName: S.fileName.slice(0, 80), importedAt: new Date().toISOString(), rowCount: txns.length, dateFrom: dates[0] || S.asOf || null, dateTo: dates[dates.length - 1] || S.asOf || null,
-      balance: bal === '' ? null : Number(bal), balanceMonth: String(fd.get('bmonth') || '') || (dates[dates.length - 1] || S.asOf || '').slice(0, 7), ...(S.pdf && S.asOf ? { asOf: S.asOf } : {}), txns };
+      balance: bal === '' ? null : Number(bal), balanceMonth: String(fd.get('bmonth') || '') || (dates[dates.length - 1] || S.asOf || '').slice(0, 7), ...(S.pdf && S.asOf ? { asOf: S.asOf } : {}), txns,
+      source: S.pdf ? 'pdf' : S.ofx ? 'ofx' : 'csv', fileRows: S.parsed.length, skipped };
+    const rc = reconNow(); if (rc && rc.ok) doc.reconcile = { opening: rc.opening, closing: rc.closing, expected: rc.expected, diff: rc.diff, from: String(fd.get('pfrom') || '') || null, to: String(fd.get('pto') || '') || null, checkedAt: doc.importedAt };
     if (JSON.stringify(doc).length > 1500000) { show(IMP, 'fd-imp-big'); return; }
     const btn = form.querySelector('#fd-import-save'); if (btn) btn.disabled = true;
     try {
@@ -392,7 +433,8 @@
       if (!db) throw new Error('no db');
       await db.collection('data/household/imports').add(doc);
       await regAcct(db, doc);
-      show(IMP, 'fd-imp-ok'); document.querySelectorAll('#fd-imp-ok').forEach((el) => { el.textContent = `Saved ${txns.length} transaction${txns.length === 1 ? '' : 's'}${skipped ? ` (${skipped} already in this account were skipped)` : ''}. The dashboard now includes this statement.`; });
+      saveMap(doc.book, doc.accountName);
+      show(IMP, 'fd-imp-ok'); document.querySelectorAll('#fd-imp-ok').forEach((el) => { el.textContent = `Saved ${txns.length} transaction${txns.length === 1 ? '' : 's'}${skipped ? ` (${skipped} already in this account were skipped)` : ''}${doc.reconcile ? (doc.reconcile.diff ? `; the statement is off by ${money2(Math.abs(doc.reconcile.diff))}` : '; the statement adds up') : ''}. The dashboard now includes this statement. You can undo it under Import history.`; });
       S.grid = []; S.parsed = []; S.pdf = null; form.reset(); dash.draw('importPreview'); dash.draw('pdfPick');
       if (window.__fdQueueSaved) window.__fdQueueSaved();
     } catch (e) { show(IMP, 'fd-imp-err'); if (btn) btn.disabled = false; impMsg = 'Save error: ' + String((e && e.message) || e); dash.draw('impDebug'); }

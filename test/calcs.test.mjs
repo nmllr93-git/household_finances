@@ -139,3 +139,33 @@ test('a statement without ids and bank sync with ids for the same purchases coun
   const sync = [{ ...tx('2026-10-03', 'COFFEE SHOP', 4.5), id: 'S1' }, { ...tx('2026-10-03', 'COFFEE SHOP', 4.5), id: 'S2' }, { ...tx('2026-10-04', 'GAS', 30), id: 'S3' }];
   assert.equal(spend(engine({ imports: [imp('a', 'Checking', 'deposit', st), imp('b', 'Checking', 'deposit', sync)] })), 39);
 });
+
+// ---- statement reconciliation ----
+const RC = (() => { const ctx = { dash: { calc: () => {}, params: () => ({}) }, console, Date, Math, JSON, Intl }; vm.runInNewContext(SRC, ctx); return ctx.reconcileStatement; })();
+const rows = [tx('2026-05-02', 'GROCER', 60.1), tx('2026-05-05', 'PAYROLL', -1000), tx('2026-05-09', 'GAS', 40.25)];
+test('reconcile: a checking statement that adds up balances to the cent', () => {
+  const r = RC({ kind: 'deposit', opening: 500, closing: 1399.65, rows });
+  assert.equal(r.balanced, true); assert.equal(r.diff, 0); assert.equal(r.expected, 1399.65);
+});
+test('reconcile: an omitted row shows a discrepancy and points at it', () => {
+  const r = RC({ kind: 'deposit', opening: 500, closing: 1399.65, rows: rows.filter((t) => t.description !== 'GAS') });
+  assert.equal(r.balanced, false); assert.equal(r.diff, -40.25);
+  const r2 = RC({ kind: 'deposit', opening: 500, closing: 1399.65, rows: [...rows, tx('2026-05-10', 'EXTRA', 40.25)] });
+  assert.equal(r2.diff, 40.25); assert.ok(r2.candidates.some((t) => t.description === 'EXTRA'));
+});
+test('reconcile: a sign-flipped row shows twice its amount and is flagged', () => {
+  const flipped = rows.map((t) => (t.description === 'GROCER' ? { ...t, amount: -60.1 } : t));
+  const r = RC({ kind: 'deposit', opening: 500, closing: 1399.65, rows: flipped });
+  assert.equal(r.diff, -120.2); assert.ok(r.candidates.some((t) => t.description === 'GROCER' && /sign/.test(t.why)));
+});
+test('reconcile: credit cards count purchases up and payments down; the period filters rows', () => {
+  const cc = [tx('2026-05-01', 'STORE', 120), tx('2026-05-20', 'PAYMENT THANK YOU', -300), tx('2026-06-02', 'NEXT MONTH', 9)];
+  const r = RC({ kind: 'credit', opening: 450, closing: 270, rows: cc, from: '2026-05-01', to: '2026-05-31' });
+  assert.equal(r.balanced, true); assert.equal(r.count, 2);
+  assert.equal(RC({ kind: 'investment', opening: 1, closing: 1, rows: cc }).ok, false);
+  assert.equal(RC({ kind: 'deposit', opening: '', closing: 1, rows: cc }).reason, 'missing');
+});
+test('reconcile: cents add up exactly (no floating-point drift)', () => {
+  const many = Array.from({ length: 1000 }, (_, i) => tx('2026-05-01', 'X' + i, 0.1));
+  assert.equal(RC({ kind: 'deposit', opening: 100, closing: 0, rows: many }).balanced, true);
+});
