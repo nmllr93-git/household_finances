@@ -9,6 +9,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
   - IRS Schedule C lines picked from the category, or chosen yourself; business income and net profit
   - Business tab: profit and loss, transactions with ⚠ missing-receipt flags, quarterly estimated taxes with due dates and a Needs attention reminder, mileage log at the IRS rate, home office (simplified method)
   - business tiles; downloads as CSV, or print / save as PDF for your tax preparer
+  - optional extras, folded away until you open them: business-only accounts, inventory and cost of goods sold for product sellers, vehicle details (Part IV) and standard-rate vs actual car costs, last year's tax for the safe harbor, and estimated payments already made
 - Desktop app: **Check for updates** and the version number are now in ⚙ Settings, so computers that connect to another host can update without the hidden menu
 - More account types: Roth 401(k), Solo 401(k), TSP, Coverdell ESA, UTMA/UGMA, ABLE account, annuity and Treasury bonds (investments), and FSA (cash)
 

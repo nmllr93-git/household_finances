@@ -1203,8 +1203,8 @@
     f.elements.type.value = t.type; f.elements.oneTime.checked = !!t.oneTime;
     if (f.elements.tags) f.elements.tags.value = (t.tags || []).join(', ');
     if (f.elements.biz) { const bs = f.elements.biz, L = BIZ().list; bs.replaceChildren(new Option('Personal (not business)', ''), ...L.map((x) => new Option(x.name, x.name)));
-      if (t.biz && !L.some((x) => x.name === t.biz)) bs.append(new Option(t.biz, t.biz)); bs.value = t.biz || ''; f.elements.bizPct.value = t.biz ? t.bizPct || 100 : 100;
-      const ls = f.elements.schedC; if (!ls.options.length) { ls.append(new Option('Automatic (from the category)', '')); (window.FDSchedC || []).forEach(([k, l]) => ls.append(new Option(`${k} · ${l}`, k))); } ls.value = t.schedC || '';
+      if (t.biz && !L.some((x) => x.name === t.biz)) bs.append(new Option(t.biz, t.biz)); bs.value = t.biz != null ? t.biz : acctMap()[t.source] || ''; f.elements.bizPct.value = t.biz ? t.bizPct || 100 : 100; if (!L.some((x) => x.name === bs.value) && bs.value) bs.append(new Option(bs.value, bs.value));
+      const ls = f.elements.schedC; ls.replaceChildren(new Option('Automatic (from the category)', '')); (window.FDSchedC || []).filter(([k]) => k !== 'cogs' || sells()).forEach(([k, l]) => ls.append(new Option(k === 'cogs' ? l : `${k} · ${l}`, k))); ls.value = t.schedC || '';
       const sync = () => { f.querySelectorAll('.fd-bizonly').forEach((x) => { x.hidden = !bs.value; }); }; bs.onchange = sync; sync(); }
     f.elements.split.checked = base.length > 1;
     for (let i = 1; i <= 4; i++) { const s = base.length > 1 ? base[i - 1] : null; f.elements['sc' + i].value = s ? s.category : ''; f.elements['sa' + i].value = s ? s.amount : ''; }
@@ -3702,14 +3702,25 @@
   // ================= Personal business (sole proprietor, Schedule C) =================
   // Everything here stays hidden until a business is added in ⚙ Settings → This dashboard → Business.
   // Saved per dashboard: prefs "business" = { list: [{ name, sqft }], setAside, receiptMin }; prefs "mileage-YYYY" = trips.
-  const BIZ = () => { const b = prefGet('business', null); return { list: [], setAside: 25, receiptMin: 75, ...(b && typeof b === 'object' ? b : {}), list: (b && Array.isArray(b.list) ? b.list : []).filter((x) => x && x.name) }; };
+  // quick edits in a row must build on each other, so these settings keep a local copy until the server's newer one arrives
+  const PCACHE = {};
+  const prefGetC = (key, def) => { const c = PCACHE[key], r = prefRows(key).pop(); if (c && (!r || String(r.createdAt) < c.at)) return JSON.parse(JSON.stringify(c.v)); return prefGet(key, def); };
+  const prefSetC = (key, v) => { PCACHE[key] = { v: JSON.parse(JSON.stringify(v)), at: new Date(Date.now() - 2000).toISOString() }; return prefSet(key, v); };
+  const BIZ = () => { const b = prefGetC('business', null); return { list: [], setAside: 25, receiptMin: 75, ...(b && typeof b === 'object' ? b : {}), list: (b && Array.isArray(b.list) ? b.list : []).filter((x) => x && x.name) }; };
   const hasBiz = () => { try { return BIZ().list.length > 0; } catch { return false; } };
   const BIZ_IDS = ['biz-summary', 'biz-tx', 'biz-mark', 'biz-tax', 'biz-miles'];
   let BZSEL = { biz: '', year: new Date().getFullYear() };
-  const tripsFor = (y) => { const v = prefGet('mileage-' + y, []); return Array.isArray(v) ? v : []; };
-  const bizSum = (year = BZSEL.year, biz = BZSEL.biz) => { const B = BIZ();
+  const tripsFor = (y) => { const v = prefGetC('mileage-' + y, []); return Array.isArray(v) ? v : []; };
+  const yearData = (y) => { const v = prefGetC('bizyear-' + y, {}); return { biz: {}, payments: [], priorTax: null, highIncome: false, ...(v && typeof v === 'object' ? v : {}) }; };
+  const setYearData = (y, fn) => { const d = yearData(y); fn(d); return prefSetC('bizyear-' + y, d); };
+  const acctMap = () => { const m = {}; BIZ().list.forEach((x) => (x.accounts || []).forEach((a) => { m[a] = x.name; })); return m; };
+  const sells = (biz) => BIZ().list.some((x) => x.sells && (!biz || x.name === biz));
+  const bizSum = (year = BZSEL.year, biz = BZSEL.biz) => { const B = BIZ(), Y = yearData(year), per = (n) => Y.biz[n] || {}, names = biz ? [biz] : B.list.map((x) => x.name);
+    const methods = [...new Set(names.map((n) => per(n).carMethod || ''))];
     return window.FDBusiness(rows('txns').filter((t) => t.book === book()), { biz, year, receipts: rcptKeys(), trips: tripsFor(year),
-      homeSqft: biz ? Number((B.list.find((x) => x.name === biz) || {}).sqft) || 0 : B.list.reduce((s, x) => s + (Number(x.sqft) || 0), 0), setAside: B.setAside, receiptMin: B.receiptMin }); };
+      homeSqft: biz ? Number((B.list.find((x) => x.name === biz) || {}).sqft) || 0 : B.list.reduce((s, x) => s + (Number(x.sqft) || 0), 0), setAside: B.setAside, receiptMin: B.receiptMin,
+      accounts: acctMap(), inventory: { begin: names.reduce((s, n) => s + (Number(per(n).invBegin) || 0), 0), end: names.reduce((s, n) => s + (Number(per(n).invEnd) || 0), 0) }, carMethod: methods.length === 1 ? methods[0] : '',
+      priorTax: Number(Y.priorTax) || null, highIncome: !!Y.highIncome, payments: Y.payments || [] }); };
   const bizYears = () => { const ys = new Set([new Date().getFullYear()]); rows('txns').forEach((t) => { if (t.book === book() && t.biz) ys.add(Number(String(t.date || t.month).slice(0, 4))); }); return [...ys].filter(Boolean).sort((a, b) => b - a); };
   const lineName = (code) => (code === 'income' ? 'Income' : ((window.FDSchedC || []).find((x) => x[0] === code) || [code, code])[1]);
   const csvEsc = (v) => { const s2 = String(v ?? ''); return /[",\r\n]/.test(s2) ? '"' + s2.replace(/"/g, '""') + '"' : s2; };
@@ -3721,6 +3732,13 @@
     ys.addEventListener('change', () => { BZSEL.year = Number(ys.value); BIZ_DRAWS.forEach((d) => dash.draw(d)); drawTiles(); });
     w.append(bs, ys); return w; };
   const BIZ_DRAWS = ['bizSummary', 'bizTx', 'bizTax', 'bizMiles'];
+  // optional extras fold away; each remembers whether it was open (per device)
+  const optBox = (key, title, fill) => { const d = document.createElement('details'); d.className = 'fd-bizopt'; let o = false; try { o = localStorage.getItem('fd-bizopt-' + key) === '1'; } catch {} d.open = o;
+    d.addEventListener('toggle', () => { try { localStorage.setItem('fd-bizopt-' + key, d.open ? '1' : '0'); } catch {} });
+    const sm = document.createElement('summary'); sm.textContent = title; d.append(sm); fill(d); return d; };
+  const bzNum = (val, ph, on, w = '8em') => { const i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.step = '0.01'; i.className = 'fd-in'; i.style.maxWidth = w; i.placeholder = ph; if (val != null && val !== '') i.value = val; i.addEventListener('change', () => on(i.value === '' ? null : Number(i.value))); return i; };
+  const lbl = (t, ...n) => { const l = document.createElement('label'); l.className = 'fd-field'; l.append(t, ...n); return l; };
+  const oneBiz = () => BZSEL.biz || (BIZ().list.length === 1 ? BIZ().list[0].name : '');
   const stat = (label, val, cls) => { const d = document.createElement('div'); d.className = 'fd-bizstat'; const a = document.createElement('span'); a.textContent = label; const b = document.createElement('b'); b.textContent = val; if (cls) b.className = cls; d.append(a, b); return d; };
 
   // Summary: profit and loss, Schedule C lines, downloads
@@ -3729,7 +3747,7 @@
     const r = bizSum(); el.append(bizPickers());
     const g = document.createElement('div'); g.className = 'fd-bizstats';
     g.append(stat('Income', money2(r.income)), stat('Expenses', money2(r.expenses)), stat('Mileage deduction', `${money2(r.mileage)} · ${Math.round(r.miles).toLocaleString('en-US')} mi`),
-      stat('Home office', money2(r.homeOffice)), stat('Net profit', money2(r.net), r.net < 0 ? 'fd-bad' : 'fd-good'), stat(`Set aside for taxes (${BIZ().setAside}%)`, money2(r.setAside)));
+      stat('Home office', money2(r.homeOffice)), ...(sells(BZSEL.biz) ? [stat('Cost of goods sold', money2(r.cogs)), stat('Gross profit', money2(r.grossProfit))] : []), stat('Net profit', money2(r.net), r.net < 0 ? 'fd-bad' : 'fd-good'), stat(`Set aside for taxes (${BIZ().setAside}%)`, money2(r.setAside)));
     el.append(g);
     if (!r.lines.length && !r.income) { el.append(phMsg(`Nothing marked as business in ${BZSEL.year} yet. Mark transactions below, or open any transaction and choose its business.`)); }
     else {
@@ -3737,7 +3755,13 @@
       for (const l of r.lines) { const tr = document.createElement('tr'); [l.code, l.label, money2(l.amount) + (l.code === '24b' ? ` (${money2(r.mealsDeductible)} deductible)` : ''), String(l.count)].forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i > 1) td.className = 'fd-r'; tr.append(td); }); t.append(tr); }
       const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
     }
-    el.append(phMsg('Meals are usually 50% deductible. Use the mileage log or actual car costs (line 9), not both. Home office uses the simplified method ($5 a square foot, up to 300). These totals are a starting point for you or your tax preparer, not tax advice.', 'fd-zero'));
+    if (sells(BZSEL.biz)) { const nb = oneBiz(); el.append(optBox('inv', `Inventory for ${BZSEL.year} (optional, product sellers)`, (d) => {
+      if (!nb) { d.append(phMsg('Pick one business at the top to enter its inventory.')); return; } const cur = yearData(BZSEL.year).biz[nb] || {};
+      const set = (k) => (v) => setYearData(BZSEL.year, (y) => { y.biz[nb] = { ...(y.biz[nb] || {}), [k]: v }; });
+      const row = document.createElement('div'); row.className = 'fd-row'; row.append(lbl('Inventory value on Jan 1', bzNum(cur.invBegin, '$', set('invBegin'))), lbl('Inventory value on Dec 31', bzNum(cur.invEnd, '$', set('invEnd'))));
+      d.append(row, phMsg(`Cost of goods sold = inventory on Jan 1 + purchases marked “Inventory and materials for resale” (${money2(r.cogsPurchases)} this year) − inventory on Dec 31. Count what you have on hand at cost. Schedule C Part III.`, 'fd-zero')); })); }
+    if (r.carNotCounted) el.append(phMsg(`Car costs on line 9 (${money2(r.carNotCounted)}) aren’t counted because you chose the standard mileage rate. Parking and tolls still count: mark them as line 27a.`, 'fd-zero'));
+    el.append(phMsg('Meals are usually 50% deductible. Use the mileage log or actual car costs (line 9), not both; choose which under Mileage log → Vehicle details. Home office uses the simplified method ($5 a square foot, up to 300). These totals are a starting point for you or your tax preparer, not tax advice.', 'fd-zero'));
     const who = BZSEL.biz ? BZSEL.biz.replace(/[^\w-]+/g, '-').toLowerCase() : 'business';
     el.append(rbtn('Download transactions (CSV)', () => {
       const lines = [['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt'].join(',')]
@@ -3745,7 +3769,7 @@
       saveFile(`${who}-${BZSEL.year}-transactions.csv`, lines.join('\r\n'), 'text/csv'); }, false), ' ',
     rbtn('Download summary (CSV)', () => {
       const L = [['Line', 'Item', 'Amount'].join(','), ['1', 'Gross receipts (income)', r.income.toFixed(2)].join(','), ...r.lines.map((l) => [l.code, l.label, l.amount.toFixed(2)].map(csvEsc).join(',')),
-        ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)].join(','), ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileage.toFixed(2)].map(csvEsc).join(','), ['30', 'Home office (simplified)', r.homeOffice.toFixed(2)].map(csvEsc).join(','), ['31', 'Net profit', r.net.toFixed(2)].map(csvEsc).join(',')];
+        ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)].join(','), ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)].map(csvEsc).join(','), ...(r.cogs ? [['4', 'Cost of goods sold (Part III)', r.cogs.toFixed(2)].join(',')] : []), ['30', 'Home office (simplified)', r.homeOffice.toFixed(2)].map(csvEsc).join(','), ['31', 'Net profit', r.net.toFixed(2)].map(csvEsc).join(',')];
       saveFile(`${who}-${BZSEL.year}-schedule-c-summary.csv`, L.join('\r\n'), 'text/csv'); }), ' ',
     rbtn('Print or save as PDF', () => bizPrint(r)));
   });
@@ -3774,7 +3798,7 @@
     const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Date', 'Vendor', 'Business', 'Tax line', 'Amount', ''].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i === 4) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
     const miss = new Set(r.missing.map((m) => m.key));
     for (const x of r.list.slice(0, bizTxMore)) {
-      const tr = document.createElement('tr'); const cells = [x.date || x.month, x.vendor, x.biz + ((x.bizPct || 100) < 100 ? ` · ${x.bizPct}%` : ''), x.line === 'income' ? 'Income' : `${x.line} · ${lineName(x.line)}`, (x.line === 'income' ? '+' : '') + money2(x.share)];
+      const tr = document.createElement('tr'); const cells = [x.date || x.month, x.vendor, x.biz + ((x.bizPct || 100) < 100 ? ` · ${x.bizPct}%` : '') + (x.byAccount ? ' · by account' : ''), x.line === 'income' ? 'Income' : `${x.line} · ${lineName(x.line)}`, (x.line === 'income' ? '+' : '') + money2(x.share)];
       cells.forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i === 1 || i === 2) td.translate = false; if (i === 4) td.className = 'fd-r' + (x.line === 'income' ? ' fd-good' : ''); tr.append(td); });
       const act = document.createElement('td'); act.className = 'fd-nowrap'; if (miss.has(x.splitOf || x.key)) { const w = document.createElement('span'); w.className = 'fd-bad'; w.textContent = '⚠ receipt '; w.title = 'No receipt photo yet'; act.append(w); } else if (rcptKeys().has(x.splitOf || x.key)) { const w = document.createElement('span'); w.textContent = '📎 '; w.title = 'Receipt photo saved'; act.append(w); }
       act.append(rbtn('Edit', () => { const full = rows('txns').find((y) => y.key === x.key) || x; showGroup('tx'); setTimeout(() => openEditor(full), 200); })); tr.append(act); t.append(tr);
@@ -3786,7 +3810,7 @@
   // Find and mark: by text and/or account; mark the matches, or make a rule for future ones
   const BM = { text: '', account: '', type: 'expense', biz: '', pct: 100, line: '' };
   const bizLineSel = (val, on, auto = true) => { const s = document.createElement('select'); s.className = 'dash-select'; s.setAttribute('aria-label', 'Schedule C line'); if (auto) s.append(new Option('Pick automatically from the category', ''));
-    (window.FDSchedC || []).forEach(([k, l]) => s.append(new Option(`${k} · ${l}`, k))); s.value = val || ''; s.addEventListener('change', () => on(s.value)); return s; };
+    (window.FDSchedC || []).filter(([k]) => k !== 'cogs' || sells()).forEach(([k, l]) => s.append(new Option(k === 'cogs' ? l : `${k} · ${l}`, k))); s.value = val || ''; s.addEventListener('change', () => on(s.value)); return s; };
   dash.draw('bizMark', (el) => {
     el.replaceChildren(); if (!hasBiz() || st('txns') !== 'ok') return;
     const L = BIZ().list; if (!BM.biz || !L.some((x) => x.name === BM.biz)) BM.biz = L[0].name;
@@ -3828,11 +3852,19 @@
     const msg = phMsg('');
     f.append(di, mi2, pu, ...(L.length > 1 ? [bs] : []), rbtn('Add trip', async () => { const m = Number(mi2.value); if (!(m > 0) || !di.value) { msg.className = 'fd-note fd-bad'; msg.textContent = 'Enter a date and the miles.'; return; }
       const yy = di.value.slice(0, 4), list = tripsFor(yy); list.push({ id: Math.random().toString(36).slice(2, 10), date: di.value, miles: Math.round(m * 10) / 10, purpose: pu.value.trim().slice(0, 80), biz: bs.value || L[0].name });
-      try { await prefSet('mileage-' + yy, list); mi2.value = ''; pu.value = ''; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } }, false));
+      try { await prefSetC('mileage-' + yy, list); mi2.value = ''; pu.value = ''; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } }, false));
     el.append(f, msg);
+    { const nb = oneBiz(); el.append(optBox('car', 'Vehicle details for Schedule C Part IV (optional)', (d) => {
+      if (!nb) { d.append(phMsg('Pick one business at the top to enter its vehicle details.')); return; } const cur = yearData(y).biz[nb] || {};
+      const set = (k) => (v) => setYearData(y, (yy) => { yy.biz[nb] = { ...(yy.biz[nb] || {}), [k]: v }; });
+      const ms = document.createElement('select'); ms.className = 'dash-select'; [['', 'Not chosen (count both)'], ['standard', 'Standard mileage rate'], ['actual', 'Actual car costs (line 9)']].forEach(([v, l]) => ms.append(new Option(l, v))); ms.value = cur.carMethod || ''; ms.addEventListener('change', () => set('carMethod')(ms.value));
+      const di2 = document.createElement('input'); di2.type = 'date'; di2.className = 'fd-in'; di2.value = cur.inService || ''; di2.addEventListener('change', () => set('inService')(di2.value));
+      const row = document.createElement('div'); row.className = 'fd-row'; row.append(lbl('How you deduct the car', ms), lbl('Placed in service for the business', di2), lbl('Total miles this year (all driving)', bzNum(cur.totalMiles, 'miles', set('totalMiles'), '9em')), lbl('Commuting miles', bzNum(cur.commuteMiles, 'miles', set('commuteMiles'), '9em')));
+      const biz = tot.filter((x) => x.biz === nb).reduce((s0, x) => s0 + (Number(x.miles) || 0), 0), other = cur.totalMiles ? Math.max(0, cur.totalMiles - biz - (cur.commuteMiles || 0)) : null;
+      d.append(row, phMsg(`Part IV asks for business miles (${Math.round(biz).toLocaleString('en-US')} from your log), commuting miles and other miles${other != null ? ` (${Math.round(other).toLocaleString('en-US')})` : ''}. The standard rate must be chosen in a car’s first business year; after that you can switch to actual costs.`, 'fd-zero')); })); }
     if (trips.length) { const t = document.createElement('table'); t.className = 'fd-table fd-biztable';
       trips.forEach((x) => { const tr = document.createElement('tr'); [x.date, `${x.miles} mi`, x.purpose || '', L.length > 1 ? x.biz : '', money2((Number(x.miles) || 0) * window.FDMileRate(x.date))].forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i === 4) td.className = 'fd-r'; if (i === 2 || i === 3) td.translate = false; tr.append(td); });
-        const a = document.createElement('td'); a.append(rbtn('×', async () => { if (!confirm('Remove this trip?')) return; await prefSet('mileage-' + y, tripsFor(y).filter((z) => z.id !== x.id)); })); tr.append(a); t.append(tr); });
+        const a = document.createElement('td'); a.append(rbtn('×', async () => { if (!confirm('Remove this trip?')) return; await prefSetC('mileage-' + y, tripsFor(y).filter((z) => z.id !== x.id)); })); tr.append(a); t.append(tr); });
       const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
       el.append(rbtn('Download mileage log (CSV)', () => saveFile(`mileage-${y}.csv`, [['Date', 'Miles', 'Purpose', 'Business', 'Rate', 'Deduction'].join(','), ...trips.map((x) => [x.date, x.miles, x.purpose, x.biz, window.FDMileRate(x.date), ((Number(x.miles) || 0) * window.FDMileRate(x.date)).toFixed(2)].map(csvEsc).join(','))].join('\r\n'), 'text/csv'))); }
   });
@@ -3843,11 +3875,22 @@
     el.replaceChildren(); if (!hasBiz() || st('txns') !== 'ok') return;
     const r = bizSum(BZSEL.year, ''), today = new Date().toISOString().slice(0, 10), B = BIZ();
     el.append(phMsg(`Self-employed people usually pay tax four times a year (IRS Form 1040-ES). This sets aside ${B.setAside}% of each period’s profit, after the home office share, as a rough guide; change the % in ⚙ Settings → Business. Your real amount depends on your whole tax situation.`));
-    const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Payment', 'Covers', 'Due', 'Profit', 'Set aside'].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 2) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
+    const Y = yearData(BZSEL.year), extra = r.paid > 0 || r.safeHarbor != null;
+    const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Payment', 'Covers', 'Due', 'Profit', extra ? 'Needed' : 'Set aside', ...(extra ? ['Paid', 'Still to pay'] : [])].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 2) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
     const cov = ['Jan – Mar', 'Apr – May', 'Jun – Aug', 'Sep – Dec'], nd = r.quarters.find((q) => q.due >= today);
     r.quarters.forEach((q, i) => { const tr = document.createElement('tr'); if (nd === q) tr.className = 'is-next';
-      [`Q${q.q}${q.due < today ? ' ✓' : nd === q ? ' · next' : ''}`, cov[i], new Date(q.due + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }), money2(q.profit), money2(q.estimate)].forEach((v, k) => { const td = document.createElement('td'); td.textContent = v; if (k > 2) td.className = 'fd-r'; tr.append(td); }); t.append(tr); });
+      [`Q${q.q}${q.due < today ? ' ✓' : nd === q ? ' · next' : ''}`, cov[i], new Date(q.due + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }), money2(q.profit), money2(extra ? q.need : q.estimate), ...(extra ? [money2(q.paid), money2(q.owed)] : [])].forEach((v, k) => { const td = document.createElement('td'); td.textContent = v; if (k > 2) td.className = 'fd-r'; tr.append(td); }); t.append(tr); });
     const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
+    el.append(optBox('est', 'Make the estimates more accurate (optional)', (d) => {
+      const row = document.createElement('div'); row.className = 'fd-row';
+      const hi = document.createElement('label'); hi.className = 'fd-check'; const hc = document.createElement('input'); hc.type = 'checkbox'; hc.checked = !!Y.highIncome; hc.addEventListener('change', () => setYearData(BZSEL.year, (y) => { y.highIncome = hc.checked; })); hi.append(hc, ' Last year’s adjusted gross income was over $150,000 ($75,000 if married filing separately)');
+      row.append(lbl(`Total tax on your ${BZSEL.year - 1} return`, bzNum(Y.priorTax, '$', (v) => setYearData(BZSEL.year, (y) => { y.priorTax = v; }), '10em')), hi);
+      d.append(row, phMsg(r.safeHarbor != null ? `Safe harbor: paying ${money2(r.safeHarbor)} in total (${Y.highIncome ? '110' : '100'}% of last year’s tax), on time in four parts, generally avoids an underpayment penalty even if you owe more in April. Each quarter asks for the smaller of that share and the set-aside amount.` : 'With last year’s total tax, each quarter can show the “safe harbor” amount: paying 100% of last year’s tax (110% at higher incomes) on time generally avoids an underpayment penalty.', 'fd-zero'));
+      const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = `Payments made for ${BZSEL.year}`; d.append(h);
+      (Y.payments || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((x) => { const pr = document.createElement('div'); pr.className = 'fd-rb-row'; pr.append(`${x.date} · ${money2(x.amount)}`, rbtn('×', () => setYearData(BZSEL.year, (y) => { y.payments = (y.payments || []).filter((z) => z.id !== x.id); }))); d.append(pr); });
+      const pd = document.createElement('input'); pd.type = 'date'; pd.className = 'fd-in'; pd.value = new Date().toISOString().slice(0, 10); let amt = null; const pa = bzNum('', 'Amount', (v) => { amt = v; });
+      const pr = document.createElement('div'); pr.className = 'fd-row'; pr.append(pd, pa, rbtn('Record payment', () => { amt = Number(pa.value) || amt; if (!(amt > 0) || !pd.value) return; setYearData(BZSEL.year, (y) => { y.payments = [...(y.payments || []), { id: Math.random().toString(36).slice(2, 10), date: pd.value, amount: Math.round(amt * 100) / 100 }]; }); }, false));
+      d.append(pr, phMsg(`Record the federal estimated payments you’ve made for ${BZSEL.year} (including the one in January ${BZSEL.year + 1}). They count toward the quarters in order.`, 'fd-zero')); }));
     el.append(phMsg('Pay at irs.gov/payments (Direct Pay or EFTPS); many states have their own estimated payments too. You’ll see a reminder under Needs attention two weeks before each due date.', 'fd-zero'));
   });
 
@@ -3859,13 +3902,21 @@
     const draw = () => { const B = BIZ(); box.replaceChildren(rhead('Business'));
       box.append(phMsg(B.list.length ? 'Mark business income and expenses, keep a mileage log and get Schedule C totals at tax time. For self-employed people and side businesses without a separate company.' : 'Run a side business or freelance on your own (no LLC)? Add it here to mark business transactions, track mileage, see profit and get Schedule C totals at tax time. The Business tab and tiles appear once a business is added.'));
       const msg = phMsg('');
-      const save = async (next) => { try { await prefSet('business', next); msg.className = 'fd-note fd-good'; msg.textContent = 'Saved.'; setTimeout(() => { msg.textContent = ''; }, 2000); } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } };
+      const save = async (next) => { try { await prefSetC('business', next); msg.className = 'fd-note fd-good'; msg.textContent = 'Saved.'; setTimeout(() => { msg.textContent = ''; }, 2000); } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } };
       B.list.forEach((x, i) => { const r = document.createElement('div'); r.className = 'fd-rb-row fd-bizrow2'; const n = document.createElement('strong'); n.textContent = x.name; n.translate = false;
         const sq = document.createElement('input'); sq.type = 'number'; sq.min = '0'; sq.max = '300'; sq.className = 'fd-in'; sq.style.maxWidth = '7em'; sq.value = x.sqft || ''; sq.placeholder = 'sq ft'; sq.disabled = ro;
         sq.addEventListener('change', () => { const L = BIZ().list, k = L.findIndex((y) => y.name === x.name); if (k < 0) return; L[k] = { ...L[k], sqft: Math.min(300, Math.max(0, Math.round(Number(sq.value) || 0))) }; save({ ...BIZ(), list: L }); });
         const lab = document.createElement('label'); lab.className = 'fd-zero'; lab.append('Home office ', sq, ' sq ft');
+        const more = optBox('set-' + x.name, 'More details (optional)', (d) => {
+          const upd = (patch) => { const L = BIZ().list, k = L.findIndex((y) => y.name === x.name); if (k < 0) return; L[k] = { ...L[k], ...patch }; save({ ...BIZ(), list: L }); };
+          const sl = document.createElement('label'); sl.className = 'fd-check'; const sc = document.createElement('input'); sc.type = 'checkbox'; sc.checked = !!x.sells; sc.disabled = ro; sc.addEventListener('change', () => upd({ sells: sc.checked }));
+          sl.append(sc, ' Sells physical products (adds inventory and cost of goods sold)'); d.append(sl);
+          const accts = [...new Set(rows('txns').filter((t) => t.book === book()).map((t) => t.source).filter(Boolean))].sort();
+          if (accts.length) { const h = document.createElement('p'); h.className = 'fd-zero'; h.textContent = 'Business-only accounts: everything in them counts as this business (unless you mark a transaction personal).'; d.append(h);
+            const w = document.createElement('div'); w.className = 'fd-bizaccts'; accts.forEach((a) => { const l = document.createElement('label'); l.className = 'fd-check'; const c0 = document.createElement('input'); c0.type = 'checkbox'; c0.checked = (x.accounts || []).includes(a); c0.disabled = ro;
+              c0.addEventListener('change', () => { const cur = new Set(x.accounts || []); c0.checked ? cur.add(a) : cur.delete(a); upd({ accounts: [...cur] }); }); const sp = document.createElement('span'); sp.textContent = a; sp.translate = false; l.append(c0, ' ', sp); w.append(l); }); d.append(w); } });
         r.append(n, lab); if (!ro) r.append(rbtn('Remove', () => { if (!confirm(`Remove “${x.name}”? Transactions already marked keep their mark; add a business with the same name to see them again.`)) return; save({ ...BIZ(), list: BIZ().list.filter((y) => y.name !== x.name) }); }));
-        box.append(r); });
+        box.append(r, more); });
       if (!ro) {
         const r = document.createElement('div'); r.className = 'fd-rb-row'; const ni = document.createElement('input'); ni.className = 'fd-in'; ni.placeholder = B.list.length ? 'Another business name' : 'Business name (e.g. Miller Photography)'; ni.maxLength = 40;
         r.append(ni, rbtn(B.list.length ? '+ Add another business' : '+ Add a business', () => { const v = ni.value.trim().slice(0, 40); if (!v) return; if (BIZ().list.some((x) => x.name.toLowerCase() === v.toLowerCase())) { msg.className = 'fd-note fd-bad'; msg.textContent = 'That business is already added.'; return; } save({ ...BIZ(), list: [...BIZ().list, { name: v, sqft: 0 }] }); }, false)); box.append(r);

@@ -57,6 +57,30 @@ name brings everything back.
 
   Use **either** the mileage log **or** actual car costs (line 9), not both. Download the log as CSV.
 
+## Optional details (all folded away until you open them)
+Each one is in a closed **(optional)** box. Leave it closed and nothing changes.
+- **⚙ Settings → Business → More details:**
+  - **Sells physical products:** adds inventory and cost of goods sold, plus an "Inventory and materials for resale" line
+    for purchases.
+  - **Business-only accounts:** everything in a ticked account counts as that business, unless a transaction is marked
+    Personal in its editor.
+- **Business → Inventory for YYYY** (product sellers): inventory value on Jan 1 and Dec 31. Cost of goods sold =
+  start + resale purchases − end (Schedule C Part III). The summary then shows cost of goods sold and gross profit.
+- **Mileage log → Vehicle details for Schedule C Part IV:**
+  - **How you deduct the car:**
+    - *Standard mileage rate*: line 9 car costs stop counting; parking and tolls still count as 27a.
+    - *Actual car costs*: the mileage log stops counting.
+    - *Not chosen*: both count, with a reminder not to use both.
+  - Date placed in service, total miles and commuting miles. Other miles are worked out from these and your log.
+- **Quarterly estimated taxes → Make the estimates more accurate:**
+  - **Last year's total tax** (and whether last year's AGI was over $150,000) gives the *safe harbor*: paying 100%
+    (or 110%) of last year's tax on time in four parts generally avoids an underpayment penalty. Each quarter then asks
+    for the smaller of its share of that and the set-aside amount.
+  - **Payments made:** record each estimated payment for the year (including January's). The table adds *Paid* and
+    *Still to pay*.
+
+The open or closed state of each box is remembered on each device.
+
 ## How the numbers work
 - **Business share:** amount × share %.
 - **Meals (line 24b):** the full amount is shown, and 50% counts toward the deduction.
@@ -83,7 +107,7 @@ Rates that change each year live in `public/calcs.js`:
 - `SCHED_C` holds the expense lines and `SCHED_GUESS` the category guesses.
 - The home office rate ($5, 300 sq ft) and quarterly due dates are fixed rules in `businessSummary` and `quarterDue`.
 
-Data: businesses are stored in the dashboard pref `business`, trips in `mileage-YYYY`, and transaction marks as `biz`,
+Data: businesses are stored in the dashboard pref `business` (with `sells` and `accounts`), trips in `mileage-YYYY`, inventory, vehicle, prior-year tax and payments in `bizyear-YYYY`, and transaction marks as `biz`,
 `bizPct` and `schedC` on edits and rules (cleaned in `core/books.js`).
 
 ## Pro

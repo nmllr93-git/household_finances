@@ -738,7 +738,7 @@ if (typeof window !== 'undefined') window.FDCustom = customReport;
 const SCHED_C = [['8', 'Advertising'], ['9', 'Car and truck expenses'], ['10', 'Commissions and fees'], ['11', 'Contract labor'], ['13', 'Depreciation'],
   ['15', 'Insurance (other than health)'], ['16b', 'Interest (other than mortgage)'], ['17', 'Legal and professional services'], ['18', 'Office expense'],
   ['20a', 'Rent: vehicles and equipment'], ['20b', 'Rent: other business property'], ['21', 'Repairs and maintenance'], ['22', 'Supplies'], ['23', 'Taxes and licenses'],
-  ['24a', 'Travel'], ['24b', 'Meals'], ['25', 'Utilities'], ['26', 'Wages'], ['27a', 'Other expenses']];
+  ['24a', 'Travel'], ['24b', 'Meals'], ['25', 'Utilities'], ['26', 'Wages'], ['27a', 'Other expenses'], ['cogs', 'Inventory and materials for resale (cost of goods sold)']];
 const SCHED_GUESS = [[/advertis|marketing|promot/i, '8'], [/\b(gas|fuel|parking|tolls?|auto)\b|car wash/i, '9'], [/commission|merchant fee|paypal fee|stripe fee|etsy fee/i, '10'],
   [/contract|freelanc/i, '11'], [/insurance/i, '15'], [/interest/i, '16b'], [/legal|lawyer|attorney|accounting|bookkeep|tax prep|cpa/i, '17'],
   [/software|subscription|office|postage|shipping|stationery|printing/i, '18'], [/equipment rental/i, '20a'], [/\brent\b|cowork/i, '20b'], [/repair|maintenance/i, '21'],
@@ -756,20 +756,22 @@ function quarterDue(year, q) {
 }
 const Q_MONTHS = [[1, 3], [4, 5], [6, 8], [9, 12]];
 // opts: { biz: name or '' for every business, year, receipts: Set of txKeys with a photo, trips: [{date, miles, biz}],
-//         homeSqft, setAside (percent), receiptMin }
+//         homeSqft, setAside (percent), receiptMin, accounts: { account name: business } (everything in them counts as that business unless marked personal),
+//         inventory: { begin, end } (product sellers, Part III), carMethod: 'standard' | 'actual' | '', priorTax, highIncome, payments: [{ date, amount }] }
 function businessSummary(txns, opts) {
   const o = opts || {}, year = String(o.year), c = (x) => Math.round(Number(x) * 100);
   const mine = (t) => t.biz && (!o.biz || t.biz === o.biz) && String(t.date || t.month || '').startsWith(year) && t.type !== 'transfer';
   const rec = o.receipts || new Set(), min = o.receiptMin == null ? 75 : Number(o.receiptMin);
-  const lines = {}, months = {}, list = [], missing = [];
-  let inc = 0, exp = 0, meals = 0;
-  for (const t of txns || []) {
+  const lines = {}, months = {}, list = [], missing = [], acc = o.accounts || {};
+  let inc = 0, exp = 0, meals = 0, cogsBuy = 0;
+  for (const t0 of txns || []) {
+    const t = t0.biz == null && acc[t0.source] ? { ...t0, biz: acc[t0.source], bizPct: 100, byAccount: true } : t0;
     if (!mine(t)) continue;
     const share = c(Math.abs(Number(t.amount) || 0) * (Number(t.bizPct) || 100) / 100), m = String(t.date || t.month).slice(0, 7);
     months[m] = months[m] || { inc: 0, exp: 0 };
     if (t.type === 'income') { inc += share; months[m].inc += share; list.push({ ...t, share: share / 100, line: 'income' }); continue; }
     const line = schedLine(t); lines[line] = lines[line] || { amount: 0, count: 0 }; lines[line].amount += share; lines[line].count++;
-    exp += share; months[m].exp += share; if (line === '24b') meals += share;
+    if (line === 'cogs') cogsBuy += share; else { exp += share; if (line === '24b') meals += share; } months[m].exp += share;
     list.push({ ...t, share: share / 100, line });
     if (share >= c(min) && !rec.has(t.splitOf || t.key)) missing.push({ key: t.splitOf || t.key, date: t.date, vendor: t.vendor, amount: share / 100 });
   }
@@ -777,7 +779,11 @@ function businessSummary(txns, opts) {
   const miles = trips.reduce((s, x) => s + (Number(x.miles) || 0), 0), mileC = trips.reduce((s, x) => s + c((Number(x.miles) || 0) * mileRate(x.date)), 0);
   const sqft = Math.min(300, Math.max(0, Number(o.homeSqft) || 0)), homeC = sqft * 500; // simplified method: $5 a square foot, up to 300
   const mealsCut = Math.round(meals / 2); // meals are usually 50% deductible
-  const deductC = exp - mealsCut + mileC + homeC, netC = inc - deductC, rate = Math.max(0, Number(o.setAside) || 0) / 100;
+  // car: with the standard mileage rate, actual car costs (line 9) don't count; with actual costs, the mileage rate doesn't
+  const car = lines['9'] ? lines['9'].amount : 0, carOff = o.carMethod === 'standard' ? car : 0, mileUse = o.carMethod === 'actual' ? 0 : mileC;
+  // cost of goods sold (Part III): inventory at the start + purchases − inventory at the end
+  const inv = o.inventory || {}, cogsC = Math.max(0, c(Number(inv.begin) || 0) + cogsBuy - c(Number(inv.end) || 0));
+  const deductC = exp - mealsCut - carOff + mileUse + homeC + cogsC, netC = inc - deductC, rate = Math.max(0, Number(o.setAside) || 0) / 100;
   for (const x of trips) { const m = String(x.date).slice(0, 7); months[m] = months[m] || { inc: 0, exp: 0 }; months[m].exp += c((Number(x.miles) || 0) * mileRate(x.date)); }
   const quarters = Q_MONTHS.map(([a, b], i) => {
     let p = 0; for (const [m, v] of Object.entries(months)) { const k = Number(m.slice(5)); if (k >= a && k <= b) p += v.inc - v.exp; }
@@ -786,8 +792,14 @@ function businessSummary(txns, opts) {
   });
   // the home office deduction is yearly: spread it over the quarters' estimates evenly
   if (homeC && rate) quarters.forEach((q) => { q.estimate = Math.max(0, Math.round((q.estimate - (homeC / 400) * rate) * 100) / 100); });
+  // payments already made, applied to the quarters in order; safe harbor from last year's tax (100%, or 110% at higher incomes)
+  const paid = (o.payments || []).reduce((s0, x) => s0 + c(Number(x.amount) || 0), 0); // payments recorded for this tax year
+  const harbor = o.priorTax ? Math.round(c(o.priorTax) * (o.highIncome ? 1.1 : 1)) / 100 : null;
+  let left = paid; quarters.forEach((q) => { const need = harbor != null ? Math.min(q.estimate, harbor / 4) : q.estimate; q.need = Math.round(need * 100) / 100; const use = Math.min(left, c(need)); q.paid = use / 100; left -= use; q.owed = Math.max(0, Math.round((c(need) - use)) / 100); });
   return {
-    income: inc / 100, expenses: exp / 100, mealsSpent: meals / 100, mealsDeductible: (meals - mealsCut) / 100, miles, mileage: mileC / 100, homeOffice: homeC / 100,
+    paid: paid / 100, safeHarbor: harbor,
+    income: inc / 100, expenses: exp / 100, mealsSpent: meals / 100, mealsDeductible: (meals - mealsCut) / 100, miles, mileage: mileC / 100, mileageCounted: mileUse / 100, carNotCounted: carOff / 100, homeOffice: homeC / 100,
+    cogs: cogsC / 100, cogsPurchases: cogsBuy / 100, grossProfit: (inc - cogsC) / 100,
     deductions: deductC / 100, net: netC / 100, setAside: Math.round(Math.max(0, netC) * rate) / 100,
     lines: SCHED_C.filter(([k]) => lines[k]).map(([k, label]) => ({ code: k, label, amount: lines[k].amount / 100, count: lines[k].count })),
     months: Object.keys(months).sort().map((m) => ({ month: m, income: months[m].inc / 100, expenses: months[m].exp / 100, net: (months[m].inc - months[m].exp) / 100 })),

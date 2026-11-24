@@ -306,3 +306,21 @@ test('business: mileage rate by date and quarterly due dates move past weekends'
   assert.equal(BZ.due(2026, 1), '2026-04-15'); assert.equal(BZ.due(2026, 4), '2027-01-15'); assert.equal(BZ.due(2027, 2), '2027-06-15');
   assert.equal(BZ.due(2028, 1), '2028-04-17'); // Apr 15 2028 is a Saturday
 });
+test('business: default accounts, cost of goods sold, car method, payments and safe harbor', () => {
+  const tx = [
+    { key: 'a', date: '2026-02-03', type: 'income', amount: 4000, source: 'Biz card' },
+    { key: 'b', date: '2026-02-10', type: 'expense', amount: 300, category: 'Materials', source: 'Biz card', schedC: 'cogs' },
+    { key: 'c', date: '2026-02-11', type: 'expense', amount: 100, category: 'Gas', source: 'Biz card' },
+    { key: 'd', date: '2026-02-12', type: 'expense', amount: 50, category: 'Groceries', source: 'Biz card', biz: '' }, // marked personal: stays out
+    { key: 'e', date: '2026-02-13', type: 'expense', amount: 70, category: 'Supplies', source: 'Checking' },
+  ];
+  const base = { biz: 'Shop', year: 2026, accounts: { 'Biz card': 'Shop' }, trips: [{ date: '2026-03-01', miles: 100, biz: 'Shop' }] };
+  const r = BZ.sum(tx, { ...base, inventory: { begin: 200, end: 150 } });
+  assert.equal(r.income, 4000); assert.equal(r.expenses, 100); assert.equal(r.cogs, 350); assert.equal(r.grossProfit, 3650);
+  assert.equal(r.net, Math.round((4000 - 350 - 100 - 72.5) * 100) / 100); // no method chosen: both car costs and mileage count
+  assert.equal(BZ.sum(tx, { ...base, carMethod: 'standard' }).net, 4000 - 300 - 72.5);
+  assert.equal(BZ.sum(tx, { ...base, carMethod: 'actual' }).net, 4000 - 300 - 100);
+  const p = BZ.sum(tx, { ...base, setAside: 25, priorTax: 2000, highIncome: true, payments: [{ date: '2026-04-10', amount: 500 }] });
+  assert.equal(p.safeHarbor, 2200); assert.equal(p.paid, 500);
+  const q1 = p.quarters[0]; assert.equal(q1.need, Math.min(q1.estimate, 550)); assert.equal(q1.paid, Math.min(500, q1.need));
+});
