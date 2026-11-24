@@ -1,6 +1,6 @@
 # Google Play listing: Larenest
 
-Drafted Nov 23, 2026 from how the app actually handles data (Android 1.6.x). Check again before each release if new data services or permissions are added.
+Drafted Nov 23, 2026; updated Nov 24, 2026 for Desktop 1.0.29 / Android 1.6.9 from how the app actually handles data (Android 1.6.x). Check again before each release if new data services or permissions are added.
 
 ## Store listing
 
@@ -17,7 +17,7 @@ Larenest is a budget, bills and net-worth tracker that keeps your money data wit
 • Budgets with a pace line, so you know mid-month if you're on track
 • Spending by category, vendor and month, with trends and drill-down
 • Upcoming bills and subscriptions, found automatically from your transactions
-• Year in review, cash-flow forecast and savings goals
+• Year in review, savings goals and a cash forecast up to two years ahead
 
 **Track everything you own and owe**
 • Accounts, investments, home and vehicle values, and your mortgage payoff
@@ -33,6 +33,11 @@ Larenest is a budget, bills and net-worth tracker that keeps your money data wit
 • Budget & bills, Investments, Markets, Market movers, and Bills & subscriptions
 • Choose which dashboard each widget shows
 • "Hide amounts" shows percentages only
+
+**Make it yours**
+• Arrange every tab: move, resize, add or remove sections and tiles
+• Build your own reports: spending, income or balances, grouped by category, vendor, account or month, as bars, a line, a table or one number
+• Your layouts and reports follow you to every device
 
 **Your data, your way**
 • Import bank statements (CSV, OFX, QFX) or connect bank sync through SimpleFIN Bridge (a separate read-only service you subscribe to yourself)
