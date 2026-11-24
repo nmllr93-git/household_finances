@@ -1953,23 +1953,23 @@
       const keys = [a.key, keyA(a.name), ...((a.reg && a.reg.aliases) || []).map(keyA)];
       if ((a.kind === 'deposit' || a.kind === 'credit') && a.reg) {
         const lt = keys.map((k) => lastTx[k]).filter(Boolean).sort().pop();
-        if (!lt) out.push({ lvl: 'info', text: `${a.name}: no transactions imported yet, so its balance won't update on its own. Import a statement.`, go: 'import' });
-        else if (daysSince(lt) > 35) out.push({ lvl: 'warn', text: `${a.name}: newest transaction is ${daysSince(lt)} days old (${lt}). Import a newer statement.`, go: 'import' });
+        if (!lt) out.push({ id: 'notx:' + a.key, sig: '0', lvl: 'info', text: `${a.name}: no transactions imported yet, so its balance won't update on its own. Import a statement.`, go: 'import' });
+        else if (daysSince(lt) > 35) out.push({ id: 'stale:' + a.key, sig: lt, lvl: 'warn', text: `${a.name}: newest transaction is ${daysSince(lt)} days old (${lt}). Import a newer statement.`, go: 'import' });
       } else if (a.bal && a.bal.balance !== 0 && a.kind !== 'deposit' && a.kind !== 'credit') {
         const m = a.bal.month, age = now.getUTCFullYear() * 12 + now.getUTCMonth() - (+m.slice(0, 4) * 12 + +m.slice(5, 7) - 1);
-        if (age >= 2) out.push({ lvl: 'info', text: `${a.name}: latest balance is from ${longName(m)}. Record a newer one.`, go: 'import' });
+        if (age >= 2) out.push({ id: 'oldbal:' + a.key, sig: m, lvl: 'info', text: `${a.name}: latest balance is from ${longName(m)}. Record a newer one.`, go: 'import' });
       }
       if (a.rateEnds) {
         const d = -daysSince(a.rateEnds);
-        if (d < 0) out.push({ lvl: 'warn', text: `${a.name}: its rate was due to change on ${a.rateEnds}. Update the rate.`, go: 'accounts' });
-        else if (d <= 60) out.push({ lvl: 'warn', text: `${a.name}: rate changes in ${d} day${d === 1 ? '' : 's'} (${a.rateEnds}).`, go: 'accounts' });
+        if (d < 0) out.push({ id: 'rate:' + a.key, sig: a.rateEnds, lvl: 'warn', text: `${a.name}: its rate was due to change on ${a.rateEnds}. Update the rate.`, go: 'accounts' });
+        else if (d <= 60) out.push({ id: 'rate:' + a.key, sig: a.rateEnds, lvl: 'warn', text: `${a.name}: rate changes in ${d} day${d === 1 ? '' : 's'} (${a.rateEnds}).`, go: 'accounts' });
       }
     }
     const inPer = new Set(period().map((m) => m.month));
     const unc = rows('txns').filter((t) => t.book === book() && t.category === 'Uncategorized' && inPer.has(t.month)).length;
-    if (unc) out.push({ lvl: 'info', text: `${unc} transaction${unc === 1 ? '' : 's'} in this range need${unc === 1 ? 's' : ''} a category.`, go: 'needs' });
+    if (unc) out.push({ id: 'uncat', sig: String(unc), lvl: 'info', text: `${unc} transaction${unc === 1 ? '' : 's'} in this range need${unc === 1 ? 's' : ''} a category.`, go: 'needs' });
     for (const x of econAlerts()) out.push(x);
-    for (const x of priceChanges()) out.push({ lvl: x.diff > 0 ? 'warn' : 'info', text: `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
+    for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
     return out;
   };
   const goTo = (where) => {
@@ -1980,14 +1980,22 @@
   dash.draw('healthRows', (el) => {
     if (st('txns', 'imports', 'accounts', 'balances', 'subs') !== 'ok') return;
     el.replaceChildren();
-    const items = healthItems();
-    if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note fd-good'; p.textContent = 'All good: accounts are up to date and nothing needs attention.'; el.append(p); return; }
+    // Dismissed alerts are saved with the dashboard (every device). One comes back only if what it's about changes
+    // (a newer statement that also goes stale, a different count, a new price), because its "sig" no longer matches.
+    const DIS = prefGet('healthDismissed', {}) || {}, all = healthItems().map((it) => ({ ...it, id: it.id || 'msg:' + it.text, sig: it.sig || it.text }));
+    const items = all.filter((it) => DIS[it.id] !== it.sig), hiddenN = all.length - items.length;
+    const saveDis = (next) => prefSet('healthDismissed', Object.fromEntries(Object.entries(next).filter(([k]) => all.some((x) => x.id === k)).slice(-200)));
+    if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note fd-good'; p.textContent = hiddenN ? 'Nothing else needs attention.' : 'All good: accounts are up to date and nothing needs attention.'; el.append(p); }
     for (const it of items.slice(0, 12)) {
       const r = document.createElement('div'); r.className = 'fd-hl ' + it.lvl;
       const t = document.createElement('span'); t.textContent = (it.lvl === 'warn' ? '⚠ ' : '• ') + it.text;
-      r.append(t, rbtn({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show' }[it.go] || 'Open', () => goTo(it.go)));
-      el.append(r);
+      const acts = document.createElement('span'); acts.className = 'fd-hl-acts';
+      acts.append(rbtn({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show' }[it.go] || 'Open', () => goTo(it.go)));
+      if (!document.body.classList.contains('fd-readonly')) { const x = rbtn('Dismiss', () => { r.remove(); saveDis({ ...DIS, [it.id]: it.sig }); }); x.title = 'Remove this alert on every device. It comes back only if something about it changes.'; acts.append(x); }
+      r.append(t, acts); el.append(r);
     }
+    if (hiddenN && !document.body.classList.contains('fd-readonly')) { const p = document.createElement('p'); p.className = 'fd-note'; p.append(`${hiddenN} dismissed. `);
+      const u = document.createElement('button'); u.type = 'button'; u.className = 'fd-link'; u.textContent = 'Show them again'; u.addEventListener('click', () => saveDis({})); p.append(u); el.append(p); }
   });
 
   // ---- spending by day of week ----
@@ -3082,6 +3090,11 @@
     box.append(msg); host.append(box);
   };
 
+  // A phone: the Android app, or a small touch screen. "Connect your phone" is a computer-only step, and a phone
+  // that opens a dashboard marks it done (saved with the dashboard, so the computer's list ticks it off too).
+  const onPhone = () => !!(window.FD_LOCAL || (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.matchMedia('(pointer: coarse) and (max-width: 820px)').matches);
+  let phoneSeenSent = false;
+  const markPhoneSeen = () => { if (phoneSeenSent || !onPhone() || window.FD_LOCAL || document.body.classList.contains('fd-readonly') || st('prefs') !== 'ok' || prefGet('phoneSeen', false)) return; phoneSeenSent = true; prefSet('phoneSeen', true); };
   // Getting started: a short checklist at the top of a new dashboard; it goes away when everything is done (or on Hide).
   let gsKeys = null;
   dash.draw('gettingStarted', (el) => {
@@ -3095,14 +3108,16 @@
     }
     if (st('imports') !== 'ok' || st('budgets') !== 'ok' || document.body.classList.contains('fd-readonly')) return;
     const bk = book(), get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-    if (get('fd-gs-hide-' + bk)) return;
+    markPhoneSeen();
+    if (prefGet('gsDismissed', false)) return; // dismissed for this dashboard, on every device (⚙ Settings can bring it back)
+    const folded = !!get('fd-gs-hide-' + bk); // "Hide" now folds it to one line on this device
     if (gsKeys === null) { gsKeys = false; FDStore.fetch('/api/keys', {}).then((r) => (r.ok ? r.json() : null)).then((j) => { gsKeys = !!(j && Object.values(j.set || {}).some(Boolean)); dash.draw('gettingStarted'); }).catch(() => {}); }
     const mine = (id) => (dash.data(id).data || []).filter((r) => r.book === bk);
     const go = (g) => () => { const b = document.querySelector(`.fd-navb[data-group="${g}"]`); if (b) { b.click(); window.scrollTo({ top: 0, behavior: 'smooth' }); } };
     const items = [
       ['Add your money', 'Import a bank or card statement, or connect automatic bank sync in ⚙ Settings.', mine('imports').length > 0 || (dash.data('txns').data || []).some((t) => t.book === bk), 'Import', go('import')],
       ['Set a few budgets', 'Pick 3 categories you want to keep an eye on, like groceries or dining.', mine('budgets').length >= 3, 'Budgets', go('budget')],
-      ['Connect your phone', window.FD_LOCAL ? 'You’re already on your phone.' : 'Scan a QR code to open your dashboard on your phone.', !!(window.FD_LOCAL || get('fd-gs-phone')), 'Show QR code', go('settings')],
+      ...(onPhone() ? [] : [['Connect your phone', 'Scan a QR code to open your dashboard on your phone.', !!(get('fd-gs-phone') || prefGet('phoneSeen', false)), 'Show QR code', go('settings')]]),
       ['Turn on free market & economy data', 'Optional. Free keys add rates, inflation, gas prices and live stock prices.', !!gsKeys, 'Set up', go('settings')],
       ['Make a backup', 'Save a copy of your data somewhere safe, like a USB drive or cloud folder.', !!get('fd-gs-backup'), 'Back up', () => { const a = document.getElementById('fd-export'); if (window.FD_LOCAL) go('settings')(); else if (a) a.click(); }],
     ];
@@ -3110,8 +3125,13 @@
     const box = document.createElement('div'); box.className = 'fd-gs';
     const head = document.createElement('div'); head.className = 'fd-gs-head';
     const h = document.createElement('h2'); h.textContent = `Getting started · ${done} of ${items.length} done`;
-    const hide = document.createElement('button'); hide.type = 'button'; hide.className = 'fd-link'; hide.textContent = 'Hide'; hide.addEventListener('click', () => { try { localStorage.setItem('fd-gs-hide-' + bk, '1'); } catch (e) {} dash.draw('gettingStarted'); });
-    head.append(h, hide); box.append(head);
+    const hide = document.createElement('button'); hide.type = 'button'; hide.className = 'fd-link'; hide.textContent = folded ? 'Show' : 'Hide';
+    hide.addEventListener('click', () => { try { if (folded) localStorage.removeItem('fd-gs-hide-' + bk); else localStorage.setItem('fd-gs-hide-' + bk, '1'); } catch (e) {} dash.draw('gettingStarted'); });
+    const dis = document.createElement('button'); dis.type = 'button'; dis.className = 'fd-link'; dis.textContent = 'Dismiss'; dis.title = 'Remove this list from this dashboard on every device. Bring it back in ⚙ Settings.';
+    dis.addEventListener('click', () => { dis.disabled = true; prefSet('gsDismissed', true).then(() => dash.draw('gettingStarted')); });
+    const acts = document.createElement('span'); acts.className = 'fd-gs-acts'; acts.append(hide, dis);
+    head.append(h, acts); box.append(head);
+    if (folded) { box.classList.add('is-folded'); el.append(box); return; }
     const ol = document.createElement('ol');
     for (const [t, d, ok, label, fn] of items) {
       const li = document.createElement('li'); li.className = ok ? 'is-done' : '';
@@ -3553,6 +3573,7 @@
     const row = (label, node, note) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const l = document.createElement('span'); l.className = 'fd-rb-lbl'; l.textContent = label; r.append(l, node); if (note) { const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = note; r.append(n); } box.append(r); };
     const sel = (opts, val, on) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([v, t]) => x.append(new Option(t, v))); x.value = val; x.addEventListener('change', () => on(x.value)); return x; };
     box.append(rhead(`Settings for the ${book()} dashboard`));
+    if (prefGet('gsDismissed', false)) row('Getting started list', rbtn('Show it again', () => { prefSet('gsDismissed', false).then(() => { try { localStorage.removeItem('fd-gs-hide-' + book()); } catch (e) {} dash.draw('gettingStarted'); dash.draw('settingsView'); }); }));
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
     if (s.type === 'shared') {
       const w = document.createElement('div'); w.className = 'fd-people';

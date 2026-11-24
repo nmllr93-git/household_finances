@@ -3,6 +3,10 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- Getting started: "Connect your phone" only shows on a computer, and ticks itself off once a phone opens the dashboard. **Dismiss** removes the list from that dashboard on every device (⚙ Settings can bring it back); Hide folds it to one line on this device
+- Needs attention: **Dismiss** any alert, on every device. It comes back only if what it's about changes (for example, a newer statement that also goes stale). "Show them again" restores them
+
 ## Desktop 1.0.29
 - Tiles for each tab: Accounts, Expenses, Budget, Planning and Transactions each get their own row of tiles at the top; click one to jump to the section behind it
 - ✎ Arrange: move, resize, add and remove tiles and sections on any tab. Saved per dashboard and synced across devices; phones use arrows. Tabs you never arrange keep the built-in layout

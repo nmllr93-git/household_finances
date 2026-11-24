@@ -624,3 +624,6 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-fold { pointer-events: none; 
 @media (max-width: 560px) { .fd-credit { position: static; margin: 0 0 6px; } .fd-crbar { grid-template-columns: minmax(70px, 38%) 1fr auto; font-size: 13px; } }
 body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: auto; }
 .fd-crfilters > summary { cursor: pointer; font-weight: 600; font-size: 13px; margin: 4px 0; } .fd-crfilters { width: 100%; }
+.fd-gs-acts { display: inline-flex; gap: 14px; align-items: center; }
+.fd-gs.is-folded .fd-gs-head { margin-bottom: 0; }
+.fd-hl-acts { display: inline-flex; gap: 6px; flex: none; }
