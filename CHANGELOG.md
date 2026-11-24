@@ -3,6 +3,18 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.27
+- Linux: desktop app as AppImage (updates itself) and .deb, for x86-64 and ARM64
+- Linux servers: Docker image (x86-64 and ARM64, including Raspberry Pi 4/5) and a one-line installer that sets Larenest up as a service; see larenest.app/linux
+- Forgot a password? Set a new one from Host options on the computer running Larenest
+- A backup is made automatically the first time each update starts; restore steps are in Host options
+- Copy diagnostic info (⚙ Settings → Help & feedback), also added to feedback emails; never includes financial data
+- Sign-in cookie is now marked secure on the app's own HTTPS connections
+
+## Android 1.6.7
+- Send feedback now includes diagnostic info (app version, connection, recent errors; never financial data)
+- Works with Larenest servers on Linux and Docker
+
 ## Desktop 1.0.26
 - Vehicle values follow an age curve (steep early, a few % a year after about 7) instead of a flat %; choose Typical, Holds value well or Loses value fast, or keep a fixed %
 - Odometer readings: your own miles per month worked out from them, estimated mileage between readings (≈), and a small capped mileage adjustment to the value
