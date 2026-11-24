@@ -523,7 +523,7 @@
     if (z.list && z.list.length && !(z.spark || z.bars)) {
       if (z.head) { const h = document.createElement('p'); h.className = 'fd-tlhead'; h.textContent = z.head; box.append(h); }
       const mx = Math.max(...z.list.map((x) => Math.abs(x[1])), 1), ul = document.createElement('ul'); ul.className = 'fd-tlist' + (z.bad ? ' is-bad' : '') + (z.good ? ' is-good' : '');
-      z.list.forEach(([lb, val, txt, flag]) => { const li = document.createElement('li'); if (flag) li.className = 'is-flag'; const n0 = document.createElement('span'); n0.textContent = lb; const a = document.createElement('b'); a.textContent = txt || money0(val);
+      z.list.forEach(([lb, val, txt, flag]) => { const li = document.createElement('li'); if (flag) li.className = 'is-flag'; const n0 = document.createElement('span'); n0.textContent = lb; n0.translate = false; // names you chose: never translated const a = document.createElement('b'); a.textContent = txt || money0(val);
         const bar = document.createElement('i'); bar.style.width = Math.round((Math.abs(val) / mx) * 100) + '%'; li.append(n0, a, bar); ul.append(li); });
       box.append(ul);
     }
@@ -3688,6 +3688,7 @@
     const sel = (opts, val, on) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([v, t]) => x.append(new Option(t, v))); x.value = val; x.addEventListener('change', () => on(x.value)); return x; };
     box.append(rhead(`Settings for the ${book()} dashboard`));
     if (prefGet('gsDismissed', false)) row('Getting started list', rbtn('Show it again', () => { prefSet('gsDismissed', false).then(() => { try { localStorage.removeItem('fd-gs-hide-' + book()); } catch (e) {} dash.draw('gettingStarted'); dash.draw('settingsView'); }); }));
+    if (window.FDI18n) row('Language', sel(Object.entries(FDI18n.langs), FDI18n.lang, (v) => FDI18n.set(v)), 'For this device. Amounts and dates stay in US format.');
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
     if (s.type === 'shared') {
       const w = document.createElement('div'); w.className = 'fd-people';

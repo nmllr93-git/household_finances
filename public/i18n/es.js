@@ -1,0 +1,76 @@
+// Español (EE. UU.) — US accounts and US dollars, Spanish wording.
+// Key = the exact English text in the app. {0} {1} mark the parts that change (amounts, names, dates).
+// Style: "tú", short and plain. Keep US account names (401(k), IRA, Roth IRA, HSA) as they are known in the US.
+// Batch 1: navigation, tiles, common buttons, account types, date ranges, settings groups, sign-in and unlock.
+window.FDI18n.add({
+  // ---- navigation & tabs ----
+  'Overview': 'Resumen', 'Expenses': 'Gastos', 'Spending': 'Gastos', 'Wealth': 'Patrimonio', 'More': 'Más', 'Accounts': 'Cuentas', 'Budget': 'Presupuesto',
+  'Transactions': 'Transacciones', 'Planning': 'Planificación', 'Markets': 'Mercados', 'Year in review': 'Resumen del año', 'Import': 'Importar', 'Everything': 'Todo',
+  '⚙ Settings': '⚙ Ajustes', 'Settings': 'Ajustes', '✎ Arrange': '✎ Organizar', 'Done': 'Listo', 'Sign out': 'Cerrar sesión', 'Household finances': 'Finanzas del hogar',
+  'Needs attention': 'Requiere atención', 'Get started': 'Primeros pasos', 'Back': 'Atrás', 'Next': 'Siguiente', 'Previous': 'Anterior', 'Close': 'Cerrar',
+  // ---- common buttons & words ----
+  'Cancel': 'Cancelar', 'Save': 'Guardar', 'Saved': 'Guardado', 'Not saved': 'No se guardó', 'Not saved:': 'No se guardó:', 'Edit': 'Editar', 'Remove': 'Quitar', 'Delete': 'Eliminar',
+  'Change': 'Cambiar', 'Show': 'Mostrar', 'Hide': 'Ocultar', 'Share': 'Compartir', 'Download': 'Descargar', 'Export': 'Exportar', 'Refresh': 'Actualizar', 'Search': 'Buscar',
+  'Open': 'Abrir', 'Dismiss': 'Descartar', 'Ignore': 'Ignorar', 'Kept': 'Conservado', 'Unknown': 'Desconocido', 'None': 'Ninguno', 'Other': 'Otro', 'Total': 'Total',
+  'Name': 'Nombre', 'Type': 'Tipo', 'Date': 'Fecha', 'Month': 'Mes', 'Year': 'Año', 'Today': 'Hoy', 'From': 'Desde', 'To': 'Hasta', 'In': 'Entrada', 'Owner': 'Titular',
+  'Amount': 'Monto', 'Balance': 'Saldo', 'Category': 'Categoría', 'Vendor': 'Comercio', 'Description': 'Descripción', 'Account': 'Cuenta', 'Source': 'Origen', 'Tags': 'Etiquetas', 'Tag': 'Etiqueta',
+  'Income': 'Ingresos', 'Expense': 'Gasto', 'Spent': 'Gastado', 'Owed': 'Adeudado', 'Interest': 'Intereses', 'Rate': 'Tasa', 'Price': 'Precio', 'Symbol': 'Símbolo', 'As of': 'Al',
+  'Trend': 'Tendencia', 'Per month': 'Por mes', 'Per year': 'Por año', 'Avg / mo': 'Prom. / mes', 'Bars': 'Barras', 'Numbers': 'Números', 'Ring': 'Anillo', 'Table': 'Tabla',
+  'Counts as': 'Cuenta como', 'Receipt': 'Recibo', 'Transfer': 'Transferencia', 'Debt': 'Deuda', 'Bill': 'Factura', 'Recurring bill': 'Factura recurrente', 'Subscription': 'Suscripción',
+  'Subscriptions': 'Suscripciones', 'Uncategorized': 'Sin categoría', 'Groceries': 'Supermercado', 'Utilities': 'Servicios públicos', 'Mortgage': 'Hipoteca', 'Loans': 'Préstamos',
+  'Personal': 'Personal', 'Shared': 'Compartido', 'Debit': 'Débito', 'Credit': 'Crédito', 'View only': 'Solo ver', 'Payday': 'Día de pago', 'Paid off': 'Pagado',
+  'Couldn’t save. Try again.': 'No se pudo guardar. Inténtalo de nuevo.', 'Couldn’t delete. Try again.': 'No se pudo eliminar. Inténtalo de nuevo.',
+  'Can’t reach the server.': 'No se puede conectar con el servidor.', 'Reset to default': 'Restablecer', 'What’s this?': '¿Qué es esto?', 'Send feedback': 'Enviar comentarios',
+  'Monday': 'lunes', 'Tuesday': 'martes', 'Wednesday': 'miércoles', 'Thursday': 'jueves', 'Friday': 'viernes', 'Saturday': 'sábado', 'Sunday': 'domingo',
+  // ---- date ranges ----
+  'Last 3 months': 'Últimos 3 meses', 'Last 6 months': 'Últimos 6 meses', 'Last 12 months': 'Últimos 12 meses', 'Last 24 months': 'Últimos 24 meses',
+  'This year so far': 'En lo que va del año', 'Last year': 'El año pasado', 'All time': 'Todo el tiempo', 'Custom…': 'Personalizado…', 'This year': 'Este año',
+  'Compare with the previous period': 'Comparar con el período anterior',
+  // ---- tiles ----
+  'Cash flow': 'Flujo de efectivo', 'Where the income went': 'A dónde fue el ingreso', 'Cash & investments': 'Efectivo e inversiones', 'Mortgage & loans': 'Hipoteca y préstamos',
+  'Net worth': 'Patrimonio neto', 'Checking & savings': 'Cuentas corrientes y de ahorro', 'Investments': 'Inversiones', 'Credit cards owed': 'Deuda de tarjetas de crédito',
+  'Loans & mortgage': 'Préstamos e hipoteca', 'Spent this month': 'Gastado este mes', 'Average spending': 'Gasto promedio', 'Savings rate': 'Tasa de ahorro',
+  'Top category this month': 'Categoría principal del mes', 'Unusual this month': 'Inusual este mes', 'Budget left': 'Presupuesto restante',
+  'Categories over budget': 'Categorías sobre el presupuesto', 'Need a category': 'Sin categoría asignada', 'Lowest cash ahead': 'Efectivo más bajo previsto',
+  'Cash forecast': 'Pronóstico de efectivo', 'Next payday': 'Próximo día de pago', 'Next bill': 'Próxima factura', 'Not enough data yet': 'Aún no hay suficientes datos',
+  'Open the section behind this': 'Abrir la sección de este recuadro', 'Most room left': 'Con más margen', 'Closest to the limit': 'Más cerca del límite', 'Above usual': 'Por encima de lo habitual',
+  'Most often': 'Más frecuentes', 'After that': 'Después', 'Then': 'Luego', 'categories above their usual': 'categorías por encima de lo habitual', 'nothing unusual so far': 'nada inusual por ahora',
+  'nothing spent yet': 'aún no hay gastos', 'so far this month': 'en lo que va del mes', 'no regular income found': 'no se encontraron ingresos regulares', 'no recurring bills found': 'no se encontraron facturas recurrentes',
+  'usual month ≈ {0}': 'mes habitual ≈ {0}', 'a month · {0}': 'al mes · {0}', '{0} · net {1}': '{0} · neto {1}', 'of income kept · {0}': 'del ingreso ahorrado · {0}', '{0} so far': '{0} en lo que va',
+  'own {0} · owe {1}': 'tienes {0} · debes {1}', 'as of {0}': 'al {0}', '{0} vs {1}': '{0} vs. {1}', 'transactions · {0}': 'transacciones · {0}', 'of {0} budgets': 'de {0} presupuestos',
+  'around {0} · next {1}': 'alrededor del {0} · próximos {1}', 'in {0} (from {1})': 'en {0} (desde {1})', '{0} spent': '{0} gastado', 'of {0}': 'de {0}', '{0} left': '{0} restante', '{0} over': '{0} excedido',
+  '{0}% used': '{0} % usado', 'all {0} sorted': 'las {0} clasificadas', 'a month · about {0} a year': 'al mes · unos {0} al año', '90 days': '90 días', '6 months': '6 meses', '1 year': '1 año', '2 years': '2 años',
+  'loans and mortgage': 'préstamos e hipoteca', 'loans': 'préstamos', 'mortgage': 'hipoteca',
+  // ---- sections ----
+  'Spending by category': 'Gastos por categoría', 'Investment accounts': 'Cuentas de inversión', 'Net worth over time': 'Patrimonio neto en el tiempo', 'Budget vs actual': 'Presupuesto vs. real',
+  'Savings goals': 'Metas de ahorro', 'Who paid what': 'Quién pagó qué', 'Biggest purchases': 'Compras más grandes', 'Income vs spending': 'Ingresos vs. gastos', 'Top 5 vendors': 'Los 5 comercios principales',
+  'Set a monthly budget': 'Fija un presupuesto mensual', 'Save budget': 'Guardar presupuesto', 'Starting': 'A partir de', 'Rolled over': 'Transferido', 'Everyday spending': 'Gastos diarios',
+  'What you own': 'Lo que tienes', 'Home & vehicles': 'Casa y vehículos', 'Purchases': 'Compras', 'To go': 'Faltan', 'Overspent': 'Gasto excedido', 'Shared household': 'Hogar compartido',
+  'Bill reminders': 'Recordatorios de facturas', 'Import statements': 'Importar estados de cuenta', 'Manual entry': 'Entrada manual', 'Add income or an expense by hand': 'Agrega un ingreso o gasto a mano',
+  'Vendor or source': 'Comercio u origen', 'Sync now': 'Sincronizar ahora', 'Download backup': 'Descargar copia de seguridad', 'Restore from backup…': 'Restaurar desde copia de seguridad…',
+  'My report': 'Mi informe', '★ New custom report…': '★ Nuevo informe personalizado…', 'Delete report': 'Eliminar informe', 'Delete this report': 'Eliminar este informe',
+  'Show these transactions': 'Mostrar estas transacciones', 'Show this vendor’s transactions': 'Mostrar las transacciones de este comercio', 'Ignore transaction': 'Ignorar transacción',
+  'None in this range': 'Nada en este período', 'Show all categories': 'Mostrar todas las categorías', 'Showing only': 'Mostrando solo', 'Everything else': 'Todo lo demás',
+  // ---- account types (US names kept where that's how they're known) ----
+  'Add a new account': 'Agregar una cuenta nueva', 'Account name': 'Nombre de la cuenta', 'Account type': 'Tipo de cuenta', 'No account': 'Sin cuenta',
+  'Checking': 'Cuenta corriente', 'Savings': 'Ahorros', 'High-yield savings': 'Ahorros de alto rendimiento', 'Money market': 'Mercado monetario', 'Cash management': 'Gestión de efectivo',
+  'CD (certificate of deposit)': 'CD (certificado de depósito)', 'Credit card': 'Tarjeta de crédito', 'Line of credit': 'Línea de crédito', 'Home equity (HELOC)': 'Préstamo sobre el valor de la vivienda (HELOC)',
+  'Auto loan': 'Préstamo de auto', 'Student loan': 'Préstamo estudiantil', 'Personal loan': 'Préstamo personal', 'Other loan': 'Otro préstamo', 'Brokerage': 'Corretaje',
+  'Roth IRA': 'Roth IRA', 'Traditional IRA': 'IRA tradicional', 'Rollover IRA': 'IRA de transferencia (rollover)', 'SEP / SIMPLE IRA': 'SEP / SIMPLE IRA', '529 college savings': 'Ahorro universitario 529',
+  'Pension': 'Pensión', 'Other investment': 'Otra inversión', 'Crypto': 'Criptomonedas', 'Bonds': 'Bonos',
+  // ---- settings ----
+  'This dashboard': 'Este tablero', 'This phone': 'Este teléfono', 'Bank & data connections': 'Bancos y conexiones de datos', 'People & devices': 'Personas y dispositivos',
+  'Notifications': 'Notificaciones', 'Backup & privacy': 'Copias de seguridad y privacidad', 'Advanced': 'Avanzado', 'Language': 'Idioma', 'For this device. Amounts and dates stay in US format.': 'Para este dispositivo. Los montos y fechas siguen en formato de EE. UU.',
+  'Dashboard type': 'Tipo de tablero', 'Personal (one person)': 'Personal (una persona)', 'Shared (two or more people)': 'Compartido (dos o más personas)', 'Open on': 'Abrir en',
+  'Last tab used': 'Última pestaña usada', 'Default date range': 'Período predeterminado', 'Last used': 'Último usado', '+ Add person': '+ Agregar persona', 'People & split': 'Personas y reparto',
+  'Encrypt the data folder': 'Cifrar la carpeta de datos', 'Turn on encryption': 'Activar el cifrado', 'Turn off encryption': 'Desactivar el cifrado', 'Change password': 'Cambiar contraseña',
+  'Unlock automatically when this computer starts': 'Desbloquear automáticamente al iniciar esta computadora', 'Also make a new recovery key': 'Crear también una nueva clave de recuperación',
+  'Current password': 'Contraseña actual', 'New password': 'Contraseña nueva', 'Type it again': 'Escríbela otra vez', 'Password (8+ characters)': 'Contraseña (8 o más caracteres)',
+  'Password or recovery key': 'Contraseña o clave de recuperación', 'Turn off': 'Desactivar', 'Copy': 'Copiar', 'I’ve saved it': 'Ya la guardé', 'Delete those backups': 'Eliminar esas copias',
+  // ---- sign in, unlock ----
+  'Sign in · Larenest': 'Iniciar sesión · Larenest', 'Unlock · Larenest': 'Desbloquear · Larenest', 'Username': 'Usuario', 'Password': 'Contraseña', 'Sign in': 'Iniciar sesión',
+  'Wrong username or password.': 'Usuario o contraseña incorrectos.', 'Sign-in failed.': 'No se pudo iniciar sesión.', 'Data is locked': 'Los datos están bloqueados',
+  'This server keeps its data encrypted. Type the encryption password (or the recovery key) to unlock it.': 'Este servidor guarda sus datos cifrados. Escribe la contraseña de cifrado (o la clave de recuperación) para desbloquearlos.',
+  'Encryption password': 'Contraseña de cifrado', 'Recovery key': 'Clave de recuperación', 'Unlock': 'Desbloquear', 'Use the recovery key instead': 'Usar la clave de recuperación',
+  'Use the password instead': 'Usar la contraseña', 'Wrong password or recovery key.': 'Contraseña o clave de recuperación incorrecta.', 'Unlock failed.': 'No se pudo desbloquear.',
+});
