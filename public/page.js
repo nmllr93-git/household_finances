@@ -296,6 +296,7 @@
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
     if (SIMPLE && SIMPLE_GROUPS.has(g)) return showGroup('all');
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id) || (SIMPLE && SIMPLE_HIDE.has(id)); }));
+    { let shared = true; try { shared = SET().type === 'shared'; } catch {} if (!shared) q('split').forEach((x) => { x.hidden = true; }); } // "Who paid what" is for shared dashboards only
     simpleNav(); ['kpis', 'fd-start', 'lede', 'range'].forEach((id) => { const x = document.getElementById(id); if (x) x.classList.toggle('fd-hide-set', g === 'settings'); }); // Settings: just the dashboard picker on top (no tiles, summary, date range or getting-started)
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
@@ -2447,12 +2448,13 @@
       const monthly = l.filter((t) => t.date >= from && t.date < to).reduce((s, t) => s + t.amount, 0) / 3;
       return { vendor, amount: (monthly * every) / 30.44, monthly, every, last: l[l.length - 1].date }; }).filter((x) => x.every <= 45 && x.monthly > 0);
   };
+  const FC_LEN = [90, 182, 365, 730], FC_NAME = { 90: '90 days', 182: '6 months', 365: '1 year', 730: '2 years' };
   dash.draw('forecast90', (el) => {
     el.replaceChildren(); if (st('subs', 'monthly', 'balance_totals', 'txns') !== 'ok') return;
     const cash = latestTotal(['deposit'])[0];
     if (!cash) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Record your checking and savings balances to see the forecast.'; el.append(p); return; }
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0); const DAYS = 90, ev = [];
-    rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 12 && d - today < DAYS * 864e5; g++) { ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: -x.lastCharge }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0); const DAYS = FC_LEN.includes(Number(prefGet('fcDays', 90))) ? Number(prefGet('fcDays', 90)) : 90, ev = [], LONG = DAYS > 120;
+    rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 120 && d - today < DAYS * 864e5; g++) { ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: -x.lastCharge }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
     const inc = recurringIncome(); inc.forEach((x) => { let d = Date.parse(x.last + 'T00:00:00Z'); while ((d += x.every * 864e5) - today < DAYS * 864e5) if (d >= today) ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: x.amount }); });
     // confirmed bills and paydays (Planning → scheduled items) take the place of the estimates they stand for
     const SCH = schedList(), conf = window.FDSchedule ? window.FDSchedule(SCH, today.toISOString().slice(0, 10), DAYS) : [];
@@ -2463,17 +2465,24 @@
     const low = Number(prefGet('fcLow', 500)) || 0;
     let bal = cash.total, minB = bal, minDay = 0; const pts = [];
     for (let i = 0; i <= DAYS; i++) { if (i) bal -= daily; ev.filter((e) => e.day === i).forEach((e) => { bal += e.amt; }); if (bal < minB) { minB = bal; minDay = i; } const d = new Date(today.getTime() + i * 864e5); pts.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), v: Math.round(bal) }); }
-    const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(i > 300 ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+    const fcName = FC_NAME[DAYS];
     const head = document.createElement('p'); head.className = 'fd-note' + (minB < low ? ' fd-bad' : '');
-    head.textContent = `Checking & savings: ${money0(cash.total)} today → about ${money0(bal)} in 90 days. Lowest point ≈ ${money0(minB)} around ${when(minDay)}.` + (minB < low ? ` ⚠ That's below your ${money0(low)} cushion.` : '');
+    head.textContent = `Checking & savings: ${money0(cash.total)} today → about ${money0(bal)} in ${fcName}. Lowest point ≈ ${money0(minB)} around ${when(minDay)}.` + (minB < low ? ` ⚠ That's below your ${money0(low)} cushion.` : '');
     el.append(head);
     const box = document.createElement('div'); box.className = 'fd-box'; el.append(box);
-    window.FD.lineChart(box, { labels: pts.map((p) => p.label), zero: false, aria: '90-day cash forecast', series: [{ name: 'Projected cash', points: pts }, ...(low ? [{ name: 'Cushion', points: pts.map((p) => ({ label: p.label, v: low })) }] : [])] });
-    const row = document.createElement('div'); row.className = 'fd-rb-row'; const lab = document.createElement('label'); lab.className = 'fd-field fd-narrow'; lab.textContent = 'Warn me below ';
+    // long ranges: one point a week (keeping the lowest day in each week so a dip isn't smoothed away)
+    const cp = !LONG ? pts : pts.filter((_, i) => i % 7 === 0 || i === minDay || i === pts.length - 1);
+    if (LONG) cp.forEach((x) => { const i = pts.indexOf(x); x.label = when(i); });
+    window.FD.lineChart(box, { labels: cp.map((p) => p.label), zero: false, aria: `${fcName} cash forecast`, series: [{ name: 'Projected cash', points: cp }, ...(low ? [{ name: 'Cushion', points: cp.map((p) => ({ label: p.label, v: low })) }] : [])] });
+    const row = document.createElement('div'); row.className = 'fd-rb-row';
+    const lenL = document.createElement('label'); lenL.className = 'fd-field fd-narrow'; lenL.textContent = 'Look ahead '; const lenS = document.createElement('select'); lenS.className = 'dash-select';
+    FC_LEN.forEach((d) => lenS.append(new Option(FC_NAME[d], d))); lenS.value = String(DAYS); lenS.addEventListener('change', () => { lenS.disabled = true; prefSet('fcDays', Number(lenS.value)).then(() => dash.draw('forecast90')); }); lenL.append(lenS); row.append(lenL);
+    const lab = document.createElement('label'); lab.className = 'fd-field fd-narrow'; lab.textContent = 'Warn me below ';
     const li = document.createElement('input'); li.type = 'number'; li.min = 0; li.step = 100; li.value = low; li.style.width = '7em'; li.addEventListener('change', () => { prefSet('fcLow', Math.max(0, Number(li.value) || 0)); dash.draw('forecast90'); }); lab.append(li); row.append(lab); el.append(row);
     const g = document.createElement('div'); g.className = 'fd-grid2';
     const list = (title, items, empty1) => { const w = document.createElement('div'); w.append(rhead(title)); if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = empty1; w.append(p); }
-      items.forEach((e) => { const r2 = document.createElement('div'); r2.className = 'fd-alloc' + (e.confirmed ? ' is-confirmed' : ''); const a = document.createElement('span'); a.textContent = `${when(e.day)} · ${e.label}`;
+      const all = items, shown = all.slice(0, LONG ? 20 : 15); shown.forEach((e) => { const r2 = document.createElement('div'); r2.className = 'fd-alloc' + (e.confirmed ? ' is-confirmed' : ''); const a = document.createElement('span'); a.textContent = `${when(e.day)} · ${e.label}`;
         const tg = document.createElement('small'); tg.className = 'fd-fc-tag'; tg.textContent = e.confirmed ? (e.moved ? 'confirmed · moved' : 'confirmed') : 'estimate'; a.append(' ', tg);
         if (e.confirmed) { const sk = document.createElement('button'); sk.type = 'button'; sk.className = 'fd-linkbtn'; sk.textContent = 'skip'; sk.title = 'Skip just this one'; sk.addEventListener('click', () => schedOverride(e.id, e.key, { skip: true }));
           const mv = document.createElement('button'); mv.type = 'button'; mv.className = 'fd-linkbtn'; mv.textContent = 'move'; mv.title = 'Change the date or amount of just this one';
@@ -2481,11 +2490,11 @@
             const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'fd-btn fd-sm'; ok.textContent = 'Save'; ok.addEventListener('click', () => schedOverride(e.id, e.key, { date: di.value, amount: Number(ai.value) || undefined }));
             const un = document.createElement('button'); un.type = 'button'; un.className = 'fd-btn fd-sm fd-quiet'; un.textContent = 'Reset'; un.addEventListener('click', () => schedOverride(e.id, e.key, null)); f.append(di, ai, ok, un); r2.after(f); });
           a.append(' ', sk, ' ', mv); }
-        const b = document.createElement('span'); b.textContent = (e.amt > 0 ? '+' : '−') + money0(Math.abs(e.amt)); b.className = e.amt > 0 ? 'fd-good' : ''; r2.append(a, b); w.append(r2); }); return w; };
-    g.append(list('Expected income', ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day).slice(0, 12), 'No regular income found in the last 4 months (needs 2+ deposits from the same source).'),
-      list('Bills & recurring', ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day).slice(0, 15), 'No recurring bills found.'));
+        const b = document.createElement('span'); b.textContent = (e.amt > 0 ? '+' : '−') + money0(Math.abs(e.amt)); b.className = e.amt > 0 ? 'fd-good' : ''; r2.append(a, b); w.append(r2); }); if (all.length > shown.length) { const mo = document.createElement('p'); mo.className = 'fd-note'; mo.textContent = `+ ${all.length - shown.length} more in the ${fcName} (${money0(Math.abs(all.slice(shown.length).reduce((t, e) => t + e.amt, 0)))} in all).`; w.append(mo); } return w; };
+    g.append(list('Expected income', ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day), 'No regular income found in the last 4 months (needs 2+ deposits from the same source).'),
+      list('Bills & recurring', ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day), 'No recurring bills found.'));
     el.append(g);
-    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Also assumes about ${money0(daily * 30.4)} a month of other everyday spending (your last ${m.length} months, minus recurring bills). Paychecks are detected from income that arrived at least twice in the last 4 months. Items marked “estimate” are worked out from your history; “confirmed” ones are amounts and dates you entered below, and they replace the matching estimate. Neither counts in your actual totals until a real transaction arrives.`; el.append(p);
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Also assumes about ${money0(daily * 30.4)} a month of other everyday spending (your last ${m.length} months, minus recurring bills). Paychecks are detected from income that arrived at least twice in the last 4 months.${LONG ? ' Over months or years this assumes nothing changes: no raises, new bills or one-off costs, so treat the far end as a rough guide.' : ''} Items marked “estimate” are worked out from your history; “confirmed” ones are amounts and dates you entered below, and they replace the matching estimate. Neither counts in your actual totals until a real transaction arrives.`; el.append(p);
     schedEditor(el, ev);
   });
   // ---- scheduled (confirmed) bills and paydays, kept in this dashboard's settings ----
@@ -3863,13 +3872,14 @@
     if (!PART('e-treas')) grp('Treasury savings options', [tile2('I bonds bought now', ser('treasury', 'ibond'), pct, (() => { const ib = ECO.treasury && ECO.treasury.ibond; if (!ib || ib.fixed == null) return null; const sp = document.createElement('span'); sp.textContent = `${ib.fixed.toFixed(2)}% fixed + inflation part · resets every 6 months`; return sp; })(), false),
       tile2('Treasury bills (avg)', ser('treasury', 'bills'), pct, null, false), tile2('Treasury notes (avg)', ser('treasury', 'notes'), pct, null, false), tile2('TIPS (avg)', ser('treasury', 'tips'), pct, null, false)],
       'From the U.S. Treasury (no key needed). I bonds and Treasury bills/notes are bought at TreasuryDirect.gov or through a brokerage; I bonds must be held at least a year.');
-    if (!PART('e-fx') && ECO.fx && ECO.fx.rates) { el.append(rhead(`Exchange rates · ${ECO.fx.date}`)); const w = document.createElement('div'); w.className = 'fd-rb-row';
+    if (!PART('e-fx') && ECO.fx && ECO.fx.rates) { const fxc = document.createElement('div'); fxc.className = 'fd-rb fd-fx'; const fxh = rhead('Currency converter'); const fxd = document.createElement('span'); fxd.className = 'fd-zero'; fxd.textContent = ` · rates from ${ECO.fx.date}`; fxh.append(fxd); fxc.append(fxh); el.append(fxc); const w = document.createElement('div'); w.className = 'fd-rb-row';
       const amt = document.createElement('input'); amt.type = 'number'; amt.value = 100; amt.className = 'fd-in'; amt.style.maxWidth = '8em'; const from = document.createElement('select'), to = document.createElement('select'); [from, to].forEach((x) => { x.className = 'dash-select'; ['USD', ...Object.keys(ECO.fx.rates).sort()].forEach((c) => x.append(new Option(c, c))); }); from.value = 'USD'; to.value = 'EUR';
       const outp = document.createElement('b'); const calc = () => { const r = (c) => (c === 'USD' ? 1 : ECO.fx.rates[c]); const v = (Number(amt.value) || 0) / r(from.value) * r(to.value); outp.textContent = `= ${v.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${to.value}`; };
-      [amt, from, to].forEach((x) => x.addEventListener('input', calc)); calc(); w.append(amt, from, document.createTextNode('→'), to, outp); el.append(w);
-      const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'European Central Bank reference rates (via Frankfurter), updated each working day. Your card\u2019s rate and fees will differ a little. Trips you tag can show their total in another currency under Expenses → Tags.'; el.append(n); }
-    if (!PART('e-cal') && (ECO.calendar || []).length) { el.append(rhead('Economic calendar · next few weeks'));
-      const tb = document.createElement('table'); tb.className = 'fd-table'; ECO.calendar.slice(0, 14).forEach((c) => { const d = new Date(c.date + 'T12:00:00'); const tr = document.createElement('tr'); tr.append(td(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), 'fd-l'), td(c.name, 'fd-l'), td(c.full, 'fd-l fd-zero')); tb.append(tr); });
+      [amt, from, to].forEach((x) => x.addEventListener('input', calc)); calc(); w.append(amt, from, document.createTextNode('→'), to, outp); fxc.append(w);
+      const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'European Central Bank reference rates (via Frankfurter), updated each working day. Your card\u2019s rate and fees will differ a little. Trips you tag can show their total in another currency under Expenses → Tags.'; fxc.append(n); }
+    const CAL = (ECO.calendar || []).filter((x, i, a) => x.name === 'Jobless claims' || a.filter((y) => y.name === x.name).length <= 4); // older cached data listed the Fed every day
+    if (!PART('e-cal') && CAL.length) { el.append(rhead('Economic calendar · next few weeks'));
+      const tb = document.createElement('table'); tb.className = 'fd-table'; CAL.slice(0, 14).forEach((c) => { const d = new Date(c.date + 'T12:00:00'); const tr = document.createElement('tr'); tr.append(td(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), 'fd-l'), td(c.name, 'fd-l'), td(c.full, 'fd-l fd-zero')); tb.append(tr); });
       const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
       const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Release dates from FRED. Inflation, jobs and Fed announcements are the ones most likely to move markets and loan rates.'; el.append(n); }
     if (!PART('e-infl')) grp('Inflation (price change over 12 months)', [infl('cpi', 'US, all items'), infl('cpiMW', 'Midwest, all items'), infl('foodHomeMW', 'Groceries'), infl('diningMW', 'Restaurants'), infl('energyMW', 'Energy'), infl('gasMW', 'Gasoline'), infl('shelterMW', 'Shelter')], 'Midwest figures from the Bureau of Labor Statistics. Compare with how your own spending in each category changed.');

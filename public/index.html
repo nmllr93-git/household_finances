@@ -158,8 +158,11 @@
         <select class="dash-select" data-draw="budgetMonth" aria-label="Month" data-source="period"></select>
       </label>
     </div>
+    <div class="fd-budcols">
+    <div class="fd-budchart">
     <p class="fd-note">Bars are spending; the dark tick is the budget (plus anything rolled over). For the current month, the faint bar shows where spending is headed at the pace so far. Red bars are over budget.</p>
     <div class="fd-box" data-draw="budgetChart" data-source="categories"></div>
+    </div>
     <div class="fd-split">
       <div>
         <h3 class="fd-h3">Budgets for <span data-draw="kBudgetMonth">—</span></h3>
@@ -178,8 +181,7 @@
           </table>
         </div>
       </div>
-      <div>
-      <div data-draw="budgetStarter" data-source="txns budgets"></div>
+      <div class="fd-budside">
       <form class="fd-card" id="fd-budget-form" autocomplete="off">
         <h3>Set a monthly budget</h3>
         <p class="fd-note">Applies from the starting month onward and replaces the sheet’s plan for that category.</p>
@@ -194,7 +196,9 @@
         <p class="fd-msg err" id="fd-bud-err" hidden>That wasn’t saved. Only editors can change budgets.</p>
         <p class="fd-msg err" id="fd-bud-miss" hidden>Fill in a category, an amount and a starting month.</p>
       </form>
+      <div data-draw="budgetStarter" data-source="txns budgets"></div>
       </div>
+    </div>
     </div>
   </section>
 
@@ -244,6 +248,7 @@
     </section>
   </div>
 
+  <div class="fd-grid2 fd-pair">
   <section id="holdings">
     <h2>Holdings</h2>
     <p class="fd-note">Stocks, ETFs and funds you own. Add each purchase as a lot; sales use the oldest shares first. Click a row to buy more, sell or edit.</p>
@@ -263,6 +268,7 @@
     <div data-draw="loanRings" data-source="accounts balances"></div>
     <div data-draw="amortView" data-source="accounts balances"></div>
   </section>
+  </div>
 
 
   <section id="subscriptions">
@@ -317,8 +323,8 @@
   </section>
 
   <section id="forecast">
-    <h2>90-day cash forecast</h2>
-    <p class="fd-note">Checking &amp; savings projected day by day: expected paychecks in, recurring bills out, and your typical other spending.</p>
+    <h2>Cash forecast</h2>
+    <p class="fd-note">Checking &amp; savings projected day by day: expected paychecks in, recurring bills out, and your typical other spending. Choose how far ahead to look: 90 days, 6 months, 1 year or 2 years.</p>
     <div data-draw="forecast90" data-source="subs monthly balance_totals txns prefs"></div>
   </section>
 

@@ -242,6 +242,12 @@
     svg.append('circle').attr('cx', x(n - 1)).attr('cy', y(values[n - 1])).attr('r', 2).style('fill', dash.colors[0]);
   }
 
+  // Charts are drawn to the width their box has at that moment. A box drawn while hidden (another tab) or before the
+  // layout settled would stay narrow, so redraw once the box's width really changes.
+  const RO = 'ResizeObserver' in window ? new ResizeObserver((list) => { for (const e of list) { const el = e.target, w = Math.round(e.contentRect.width), f = el._fdChart;
+    if (!f || !w || Math.abs(w - (el._fdW || 0)) < 24) continue; el._fdW = w; clearTimeout(el._fdT); el._fdT = setTimeout(() => f[0](el, f[1]), 120); } }) : null;
+  const fit = (fn) => function (el, opts) { if (el && RO) { if (!el._fdChart) RO.observe(el); el._fdChart = [fn, opts]; el._fdW = Math.round(el.clientWidth || 0); } return fn(el, opts); };
+  lineChart = fit(lineChart); groupedBars = fit(groupedBars); stackedBars = fit(stackedBars); budgetBars = fit(budgetBars);
   window.FD = { money0, money2, short, enc, placeholder, lineChart, groupedBars, budgetBars, stackedBars, sparkline,
     book: () => window.FD_BOOK || (dash.params().book === 'Shared' ? 'Shared' : 'Personal') };
 })();

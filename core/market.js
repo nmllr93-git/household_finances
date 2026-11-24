@@ -148,7 +148,8 @@
           const KEEP = [[/^Consumer Price Index$/i, 'Inflation (CPI)'], [/^Employment Situation$/i, 'Jobs report'], [/^Gross Domestic Product$/i, 'GDP'], [/^Personal Income and Outlays$/i, 'Spending & PCE inflation'], [/^Advance Monthly Sales for Retail/i, 'Retail sales'], [/FOMC Press Release/i, 'Fed rate decision'], [/^Producer Price Index$/i, 'Producer prices'], [/^Job Openings and Labor Turnover/i, 'Job openings (JOLTS)'], [/^New Residential Construction$/i, 'Housing starts'], [/Existing Home Sales/i, 'Existing home sales'], [/Surveys of Consumers|Consumer Sentiment/i, 'Consumer sentiment'], [/^Unemployment Insurance Weekly Claims/i, 'Jobless claims']];
           const seen = new Set();
           out.calendar = ((j && j.release_dates) || []).map((r) => { const m = KEEP.find(([re]) => re.test(r.release_name || '')); return m ? { date: r.date, name: m[1], full: r.release_name } : null; })
-            .filter((x) => x && x.date >= d0 && !seen.has(x.date + x.name) && seen.add(x.date + x.name)).filter((x, i, a) => x.name !== 'Jobless claims' || a.filter((y) => y.name === 'Jobless claims').indexOf(x) < 2).slice(0, 30);
+            .filter((x) => x && x.date >= d0 && !seen.has(x.date + x.name) && seen.add(x.date + x.name)).filter((x, i, a) => x.name !== 'Jobless claims' || a.filter((y) => y.name === 'Jobless claims').indexOf(x) < 2)
+            .filter((x, i, a) => x.name === 'Jobless claims' || a.filter((y) => y.name === x.name).length <= 4).slice(0, 30); // a name on most days is a page FRED refreshes daily, not a scheduled release (it showed "Fed rate decision" every day)
         } catch (e) { err('FRED calendar', e); }
       } else out.errors.push('No FRED key: mortgage/Treasury rates, inflation and home prices are off.');
       if (k.bls) {

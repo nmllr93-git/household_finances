@@ -550,3 +550,27 @@ body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); 
 .fd-settle .fd-rb-row > span { align-self: center; }
 .fd-alloc > span .fd-btn { margin-left: 6px; }
 .fd-settle { flex: 1 1 100%; width: 100%; box-sizing: border-box; margin-top: var(--cds-gap-md, 12px); }
+/* wide screens: fill the width instead of leaving one tall column */
+.fd-box:not(:has(svg, canvas, img)) { min-height: 0; }
+#networth { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; align-items: center; }
+#networth > h2, #networth > .fd-note { grid-column: 1 / -1; }
+@media (min-width: 1100px) {
+  #networth { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
+  #networth .fd-ringbox { align-items: center; }
+  #networth .fd-ring { max-width: 200px; }
+  .fd-grid2 > #goals { grid-column: auto; }
+  .fd-grid2 > #networth { order: 1; } .fd-grid2 > #accounts { order: 2; } .fd-grid2 > #investments { order: 3; } .fd-grid2 > #deposits { order: 4; }
+  .fd-grid2 > #assets { order: 5; } .fd-grid2 > #goals { order: 6; } .fd-grid2 > #sharedin { order: 7; grid-column: 1 / -1; }
+  .fd-pair:has(> #holdings[hidden]) > #mortgage, .fd-pair:has(> #mortgage[hidden]) > #holdings { grid-column: 1 / -1; }
+}
+/* net worth: ring centred against the taller chart */
+#networth > [data-draw=nwRing] { align-self: center; }
+@media (min-width: 1100px) { #networth .fd-ringbox { justify-content: center; } }
+/* budget: chart on the left; this month's bars, the form and suggestions stacked on the right */
+.fd-budside { display: flex; flex-direction: column; gap: var(--cds-gap-md, 12px); }
+@media (min-width: 1100px) {
+  .fd-budcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--cds-gap-lg); align-items: start; }
+  .fd-budcols > .fd-split { grid-template-columns: minmax(0, 1fr); }
+}
+/* currency converter stands out as its own tool */
+.fd-fx { margin: var(--cds-gap-md, 12px) 0; max-width: 720px; }
