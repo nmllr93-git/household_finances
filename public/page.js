@@ -344,7 +344,7 @@
     if (!e.target.closest('.fd-navb')) return;
     setTimeout(() => {
       const nav = document.getElementById('fd-nav'), rep = document.getElementById('fd-report');
-      const ids = GROUPS[NP.group] || ALL; const tgt = rep && !rep.hidden ? rep : ids.map((id) => q(id)[0]).find((s) => s && !s.hidden && s.offsetParent);
+      const ids = GROUPS[NP.group] || ALL, kp = document.getElementById('kpis'); const tgt = kp && !kp.hidden && kp.offsetParent && !kp.classList.contains('fd-notiles') ? kp : rep && !rep.hidden ? rep : ids.map((id) => q(id)[0]).find((s) => s && !s.hidden && s.offsetParent);
       if (tgt) window.scrollTo({ top: Math.max(0, tgt.getBoundingClientRect().top + window.scrollY - nav.offsetHeight - 8), behavior: 'smooth' });
     }, 30);
   });
@@ -436,35 +436,49 @@
   const prevMonths = (n) => { const out = []; const d = new Date(); d.setUTCDate(15); for (let i = 1; i <= n; i++) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 15)); out.push(x.toISOString().slice(0, 7)); } return out; };
   let FCSUM = null; // filled in by the cash forecast each time it draws
   const T = (title, go, fn) => ({ title, go, fn });
+  // series for the tile charts
+  const monthsBack = (n) => [...prevMonths(n - 1).reverse(), nowM()];
+  const MS = (m) => new Date(m + '-15T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+  const balSeries = (kinds, sign = 1) => { const by = {}; rows('balance_totals').filter((r) => r.book === book() && kinds.includes(r.kind)).forEach((r) => { by[r.month] = (by[r.month] || 0) + (['credit', 'loan', 'mortgage'].includes(r.kind) ? -Math.abs(r.total) : r.total) * sign; });
+    const ms = Object.keys(by).sort(); return ms.length > 1 ? { v: ms.map((m) => by[m]), l: ms.map(MS) } : null; };
+  const monRows = () => rows('monthly').filter((r) => r.book === book()).sort((a, b) => a.month.localeCompare(b.month));
+  const catsOf = (m) => { const by = {}; for (const t of expM(m)) { const c = t.category || 'Uncategorized'; if (/^transfer$/i.test(c)) continue; by[c] = (by[c] || 0) + (Number(t.amount) || 0); } return by; };
   const GT = {
     nw: T('Net worth', 'networth', () => { const a = ['deposit', 'investment'].map(bal1).filter(Boolean), d = ['credit', 'loan', 'mortgage'].map(bal1).filter(Boolean); if (!a.length && !d.length) return null;
-      const own = a.reduce((s, r) => s + r.total, 0), owe = d.reduce((s, r) => s + Math.abs(r.total), 0); return [money0(own - owe), `own ${money0(own)} · owe ${money0(owe)}`]; }),
-    cash: T('Checking & savings', 'deposits', () => { const r = bal1('deposit'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good']; }),
-    invest: T('Investments', 'investments', () => { const r = bal1('investment'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good']; }),
-    cards: T('Credit cards owed', 'accounts', () => { const r = bal1('credit'); return r && [money0(Math.abs(r.total)), `as of ${r.label}`]; }),
-    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean); return r.length ? [money0(r.reduce((s, x) => s + Math.abs(x.total), 0)), r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans'] : null; }),
+      const own = a.reduce((s, r) => s + r.total, 0), owe = d.reduce((s, r) => s + Math.abs(r.total), 0); const sr = balSeries(['deposit', 'investment', 'credit', 'loan', 'mortgage']);
+      return [money0(own - owe), `own ${money0(own)} · owe ${money0(owe)}`, '', sr ? { spark: sr.v, l: sr.l } : { meter: owe ? own / (own + owe) : 1, ml: ['owned', 'owed'] }]; }),
+    cash: T('Checking & savings', 'deposits', () => { const r = bal1('deposit'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['deposit']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
+    invest: T('Investments', 'investments', () => { const r = bal1('investment'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['investment']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
+    cards: T('Credit cards owed', 'accounts', () => { const r = bal1('credit'); const sr = balSeries(['credit'], -1); return r && [money0(Math.abs(r.total)), `as of ${r.label}`, '', sr && { spark: sr.v, l: sr.l, down: true }]; }),
+    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean); return r.length ? [money0(r.reduce((s, x) => s + Math.abs(x.total), 0)), r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()] : null; }),
     spentMonth: T('Spent this month', 'categories', () => { if (st('txns') !== 'ok') return null; const s = sumA(expM(nowM())), pm = prevMonths(3).map((m) => sumA(expM(m))).filter((x) => x > 0), avg = pm.length ? pm.reduce((a, b) => a + b, 0) / pm.length : 0;
-      return [money0(s), avg ? `usual month ≈ ${money0(avg)}` : 'so far this month']; }),
-    avgSpend: T('Average spending', 'cashflow', () => { const r = sumRow(); return r && [money0(r.avgSpend), `a month · ${rangeLabel()}`]; }),
-    income: T('Income', 'cashflow', () => { const r = sumRow(); return r && [money0(r.income), `${rangeLabel()} · net ${money0(r.net)}`, r.net < 0 ? 'bad' : 'good']; }),
-    saveRate: T('Savings rate', 'cashflow', () => { const r = sumRow(); if (!r || !(r.income > 0)) return null; const p = Math.round((r.net / r.income) * 100); return [p + '%', `of income kept · ${rangeLabel()}`, p < 0 ? 'bad' : p >= 10 ? 'good' : '']; }),
+      const ms = monthsBack(6); return [money0(s), avg ? `usual month ≈ ${money0(avg)}` : 'so far this month', '', { bars: ms.map((m) => sumA(expM(m))), l: ms.map(MS), ref: avg || null }]; }),
+    avgSpend: T('Average spending', 'cashflow', () => { const r = sumRow(); const m = monRows(); return r && [money0(r.avgSpend), `a month · ${rangeLabel()}`, '', m.length > 1 && { bars: m.map((x) => x.spend), l: m.map((x) => MS(x.month)), ref: r.avgSpend }]; }),
+    income: T('Income', 'cashflow', () => { const r = sumRow(); const m = monRows(); return r && [money0(r.income), `${rangeLabel()} · net ${money0(r.net)}`, r.net < 0 ? 'bad' : 'good', m.length > 1 && { bars: m.map((x) => x.income), l: m.map((x) => MS(x.month)), good: true }]; }),
+    saveRate: T('Savings rate', 'cashflow', () => { const r = sumRow(); if (!r || !(r.income > 0)) return null; const p = Math.round((r.net / r.income) * 100); const m = monRows().filter((x) => x.income > 0); return [p + '%', `of income kept · ${rangeLabel()}`, p < 0 ? 'bad' : p >= 10 ? 'good' : '', m.length > 1 && { bars: m.map((x) => Math.round((x.net / x.income) * 100)), l: m.map((x) => MS(x.month)), signed: true, pct: true }]; }),
     topCat: T('Top category this month', 'categories', () => { if (st('txns') !== 'ok') return null; const by = {}; for (const t of expM(nowM())) { const c = t.category || 'Uncategorized'; if (/^(transfer)$/i.test(c)) continue; by[c] = (by[c] || 0) + (Number(t.amount) || 0); }
       const srt = Object.entries(by).sort((a, b) => b[1] - a[1]), un = by.Uncategorized || 0, top = srt.find(([c]) => c !== 'Uncategorized') || srt[0]; // a real category beats "Uncategorized"
-      return top ? [top[0], money0(top[1]) + ' so far' + (top[0] !== 'Uncategorized' && un > top[1] ? ` · ${money0(un)} uncategorized` : '')] : ['—', 'nothing spent yet']; }),
+      return top ? [top[0], money0(top[1]) + ' so far' + (top[0] !== 'Uncategorized' && un > top[1] ? ` · ${money0(un)} uncategorized` : ''), '', { list: srt.slice(0, 4).map(([c, v]) => [c, v]) }] : ['—', 'nothing spent yet']; }),
     unusual: T('Unusual this month', 'unusual', () => { if (st('txns') !== 'ok') return null; const pm = prevMonths(6), cur = {}, past = {};
       for (const t of expM(nowM())) { const c = t.category || 'Uncategorized'; cur[c] = (cur[c] || 0) + Number(t.amount || 0); }
       for (const m of pm) for (const t of expM(m)) { const c = t.category || 'Uncategorized'; past[c] = (past[c] || 0) + Number(t.amount || 0) / pm.length; }
       const hits = Object.entries(cur).filter(([c, v]) => !/^transfer$/i.test(c) && v >= (past[c] || 0) * 1.3 && v - (past[c] || 0) >= 50);
-      return [String(hits.length), hits.length ? hits.slice(0, 2).map((h) => h[0]).join(', ') + (hits.length > 2 ? '…' : '') : 'categories above their usual', hits.length ? 'bad' : 'good']; }),
-    subs: T('Subscriptions', 'subscriptions', () => { const r = subsTot('Subscription'); return r && [money0(r.avg), `a month · about ${money0(r.yearly)} a year`]; }),
-    budLeft: T('Budget left', 'budget', () => { const r = budTot(); if (!r || !r.categories) return null; const left = r.available - r.spent; return [money0(Math.abs(left)) + (left < 0 ? ' over' : ''), `${r.label}${isCurrent(r.month) ? ' so far' : ''}`, left < 0 ? 'bad' : 'good']; }),
+      hits.sort((a, b) => (b[1] - (past[b[0]] || 0)) - (a[1] - (past[a[0]] || 0)));
+      return [String(hits.length), hits.length ? 'categories above their usual' : 'nothing unusual so far', hits.length ? 'bad' : 'good', (() => { const hs = new Set(hits.map((h) => h[0])), up = Object.entries(cur).filter(([c, v]) => !/^transfer$/i.test(c) && v - (past[c] || 0) > 0).sort((a, b) => (b[1] - (past[b[0]] || 0)) - (a[1] - (past[a[0]] || 0))).slice(0, 4);
+        return up.length ? { head: 'Above usual', list: up.map(([c, v]) => [c, v - (past[c] || 0), '+' + money0(v - (past[c] || 0)), hs.has(c)]) } : null; })()]; }),
+    subs: T('Subscriptions', 'subscriptions', () => { const r = subsTot('Subscription'); const l = rows('subs').filter((x) => x.book === book() && x.kind === 'Subscription').sort((a, b) => b.yearly - a.yearly); return r && [money0(r.avg), `a month · about ${money0(r.yearly)} a year`, '', l.length ? { list: l.slice(0, 4).map((x) => [x.vendor, x.yearly / 12]) } : null]; }),
+    budLeft: T('Budget left', 'budget', () => { const r = budTot(); if (!r || !r.categories) return null; const left = r.available - r.spent; return [money0(Math.abs(left)) + (left < 0 ? ' over' : ''), `${r.label}${isCurrent(r.month) ? ' so far' : ''}`, left < 0 ? 'bad' : 'good', { meter: r.available > 0 ? r.spent / r.available : 0, ml: [`${money0(r.spent)} spent`, `of ${money0(r.available)}`], over: left < 0, list: rows('categories').filter((x) => x.book === book() && x.month === r.month && x.available > 0).map((x) => [x.category, x.available - x.actual, money0(Math.abs(x.available - x.actual)) + (x.actual > x.available ? ' over' : ' left'), x.actual > x.available]).sort((a, b) => b[1] - a[1]).slice(0, 3), head: 'Most room left' }]; }),
     budOver: T('Categories over budget', 'budget', () => { const r = budTot(); if (!r || !r.categories) return null; const l = rows('categories').filter((x) => x.book === book() && x.month === r.month && x.available > 0 && x.actual > x.available);
-      return [String(l.length), l.length ? l.slice(0, 2).map((x) => x.category).join(', ') + (l.length > 2 ? '…' : '') : `of ${r.categories} budgets`, l.length ? 'bad' : 'good']; }),
-    needsCat: T('Need a category', 'transactions', () => { if (st('txns') !== 'ok') return null; const inP = new Set(period().map((m) => m.month)); const n = rows('txns').filter((t) => t.book === book() && inP.has(t.month) && (t.category || 'Uncategorized') === 'Uncategorized').length; return [String(n), `transactions · ${rangeLabel()}`, n ? 'bad' : 'good']; }),
-    fcLow: T('Lowest cash ahead', 'forecast', () => FCSUM && [money0(FCSUM.low), `around ${FCSUM.lowWhen} · next ${FCSUM.name}`, FCSUM.low < FCSUM.cushion ? 'bad' : '']),
-    fcEnd: T('Cash forecast', 'forecast', () => FCSUM && [money0(FCSUM.end), `in ${FCSUM.name} (from ${money0(FCSUM.cash)})`, FCSUM.end < FCSUM.cash ? 'bad' : 'good']),
-    nextPay: T('Next payday', 'forecast', () => FCSUM && (FCSUM.pay ? [money0(FCSUM.pay.amt), `${FCSUM.pay.when} · ${FCSUM.pay.label}`] : ['—', 'no regular income found'])),
-    nextBill: T('Next bill', 'forecast', () => FCSUM && (FCSUM.bill ? [money0(Math.abs(FCSUM.bill.amt)), `${FCSUM.bill.when} · ${FCSUM.bill.label}`] : ['—', 'no recurring bills found'])),
+      l.sort((a, b) => (b.actual - b.available) - (a.actual - a.available));
+      return [String(l.length), `of ${r.categories} budgets`, l.length ? 'bad' : 'good', (() => { const all = rows('categories').filter((x) => x.book === book() && x.month === r.month && x.available > 0).map((x) => [x.category, x.actual / x.available, Math.round((x.actual / x.available) * 100) + '% used', x.actual > x.available]).sort((a, b) => b[1] - a[1]).slice(0, 4);
+        return all.length ? { head: 'Closest to the limit', list: all } : null; })()]; }),
+    needsCat: T('Need a category', 'transactions', () => { if (st('txns') !== 'ok') return null; const inP = new Set(period().map((m) => m.month)); const l = rows('txns').filter((t) => t.book === book() && inP.has(t.month) && (t.category || 'Uncategorized') === 'Uncategorized'), n = l.length, by = {}; l.forEach((t) => { const k = t.vendor || t.description || '?'; by[k] = (by[k] || 0) + 1; });
+      const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 4); const tot = rows('txns').filter((t) => t.book === book() && inP.has(t.month)).length;
+      return [String(n), `transactions · ${rangeLabel()}`, n ? 'bad' : 'good', top.length ? { list: top.map(([v, k]) => [v, k, k + '×']), head: 'Most often' } : tot ? { meter: 1, ml: [`all ${tot} sorted`, '100%'] } : null]; }),
+    fcLow: T('Lowest cash ahead', 'forecast', () => FCSUM && [money0(FCSUM.low), `around ${FCSUM.lowWhen} · next ${FCSUM.name}`, FCSUM.low < FCSUM.cushion ? 'bad' : '', { spark: FCSUM.pts, mark: FCSUM.lowDay, ref: FCSUM.cushion }]),
+    fcEnd: T('Cash forecast', 'forecast', () => FCSUM && [money0(FCSUM.end), `in ${FCSUM.name} (from ${money0(FCSUM.cash)})`, FCSUM.end < FCSUM.cash ? 'bad' : 'good', { spark: FCSUM.pts }]),
+    nextPay: T('Next payday', 'forecast', () => FCSUM && (FCSUM.pay ? [money0(FCSUM.pay.amt), `${FCSUM.pay.when} · ${FCSUM.pay.label}`, '', FCSUM.pays.length > 1 && { list: FCSUM.pays.slice(1).map(([lb, a, w]) => [`${w} · ${lb}`, a, money0(a)]), head: 'After that', good: true }] : ['—', 'no regular income found'])),
+    nextBill: T('Next bill', 'forecast', () => FCSUM && (FCSUM.bill ? [money0(Math.abs(FCSUM.bill.amt)), `${FCSUM.bill.when} · ${FCSUM.bill.label}`, '', FCSUM.bills.length > 1 && { list: FCSUM.bills.slice(1).map(([lb, a, w]) => [`${w} · ${lb}`, Math.abs(a), money0(Math.abs(a))]), head: 'Then' }] : ['—', 'no recurring bills found'])),
   };
   const TILE_NAME = (id) => (CARD[id] ? CARD[id][1] : GT[id] ? GT[id].title : id);
   const ALL_TILES = [...Object.keys(CARD), ...Object.keys(GT)];
@@ -477,8 +491,47 @@
   const gTile = (id) => { if (gtiles[id]) return gtiles[id]; const c = document.createElement('div'); c.className = 'fd-card fd-gtile'; c.dataset.tile = id; const h = document.createElement('h3'); h.textContent = GT[id].title;
     const v = document.createElement('p'); v.className = 'fd-big'; const s = document.createElement('p'); s.className = 'fd-sub'; c.append(h, v, s);
     c.addEventListener('click', (e) => { if (ARR || e.target.closest('.fd-tiletools')) return; if (GT[id].go && window.FDShow) window.FDShow(GT[id].go); }); c.title = 'Open the section behind this'; return (gtiles[id] = c); };
+  // small charts inside tiles: spark (line), bars (months), meter (progress), list (top items)
+  const SVGN = 'http://www.w3.org/2000/svg', sv = (t, a) => { const e = document.createElementNS(SVGN, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const tileViz = (z) => {
+    const box = document.createElement('div'); box.className = 'fd-tviz';
+    if (z.spark || z.bars) {
+      const v = (z.spark || z.bars).map((x) => Number(x) || 0), W = 200, H = 56, P = 3, n = v.length;
+      const mn = Math.min(...v), mx = Math.max(...v), pad = Math.max((mx - mn) * 0.15, Math.abs(mx) * 0.01, 1);
+      let lo = z.spark ? mn - pad : Math.min(0, mn, z.ref ?? Infinity), hi = z.spark ? mx + pad : Math.max(mx, z.ref ?? -Infinity, lo + 1); if (z.spark && z.ref != null && z.ref > lo - pad * 3) lo = Math.min(lo, z.ref - pad); const y = (x) => P + (H - 2 * P) * (1 - (x - lo) / (hi - lo));
+      const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'fd-tsvg', role: 'img' });
+      if (z.spark) {
+        const x = (i) => (n < 2 ? W / 2 : (i * W) / (n - 1)), pts = v.map((a, i) => `${x(i).toFixed(1)},${y(a).toFixed(1)}`);
+        const up = z.down ? v[n - 1] <= v[0] : v[n - 1] >= v[0];
+        svg.classList.add(up ? 'is-up' : 'is-down');
+        svg.append(sv('path', { d: `M0,${H} L${pts.join(' L')} L${W},${H} Z`, class: 'fd-tarea' }), sv('polyline', { points: pts.join(' '), class: 'fd-tline' }));
+        if (z.ref != null && z.ref > lo && z.ref < hi) svg.append(sv('line', { x1: 0, x2: W, y1: y(z.ref), y2: y(z.ref), class: 'fd-tref' }));
+        if (z.mark != null) svg.append(sv('circle', { cx: x(z.mark), cy: y(v[z.mark]), r: 3, class: 'fd-tdot' }));
+        svg.setAttribute('aria-label', z.l ? `${z.l[0]} to ${z.l[n - 1]}` : 'trend');
+      } else {
+        const bw = W / n, z0 = y(0);
+        v.forEach((a, i) => { const top = Math.min(y(a), z0), h = Math.max(1.5, Math.abs(y(a) - z0)); const r = sv('rect', { x: i * bw + bw * 0.18, y: top, width: bw * 0.64, height: h, rx: 2, class: 'fd-tbar' + (i === n - 1 ? ' is-last' : '') + (a < 0 ? ' is-neg' : '') + (z.good ? ' is-good' : '') });
+          const t = sv('title', {}); t.textContent = `${z.l ? z.l[i] + ': ' : ''}${z.pct ? a + '%' : money0(a)}`; r.append(t); svg.append(r); });
+        if (z.ref != null) svg.append(sv('line', { x1: 0, x2: W, y1: y(z.ref), y2: y(z.ref), class: 'fd-tref' }));
+      }
+      box.append(svg);
+      if (z.l && z.l.length > 1) { const ax = document.createElement('div'); ax.className = 'fd-taxis'; const a = document.createElement('span'), b = document.createElement('span'); a.textContent = z.l[0]; b.textContent = z.l[z.l.length - 1]; ax.append(a, b); box.append(ax); }
+    } else if (z.meter != null) {
+      const m = document.createElement('div'); m.className = 'fd-tmeter' + (z.over || z.meter > 1 ? ' is-over' : ''); const f = document.createElement('i'); f.style.width = Math.round(Math.min(1, Math.max(0, z.meter)) * 100) + '%'; m.append(f); box.append(m);
+      if (z.ml) { const ax = document.createElement('div'); ax.className = 'fd-taxis'; z.ml.forEach((t) => { const s0 = document.createElement('span'); s0.textContent = t; ax.append(s0); }); box.append(ax); }
+    }
+    if (z.list && z.list.length && !(z.spark || z.bars)) {
+      if (z.head) { const h = document.createElement('p'); h.className = 'fd-tlhead'; h.textContent = z.head; box.append(h); }
+      const mx = Math.max(...z.list.map((x) => Math.abs(x[1])), 1), ul = document.createElement('ul'); ul.className = 'fd-tlist' + (z.bad ? ' is-bad' : '') + (z.good ? ' is-good' : '');
+      z.list.forEach(([lb, val, txt, flag]) => { const li = document.createElement('li'); if (flag) li.className = 'is-flag'; const n0 = document.createElement('span'); n0.textContent = lb; const a = document.createElement('b'); a.textContent = txt || money0(val);
+        const bar = document.createElement('i'); bar.style.width = Math.round((Math.abs(val) / mx) * 100) + '%'; li.append(n0, a, bar); ul.append(li); });
+      box.append(ul);
+    }
+    return box;
+  };
   const fillG = (id) => { const c = gTile(id); let r = null; try { r = GT[id].fn(); } catch { r = null; } const [v, s] = [c.children[1], c.children[2]];
-    v.textContent = r ? r[0] : '—'; s.textContent = r ? r[1] : 'Not enough data yet'; v.classList.toggle('fd-bad', !!(r && r[2] === 'bad')); c.classList.toggle('is-empty', !r); };
+    v.textContent = r ? r[0] : '—'; s.textContent = r ? r[1] : 'Not enough data yet'; v.classList.toggle('fd-bad', !!(r && r[2] === 'bad')); c.classList.toggle('is-empty', !r);
+    c.querySelector('.fd-tviz')?.remove(); if (r && r[3]) { try { c.append(tileViz(r[3])); } catch {} } };
   let dragTile = null;
   function drawTiles() {
     if (!kpis) return; const g = curTab(), list = tilesFor(g);
@@ -608,7 +661,11 @@
       s.hidden = true; }
     s.querySelector('h2').textContent = spec.title || 'My report'; s.querySelector('.fd-crdesc').textContent = crDesc(spec);
     // as a tile: the report's total
-    const tk = 'cr:' + spec.id; GT[tk] = T('★ ' + (spec.title || 'My report'), id, () => { const r = crRun(spec); return [crFmt(spec)(r.total), crDesc(spec).split(' · ').slice(0, 2).join(' · ')]; });
+    const tk = 'cr:' + spec.id; GT[tk] = T('★ ' + (spec.title || 'My report'), id, () => { const r = crRun(spec), f = crFmt(spec), ms = r.months || [];
+      const viz = !['none', 'month', 'weekday'].includes(spec.by) && r.groups.length > 1 ? { list: r.groups.slice(0, 4).map((g) => [g.key, g.value, f(g.value)]) }
+        : ms.length > 1 && spec.measure !== 'balance' ? { bars: ms.map((m) => r.groups.reduce((t, g) => t + (g.byMonth[m] || 0), 0)), l: ms.map(MS) }
+        : r.groups.length > 1 ? { bars: r.groups.map((g) => g.value), l: r.groups.map((g) => String(g.key).slice(0, 3)) } : null;
+      return [f(r.total), crDesc(spec).split(' · ').slice(0, 2).join(' · '), '', viz]; });
     if (!ALL_TILES.includes(tk)) ALL_TILES.push(tk); if (gtiles[tk]) gtiles[tk].querySelector('h3').textContent = GT[tk].title;
     return s;
   }
@@ -2768,7 +2825,7 @@
     const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(i > 300 ? { year: 'numeric' } : {}), timeZone: 'UTC' });
     const fcName = FC_NAME[DAYS];
     { const fp = ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day)[0], fb = ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day)[0];
-      FCSUM = { low: minB, lowWhen: when(minDay), end: bal, cash: cash.total, name: fcName, cushion: low, pay: fp && { amt: fp.amt, label: fp.label, when: when(fp.day) }, bill: fb && { amt: fb.amt, label: fb.label, when: when(fb.day) } };
+      FCSUM = { pts: pts.map((x) => x.v), lowDay: minDay, pays: ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day).slice(0, 3).map((e) => [e.label, e.amt, when(e.day)]), bills: ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day).slice(0, 3).map((e) => [e.label, e.amt, when(e.day)]), low: minB, lowWhen: when(minDay), end: bal, cash: cash.total, name: fcName, cushion: low, pay: fp && { amt: fp.amt, label: fp.label, when: when(fp.day) }, bill: fb && { amt: fb.amt, label: fb.label, when: when(fb.day) } };
       setTimeout(() => { try { drawTiles(); } catch {} }, 0); }
     const head = document.createElement('p'); head.className = 'fd-note' + (minB < low ? ' fd-bad' : '');
     head.textContent = `Checking & savings: ${money0(cash.total)} today → about ${money0(bal)} in ${fcName}. Lowest point ≈ ${money0(minB)} around ${when(minDay)}.` + (minB < low ? ` ⚠ That's below your ${money0(low)} cushion.` : '');

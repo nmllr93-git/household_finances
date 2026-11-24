@@ -640,3 +640,30 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 @media (max-width: 335px) { .fd-nav .fd-navm { font-size: 12px; text-overflow: ellipsis; } }
 /* small laptop windows: tighter tabs so every tab, ✎ Arrange and ⚙ Settings fit without scrolling */
 @media (min-width: 1061px) and (max-width: 1260px) { .fd-nav .fd-navb { padding-left: 7px; padding-right: 7px; font-size: 13.5px; } }
+
+/* tile charts */
+.fd-gtile .fd-tviz { margin-top: auto; padding-top: 6px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fd-tsvg { width: 100%; height: 52px; display: block; overflow: visible; }
+.fd-tline { fill: none; stroke: var(--color-accent); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
+.fd-tarea { fill: var(--color-accent); opacity: .08; }
+.fd-tsvg.is-down .fd-tline { stroke: var(--color-bad); } .fd-tsvg.is-down .fd-tarea { fill: var(--color-bad); }
+.fd-tref { stroke: var(--color-fg-muted); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: .7; }
+.fd-tdot { fill: var(--color-bad); stroke: var(--color-panel, #fff); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fd-tbar { fill: var(--color-fg-muted); opacity: .35; } .fd-tbar.is-last { fill: var(--color-accent); opacity: 1; }
+.fd-tbar.is-good.is-last { fill: var(--color-good, var(--color-accent)); } .fd-tbar.is-neg { fill: var(--color-bad); opacity: .8; }
+.fd-taxis { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--color-fg-muted); }
+.fd-tmeter { height: 10px; border-radius: 99px; background: var(--color-border-line); overflow: hidden; margin-top: 4px; }
+.fd-tmeter i { display: block; height: 100%; border-radius: 99px; background: var(--color-accent); }
+.fd-tmeter.is-over i { background: var(--color-bad); }
+.fd-tlhead { margin: 0; font-size: 11px; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; }
+.fd-tlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.fd-tlist li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 2px; padding: 0; }
+.fd-tlist li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-tlist li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.fd-tlist li i { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: var(--color-accent); opacity: .55; }
+.fd-tlist.is-bad li i, .fd-tlist.is-bad li b { background-color: transparent; } .fd-tlist.is-bad li i { background: var(--color-bad); } .fd-tlist.is-bad li b { color: var(--color-bad); }
+.fd-tlist.is-good li i { background: var(--color-good, var(--color-accent)); }
+.fd-tlist li.is-flag b { color: var(--color-bad); } .fd-tlist li.is-flag i { background: var(--color-bad); opacity: .8; }
+.fd-tmeter + .fd-taxis + .fd-tlhead { margin-top: 8px; }
+.fd-gtile .fd-tviz:has(> .fd-tsvg) { flex: 1 1 auto; }
+.fd-gtile .fd-tviz > .fd-tsvg { flex: 1 1 52px; height: auto; min-height: 52px; max-height: 140px; }
