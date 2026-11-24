@@ -3772,21 +3772,54 @@
         ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)].join(','), ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)].map(csvEsc).join(','), ...(r.cogs ? [['4', 'Cost of goods sold (Part III)', r.cogs.toFixed(2)].join(',')] : []), ['30', 'Home office (simplified)', r.homeOffice.toFixed(2)].map(csvEsc).join(','), ['31', 'Net profit', r.net.toFixed(2)].map(csvEsc).join(',')];
       saveFile(`${who}-${BZSEL.year}-schedule-c-summary.csv`, L.join('\r\n'), 'text/csv'); }), ' ',
     rbtn('Print or save as PDF', () => bizPrint(r)));
+    { const pk = rbtn('Download tax packet (ZIP)', async () => { pk.disabled = true; const t0 = pk.textContent; pk.textContent = 'Building…'; try { await bizPacket(r); } catch (e) { alert('Couldn’t build the tax packet: ' + e.message); } pk.disabled = false; pk.textContent = t0; }, false);
+      el.append(document.createElement('br'), pk, phMsg('One file for your tax preparer: the Schedule C summary, business transactions, every transaction for the year (business and personal), mileage log, estimated payments, a printable summary and the receipt photos.', 'fd-zero')); }
   });
-  // a plain printable page (the browser's Print → Save as PDF)
-  const bizPrint = (r) => {
-    const w = window.open('', '_blank'); if (!w) return alert('Allow pop-ups to print.');
-    const e = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-    const rowsH = r.lines.map((l) => `<tr><td>${e(l.code)}</td><td>${e(l.label)}</td><td class="r">${e(money2(l.amount))}</td></tr>`).join('');
+  // printable summary as an HTML page (also put inside the tax packet)
+  const bizHtml = (r, auto) => {
+    const e = (x) => String(x ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+    const rowsH = r.lines.map((l) => `<tr><td>${e(l.code === 'cogs' ? '' : l.code)}</td><td>${e(l.label)}</td><td class="r">${e(money2(l.amount))}</td></tr>`).join('');
     const txH = r.list.map((t) => `<tr><td>${e(t.date || t.month)}</td><td>${e(t.vendor)}</td><td>${e(lineName(t.line))}</td><td class="r">${e(money2(t.share))}</td><td>${rcptKeys().has(t.splitOf || t.key) ? '✓' : ''}</td></tr>`).join('');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${e(BZSEL.biz || 'Business')} ${BZSEL.year}</title><style>body{font:12px system-ui,sans-serif;margin:24px;color:#111}h1{font-size:18px}h2{font-size:14px;margin-top:20px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}.r{text-align:right}p{color:#555}</style></head><body>
-      <h1>${e(BZSEL.biz || 'All businesses')} · ${BZSEL.year}</h1><p>From Larenest (${e(book())} dashboard). A starting point for your tax return, not tax advice.</p>
-      <table><tr><td>Income (gross receipts)</td><td class="r">${e(money2(r.income))}</td></tr><tr><td>Expenses</td><td class="r">${e(money2(r.expenses))}</td></tr><tr><td>Meals deductible (50%)</td><td class="r">${e(money2(r.mealsDeductible))}</td></tr><tr><td>Standard mileage (${Math.round(r.miles)} mi)</td><td class="r">${e(money2(r.mileage))}</td></tr><tr><td>Home office (simplified)</td><td class="r">${e(money2(r.homeOffice))}</td></tr><tr><th>Net profit</th><th class="r">${e(money2(r.net))}</th></tr></table>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${e(BZSEL.biz || 'Business')} ${BZSEL.year}</title><style>body{font:12px system-ui,sans-serif;margin:24px;color:#111}h1{font-size:18px}h2{font-size:14px;margin-top:20px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}.r{text-align:right}p{color:#555}</style></head><body>
+      <h1>${e(BZSEL.biz || 'All businesses')} · ${BZSEL.year}</h1><p>From Larenest (${e(book())} dashboard), ${e(new Date().toLocaleDateString('en-US'))}. A starting point for your tax return, not tax advice.</p>
+      <table><tr><td>Income (gross receipts)</td><td class="r">${e(money2(r.income))}</td></tr>${r.cogs ? `<tr><td>Cost of goods sold (Part III)</td><td class="r">${e(money2(r.cogs))}</td></tr>` : ''}<tr><td>Expenses</td><td class="r">${e(money2(r.expenses))}</td></tr><tr><td>Meals deductible (50%)</td><td class="r">${e(money2(r.mealsDeductible))}</td></tr><tr><td>Standard mileage (${Math.round(r.miles)} mi)</td><td class="r">${e(money2(r.mileageCounted))}</td></tr><tr><td>Home office (simplified)</td><td class="r">${e(money2(r.homeOffice))}</td></tr><tr><th>Net profit</th><th class="r">${e(money2(r.net))}</th></tr></table>
       <h2>Expenses by Schedule C line</h2><table><tr><th>Line</th><th>Expense</th><th class="r">Amount</th></tr>${rowsH}</table>
       <h2>Transactions</h2><table><tr><th>Date</th><th>Vendor</th><th>Line</th><th class="r">Business amount</th><th>Receipt</th></tr>${txH}</table>
-      <script>setTimeout(()=>print(),300)<\/script></body></html>`);
-    w.document.close();
+      ${auto ? '<script>setTimeout(()=>print(),300)<\/script>' : ''}</body></html>`;
   };
+  // the tax packet: one ZIP with every file a tax preparer usually asks for
+  const bizPacket = async (r) => {
+    const Y = BZSEL.year, who = (BZSEL.biz || 'business').replace(/[^\w-]+/g, '-').toLowerCase(), B = BIZ(), YD = yearData(Y), csv = (rows0) => rows0.map((x) => x.map(csvEsc).join(',')).join('\r\n');
+    const files = [];
+    files.push({ name: 'README.txt', data: [`Tax packet for ${BZSEL.biz || 'all businesses'} — ${Y}`, `Made by Larenest on ${new Date().toLocaleDateString('en-US')} from the ${book()} dashboard.`, '',
+      'summary.html                 Printable summary (open it and print, or save as PDF)', 'schedule-c-summary.csv       Totals by Schedule C line, mileage, home office, net profit', 'business-transactions.csv    Every business transaction, with its line, business share and receipt',
+      `all-transactions-${Y}.csv    Every transaction in the year, business and personal`, 'mileage-log.csv              Business trips at the IRS standard rate', 'estimated-payments.csv       Quarterly estimates, payments made', 'receipts/                    Receipt photos, named date_vendor_amount',
+      '', 'These totals are a starting point for you or your tax preparer, not tax advice.'].join('\r\n') });
+    files.push({ name: 'summary.html', data: bizHtml(r, false) });
+    files.push({ name: 'schedule-c-summary.csv', data: csv([['Line', 'Item', 'Amount'], ['1', 'Gross receipts (income)', r.income.toFixed(2)], ...(r.cogs ? [['4', 'Cost of goods sold (Part III)', r.cogs.toFixed(2)]] : []),
+      ...r.lines.filter((l) => l.code !== 'cogs').map((l) => [l.code, l.label, l.amount.toFixed(2)]), ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)], ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)],
+      ['30', `Home office, simplified (${B.list.reduce((s0, x) => s0 + (!BZSEL.biz || x.name === BZSEL.biz ? Number(x.sqft) || 0 : 0), 0)} sq ft)`, r.homeOffice.toFixed(2)], ['31', 'Net profit', r.net.toFixed(2)]]) });
+    const rk = rcptKeys();
+    files.push({ name: 'business-transactions.csv', data: csv([['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt'],
+      ...r.list.map((t) => [t.date || t.month, t.biz, t.line === 'income' ? 'Income' : `${t.line} ${lineName(t.line)}`, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.bizPct || 100, t.share.toFixed(2), t.source, rk.has(t.splitOf || t.key) ? 'yes' : ''])]) });
+    const am = acctMap(), all = rows('txns').filter((t) => t.book === book() && String(t.date || t.month).startsWith(String(Y))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    files.push({ name: `all-transactions-${Y}.csv`, data: csv([['Date', 'Type', 'Vendor', 'Category', 'Description', 'Amount', 'Account', 'Tags', 'Business', 'Business %'],
+      ...all.map((t) => { const bz = t.biz != null ? t.biz : am[t.source] || ''; return [t.date || t.month, t.type, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.source, (t.tags || []).join('; '), bz, bz ? t.bizPct || 100 : '']; })]) });
+    const trips = tripsFor(Y).filter((x) => !BZSEL.biz || x.biz === BZSEL.biz);
+    files.push({ name: 'mileage-log.csv', data: csv([['Date', 'Miles', 'Purpose', 'Business', 'Rate', 'Deduction'], ...trips.map((x) => [x.date, x.miles, x.purpose, x.biz, window.FDMileRate(x.date), ((Number(x.miles) || 0) * window.FDMileRate(x.date)).toFixed(2)])]) });
+    const rq = bizSum(Y, '');
+    files.push({ name: 'estimated-payments.csv', data: csv([['Quarter', 'Due', 'Profit', 'Set aside / needed', 'Paid', 'Still to pay'], ...rq.quarters.map((q) => [`Q${q.q}`, q.due, q.profit.toFixed(2), (q.need ?? q.estimate).toFixed(2), (q.paid || 0).toFixed(2), (q.owed ?? q.estimate).toFixed(2)]),
+      [], ['Payment date', 'Amount'], ...(YD.payments || []).map((x) => [x.date, Number(x.amount).toFixed(2)]), ...(YD.priorTax ? [[], ['Last year total tax', Number(YD.priorTax).toFixed(2)], ['Safe harbor', rq.safeHarbor != null ? rq.safeHarbor.toFixed(2) : '']] : [])]) });
+    const keys = new Set(r.list.map((t) => t.splitOf || t.key)), recs = rows('receipts').filter((x) => keys.has(x.txKey)), byKey = Object.fromEntries(r.list.map((t) => [t.splitOf || t.key, t])), used = new Set();
+    for (const x of recs) { try { const res = await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files/${encodeURIComponent(x.fileId)}`, {}); if (!res.ok) continue;
+      const t = byKey[x.txKey] || {}, ext = /png/.test(x.mime) ? 'png' : /webp/.test(x.mime) ? 'webp' : 'jpg'; let base = `${t.date || 'receipt'}_${String(t.vendor || 'vendor').replace(/[^\w-]+/g, '-').slice(0, 30)}_${Number(t.share || t.amount || 0).toFixed(2)}`, n = base, k = 2; while (used.has(n)) n = `${base}_${k++}`; used.add(n);
+      files.push({ name: `receipts/${n}.${ext}`, data: new Uint8Array(await res.arrayBuffer()) }); } catch {} }
+    const zip = window.FDZip(files), name = `tax-packet-${who}-${Y}.zip`;
+    if (window.FD_LOCAL && window.FDLocal && window.FDLocal.saveBytes) return window.FDLocal.saveBytes(name, zip, 'application/zip', 'Save or send');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  };
+  // a plain printable page (the browser's Print → Save as PDF)
+  const bizPrint = (r) => { const w = window.open('', '_blank'); if (!w) return alert('Allow pop-ups to print.'); w.document.write(bizHtml(r, true)); w.document.close(); };
 
   // Business transactions, with missing-receipt flags
   let bizTxMore = 25;

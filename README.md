@@ -356,7 +356,7 @@ Build a section from the data already in Larenest. In **✎ Arrange**, choose **
 Click **+ Report** in the top bar to make your own tab. Use **✎ Arrange** (or **Edit**) on it, then **Add a view** to add any section or custom report. Size each one S, M, L or F and reorder them. Report tabs sync across devices.
 
 ### Business (self-employed, no LLC)
-Add a business in ⚙ Settings → This dashboard → **Business**. A Business tab appears where you can mark business income and expenses (also partly, like 30% of a phone bill), keep a mileage log, see profit by Schedule C line, quarterly estimated tax amounts and missing receipts, and download CSV or PDF summaries at tax time. Hidden until you add a business. Full guide: [docs/BUSINESS.md](docs/BUSINESS.md).
+Add a business in ⚙ Settings → This dashboard → **Business**. A Business tab appears where you can mark business income and expenses (also partly, like 30% of a phone bill), keep a mileage log, see profit by Schedule C line, quarterly estimated tax amounts and missing receipts, and download CSV or PDF summaries, or one tax packet (ZIP with every file and the receipt photos) for your tax preparer. Hidden until you add a business. Full guide: [docs/BUSINESS.md](docs/BUSINESS.md).
 
 ---
 

@@ -39,6 +39,14 @@ name brings everything back.
   - **Download transactions (CSV):** every business transaction with its line, business share and receipt status.
   - **Download summary (CSV):** totals by line, ready to type into a tax form or hand to a preparer.
   - **Print or save as PDF:** a clean printable summary plus the transaction list.
+  - **Download tax packet (ZIP):** one file for your tax preparer. It holds:
+    - a README and a printable summary;
+    - the Schedule C summary and business transactions;
+    - every transaction in the year, business and personal, with business marks;
+    - the mileage log and the estimated payments;
+    - the receipt photos, named `date_vendor_amount`.
+
+    On the phone it opens the share sheet, so you can email it or save it to Files or Drive.
 - **Business transactions:** everything marked this year. ⚠ shows expenses that still need a receipt photo; Edit opens
   the transaction so you can add one with your phone's camera.
 - **Mark business transactions:** see above.
