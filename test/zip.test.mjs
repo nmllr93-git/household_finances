@@ -9,6 +9,6 @@ test('zip: text and bytes, folders and unicode names, CRC checked by unzip', () 
   const z = ctx.window.FDZip([{ name: 'README.txt', data: 'Hello, café ✓' }, { name: 'receipts/2026-01-02_Shell_40.00.jpg', data: bytes }, { name: 'empty.csv', data: '' }]);
   assert.equal(ctx.window.FDZip.crc32(new TextEncoder().encode('123456789')), 0xcbf43926);
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zip-')), 't.zip'); fs.writeFileSync(f, z);
-  const out = execFileSync('python3', ['-c', 'import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; print("|".join(z.namelist())); print(z.read("README.txt").decode()); print(len(z.read(z.namelist()[1])))', f], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } }).toString().trim().split('\n');
+  const out = execFileSync('python3', ['-c', 'import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; print("|".join(z.namelist())); print(z.read("README.txt").decode()); print(len(z.read(z.namelist()[1])))', f], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } }).toString().trim().split(/\r?\n/);
   assert.equal(out[0], 'README.txt|receipts/2026-01-02_Shell_40.00.jpg|empty.csv'); assert.equal(out[1], 'Hello, café ✓'); assert.equal(out[2], '3000');
 });
