@@ -181,7 +181,7 @@ function serveStatic(req, res, urlPath) {
     fs.createReadStream(file).pipe(res);
   });
 }
-const isHttps = (req) => req.headers['x-forwarded-proto'] === 'https';
+const isHttps = (req) => !!(req.socket && req.socket.encrypted) || req.headers['x-forwarded-proto'] === 'https'; // our own HTTPS, or a proxy in front
 const cookie = (req, v, maxAge) => `hf_session=${v}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
 
 // ---------- clean up what the page sends before storing it ----------
