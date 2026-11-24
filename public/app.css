@@ -341,7 +341,7 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 @media (max-width: 640px) {
   .fd-nav { overflow-x: visible; }
   .fd-nav .fd-navm { display: block; }
-  .fd-nav .fd-navb:not(.fd-navset) { display: none; }
+  .fd-nav .fd-navb:not(.fd-navset):not(.fd-navarr) { display: none; }
   .fd-nav .fd-navset { font-size: 0; padding: 11px 10px 9px; margin-left: 0; } .fd-nav .fd-navset::before { content: '⚙'; font-size: 18px; }
 }
 
@@ -574,3 +574,35 @@ body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); 
 }
 /* currency converter stands out as its own tool */
 .fd-fx { margin: var(--cds-gap-md, 12px) 0; max-width: 720px; }
+/* ---- per-tab tiles and Arrange mode ---- */
+.fd-gtile { cursor: pointer; justify-content: flex-start; }
+.fd-gtile h3 { margin-bottom: 2px; }
+.fd-gtile .fd-big { font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
+.fd-gtile.is-empty .fd-big { color: var(--color-fg-muted); }
+#kpis.fd-notiles { display: none; }
+#kpis.is-arr .fd-card { position: relative; outline: 1px dashed var(--color-border-line); outline-offset: -1px; cursor: default; }
+.fd-tiletools { display: flex; gap: 4px; justify-content: flex-end; margin: -4px -4px 4px; }
+.fd-tiletools .fd-repbtn, .fd-reptools .fd-repbtn { min-width: 30px; min-height: 30px; }
+.fd-grip { cursor: grab; margin-right: auto; }
+.fd-reptools .fd-grip { margin-right: 0; }
+.fd-tileadd { display: flex; align-items: center; justify-content: center; border-style: dashed; }
+.is-drop { box-shadow: 0 0 0 2px var(--brand, #c2410c) inset; }
+.fd-reptile:not(.is-arr):has(> section[hidden], > section.fd-none) { display: none; }
+.fd-navarr { margin-left: auto; }
+.fd-navarr.is-on { color: var(--brand, inherit); font-weight: 600; }
+body.fd-arranging .fd-reptile.is-arr > section { pointer-events: none; opacity: .92; }
+body.fd-arranging .fd-reptile.is-arr > section .fd-fold { pointer-events: none; }
+@media (max-width: 760px) {
+  .fd-navarr { font-size: 13px; padding-left: 8px; padding-right: 8px; }
+  .fd-grip { display: none; } /* touch: drag isn't reliable, the arrows are */
+}
+@media (hover: none) { .fd-grip { display: none; } }
+.fd-navarr + .fd-navset { margin-left: 0; }
+@media (max-width: 760px) { .fd-nav .fd-navarr:not(.is-on) { font-size: 0; } .fd-nav .fd-navarr:not(.is-on)::before { content: '✎'; font-size: 17px; } }
+.fd-arrhelp { font-size: 13px; }
+@media (max-width: 760px) {
+  .fd-sizebtn { display: none; }
+  .fd-reptools { flex-wrap: nowrap; } .fd-reptools span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .fd-nav .fd-navarr.is-on { font-size: 0; } .fd-nav .fd-navarr.is-on::before { content: '✓'; font-size: 18px; }
+}
+.fd-tileadd .dash-select { width: 100%; max-width: 100%; }

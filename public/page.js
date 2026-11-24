@@ -100,6 +100,7 @@
     if (st('prefs') !== 'ok') return;
     COLORS = prefGet('colors', {}) || {};
     const r = prefGet('reports', null); if (Array.isArray(r)) { REPS = r; try { navReports(); if (repOn != null) drawReport(); } catch {} }
+    if (window.__fdLayoutSync) window.__fdLayoutSync();
     applySettings(SET(), false);
     if (!prefsReady) { prefsReady = true; const s = SET(); if (s.range && !new URLSearchParams(location.search).get('range')) dash.setParams({ range: s.range }); if (s.tab) showGroup(s.tab); }
     redrawAll();
@@ -356,7 +357,7 @@
   const repBox = document.createElement('div'); repBox.id = 'fd-report'; repBox.hidden = true;
   const repBar = document.createElement('div'); repBar.className = 'fd-repbar';
   const repGrid = document.createElement('div'); repGrid.className = 'fd-repgrid';
-  repBox.append(repBar, repGrid); document.getElementById('fd-nav').after(repBox);
+  repBox.append(repBar, repGrid); (document.getElementById('kpis') || document.getElementById('fd-nav')).after(repBox); // below the tiles, so a tab's tiles stay on top
   let repEdit = false, repOn = null;
   const goHome = () => { home.forEach((mark, s) => { if (s.parentElement?.classList.contains('fd-reptile')) { mark.after(s); } }); repGrid.replaceChildren(); };
   const sbtn = (txt, title, fn, on) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-repbtn' + (on ? ' is-on' : ''); b.textContent = txt; b.title = title; b.setAttribute('aria-label', title); b.addEventListener('click', fn); return b; };
@@ -410,6 +411,167 @@
   };
   navReports();
   if (/^rep:/.test(NP.group || '')) showGroup(NP.group);
+  // ==== Layout: per-tab tiles and Arrange mode (one "layout" setting per dashboard, synced like other settings) ====
+  // layout = { v: 1, tabs: { <tab>: { tiles?: [tileId], items?: [{ id, size }] } } }. A tab with no entry uses the defaults.
+  // Reports (★ tabs) keep their own items; their tiles live on the report as r.tiles.
+  let LAYOUT = (() => { const l = prefGet('layout', null); return l && l.tabs ? l : { v: 1, tabs: {} }; })();
+  let ARR = false; // Arrange mode on the current tab
+  let laySaveT = null;
+  const laySave = () => { clearTimeout(laySaveT); laySaveT = setTimeout(() => prefSet('layout', LAYOUT), 400); };
+  const curTab = () => NP.group || 'all';
+  const isRepTab = (g) => /^rep:\d+$/.test(g) && REPS[+g.slice(4)];
+  const tabLay = (g) => (isRepTab(g) ? REPS[+g.slice(4)] : (LAYOUT.tabs[g] = LAYOUT.tabs[g] || {}));
+  const peekLay = (g) => (isRepTab(g) ? REPS[+g.slice(4)] : LAYOUT.tabs[g] || {});
+  const saveTab = (g) => { if (isRepTab(g)) repSave(); else laySave(); };
+
+  // ---- tiles ----
+  // The five original cards are kept as they are (rings, toggles); the rest are compact number tiles.
+  const CARD = { flow: ['kpi-flow', 'Cash flow'], budget: ['kpi-budget', 'Budget'], where: ['kpi-subs', 'Where the income went'], assets: ['kpi-assets', 'Cash & investments'], debt: ['kpi-debt', 'Mortgage & loans'] };
+  const nowM = () => new Date().toISOString().slice(0, 7);
+  const bal1 = (k) => (latestTotal([k])[0] || null);
+  const expM = (m) => rows('txns').filter((t) => t.book === book() && t.type === 'expense' && t.month === m);
+  const sumA = (l) => l.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const prevMonths = (n) => { const out = []; const d = new Date(); d.setUTCDate(15); for (let i = 1; i <= n; i++) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 15)); out.push(x.toISOString().slice(0, 7)); } return out; };
+  let FCSUM = null; // filled in by the cash forecast each time it draws
+  const T = (title, go, fn) => ({ title, go, fn });
+  const GT = {
+    nw: T('Net worth', 'networth', () => { const a = ['deposit', 'investment'].map(bal1).filter(Boolean), d = ['credit', 'loan', 'mortgage'].map(bal1).filter(Boolean); if (!a.length && !d.length) return null;
+      const own = a.reduce((s, r) => s + r.total, 0), owe = d.reduce((s, r) => s + Math.abs(r.total), 0); return [money0(own - owe), `own ${money0(own)} · owe ${money0(owe)}`]; }),
+    cash: T('Checking & savings', 'deposits', () => { const r = bal1('deposit'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good']; }),
+    invest: T('Investments', 'investments', () => { const r = bal1('investment'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good']; }),
+    cards: T('Credit cards owed', 'accounts', () => { const r = bal1('credit'); return r && [money0(Math.abs(r.total)), `as of ${r.label}`]; }),
+    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean); return r.length ? [money0(r.reduce((s, x) => s + Math.abs(x.total), 0)), r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans'] : null; }),
+    spentMonth: T('Spent this month', 'categories', () => { if (st('txns') !== 'ok') return null; const s = sumA(expM(nowM())), pm = prevMonths(3).map((m) => sumA(expM(m))).filter((x) => x > 0), avg = pm.length ? pm.reduce((a, b) => a + b, 0) / pm.length : 0;
+      return [money0(s), avg ? `usual month ≈ ${money0(avg)}` : 'so far this month']; }),
+    avgSpend: T('Average spending', 'cashflow', () => { const r = sumRow(); return r && [money0(r.avgSpend), `a month · ${rangeLabel()}`]; }),
+    income: T('Income', 'cashflow', () => { const r = sumRow(); return r && [money0(r.income), `${rangeLabel()} · net ${money0(r.net)}`, r.net < 0 ? 'bad' : 'good']; }),
+    saveRate: T('Savings rate', 'cashflow', () => { const r = sumRow(); if (!r || !(r.income > 0)) return null; const p = Math.round((r.net / r.income) * 100); return [p + '%', `of income kept · ${rangeLabel()}`, p < 0 ? 'bad' : p >= 10 ? 'good' : '']; }),
+    topCat: T('Top category this month', 'categories', () => { if (st('txns') !== 'ok') return null; const by = {}; for (const t of expM(nowM())) { const c = t.category || 'Uncategorized'; if (/^(transfer)$/i.test(c)) continue; by[c] = (by[c] || 0) + (Number(t.amount) || 0); }
+      const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0]; return top ? [top[0], money0(top[1]) + ' so far'] : ['—', 'nothing spent yet']; }),
+    unusual: T('Unusual this month', 'unusual', () => { if (st('txns') !== 'ok') return null; const pm = prevMonths(6), cur = {}, past = {};
+      for (const t of expM(nowM())) { const c = t.category || 'Uncategorized'; cur[c] = (cur[c] || 0) + Number(t.amount || 0); }
+      for (const m of pm) for (const t of expM(m)) { const c = t.category || 'Uncategorized'; past[c] = (past[c] || 0) + Number(t.amount || 0) / pm.length; }
+      const hits = Object.entries(cur).filter(([c, v]) => !/^transfer$/i.test(c) && v >= (past[c] || 0) * 1.3 && v - (past[c] || 0) >= 50);
+      return [String(hits.length), hits.length ? hits.slice(0, 2).map((h) => h[0]).join(', ') + (hits.length > 2 ? '…' : '') : 'categories above their usual', hits.length ? 'bad' : 'good']; }),
+    subs: T('Subscriptions', 'subscriptions', () => { const r = subsTot('Subscription'); return r && [money0(r.avg), `a month · about ${money0(r.yearly)} a year`]; }),
+    budLeft: T('Budget left', 'budget', () => { const r = budTot(); if (!r || !r.categories) return null; const left = r.available - r.spent; return [money0(Math.abs(left)) + (left < 0 ? ' over' : ''), `${r.label}${isCurrent(r.month) ? ' so far' : ''}`, left < 0 ? 'bad' : 'good']; }),
+    budOver: T('Categories over budget', 'budget', () => { const r = budTot(); if (!r || !r.categories) return null; const l = rows('categories').filter((x) => x.book === book() && x.month === r.month && x.available > 0 && x.actual > x.available);
+      return [String(l.length), l.length ? l.slice(0, 2).map((x) => x.category).join(', ') + (l.length > 2 ? '…' : '') : `of ${r.categories} budgets`, l.length ? 'bad' : 'good']; }),
+    needsCat: T('Need a category', 'transactions', () => { if (st('txns') !== 'ok') return null; const inP = new Set(period().map((m) => m.month)); const n = rows('txns').filter((t) => t.book === book() && inP.has(t.month) && (t.category || 'Uncategorized') === 'Uncategorized').length; return [String(n), `transactions · ${rangeLabel()}`, n ? 'bad' : 'good']; }),
+    fcLow: T('Lowest cash ahead', 'forecast', () => FCSUM && [money0(FCSUM.low), `around ${FCSUM.lowWhen} · next ${FCSUM.name}`, FCSUM.low < FCSUM.cushion ? 'bad' : '']),
+    fcEnd: T('Cash forecast', 'forecast', () => FCSUM && [money0(FCSUM.end), `in ${FCSUM.name} (from ${money0(FCSUM.cash)})`, FCSUM.end < FCSUM.cash ? 'bad' : 'good']),
+    nextPay: T('Next payday', 'forecast', () => FCSUM && (FCSUM.pay ? [money0(FCSUM.pay.amt), `${FCSUM.pay.when} · ${FCSUM.pay.label}`] : ['—', 'no regular income found'])),
+    nextBill: T('Next bill', 'forecast', () => FCSUM && (FCSUM.bill ? [money0(Math.abs(FCSUM.bill.amt)), `${FCSUM.bill.when} · ${FCSUM.bill.label}`] : ['—', 'no recurring bills found'])),
+  };
+  const TILE_NAME = (id) => (CARD[id] ? CARD[id][1] : GT[id] ? GT[id].title : id);
+  const ALL_TILES = [...Object.keys(CARD), ...Object.keys(GT)];
+  const DEF_TILES = { all: ['flow', 'budget', 'where', 'assets', 'debt'], overview: ['flow', 'budget', 'where', 'assets', 'debt'], accounts: ['nw', 'cash', 'invest', 'cards', 'loans'],
+    expenses: ['spentMonth', 'avgSpend', 'topCat', 'subs', 'unusual'], budget: ['budget', 'budLeft', 'budOver', 'spentMonth'], tx: ['needsCat', 'spentMonth', 'income'],
+    planning: ['fcLow', 'fcEnd', 'nextPay', 'nextBill', 'saveRate'], markets: ['invest', 'nw'], review: ['income', 'avgSpend', 'saveRate', 'nw'], import: [], settings: [] };
+  const tilesFor = (g) => { const own = peekLay(g).tiles; if (Array.isArray(own)) return own.filter((x) => ALL_TILES.includes(x));
+    if (isRepTab(g)) return DEF_TILES.overview.slice(); const hid = new Set(SET().hideTiles || []); return (DEF_TILES[g] || DEF_TILES.all).filter((x) => !CARD[x] || !hid.has(CARD[x][0])); };
+  const kpis = document.getElementById('kpis'), gtiles = {};
+  const gTile = (id) => { if (gtiles[id]) return gtiles[id]; const c = document.createElement('div'); c.className = 'fd-card fd-gtile'; c.dataset.tile = id; const h = document.createElement('h3'); h.textContent = GT[id].title;
+    const v = document.createElement('p'); v.className = 'fd-big'; const s = document.createElement('p'); s.className = 'fd-sub'; c.append(h, v, s);
+    c.addEventListener('click', (e) => { if (ARR || e.target.closest('.fd-tiletools')) return; if (GT[id].go && window.FDShow) window.FDShow(GT[id].go); }); c.title = 'Open the section behind this'; return (gtiles[id] = c); };
+  const fillG = (id) => { const c = gTile(id); let r = null; try { r = GT[id].fn(); } catch { r = null; } const [v, s] = [c.children[1], c.children[2]];
+    v.textContent = r ? r[0] : '—'; s.textContent = r ? r[1] : 'Not enough data yet'; v.classList.toggle('fd-bad', !!(r && r[2] === 'bad')); c.classList.toggle('is-empty', !r); };
+  let dragTile = null;
+  function drawTiles() {
+    if (!kpis) return; const g = curTab(), list = tilesFor(g);
+    Object.values(CARD).forEach(([id]) => q(id).forEach((c) => { c.hidden = true; }));
+    Object.values(gtiles).forEach((c) => { c.hidden = true; });
+    kpis.querySelectorAll('.fd-tiletools, .fd-tileadd').forEach((x) => x.remove());
+    const els = list.map((id) => (CARD[id] ? q(CARD[id][0])[0] : GT[id] ? gTile(id) : null)).filter(Boolean);
+    els.forEach((c, i) => { const id = list[i]; if (!CARD[id]) fillG(id); c.hidden = false; c.dataset.tile = id; kpis.append(c);
+      c.classList.toggle('is-arr', ARR); c.draggable = false;
+      if (ARR) { const tt = document.createElement('div'); tt.className = 'fd-tiletools';
+        const mv = (d) => () => { const l = tilesFor(g), j = i + d; if (j < 0 || j >= l.length) return; l.splice(j, 0, l.splice(i, 1)[0]); tabLay(g).tiles = l; saveTab(g); drawTiles(); };
+        const grip = sbtn('⠿', 'Drag to move', () => {}); grip.classList.add('fd-grip');
+        grip.addEventListener('mousedown', () => { c.draggable = true; }); c.addEventListener('dragend', () => { c.draggable = false; }, { once: true });
+        tt.append(grip, sbtn('‹', 'Move left', mv(-1)), sbtn('›', 'Move right', mv(1)), sbtn('×', 'Remove this tile', () => { const l = tilesFor(g); l.splice(i, 1); tabLay(g).tiles = l; saveTab(g); drawTiles(); }));
+        c.prepend(tt);
+        c.ondragstart = (e) => { dragTile = i; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', id); } catch {} };
+        c.ondragover = (e) => { if (dragTile != null) { e.preventDefault(); c.classList.add('is-drop'); } }; c.ondragleave = () => c.classList.remove('is-drop');
+        c.ondrop = (e) => { e.preventDefault(); c.classList.remove('is-drop'); if (dragTile == null || dragTile === i) return; const l = tilesFor(g); l.splice(i, 0, l.splice(dragTile, 1)[0]); dragTile = null; tabLay(g).tiles = l; saveTab(g); drawTiles(); };
+      } else { c.ondragstart = c.ondragover = c.ondrop = c.ondragleave = null; } });
+    if (ARR) { const add = document.createElement('div'); add.className = 'fd-card fd-tileadd'; const sel = document.createElement('select'); sel.className = 'dash-select'; sel.setAttribute('aria-label', 'Add a tile');
+      sel.append(new Option(list.length >= 8 ? 'Up to 8 tiles' : '+ Add a tile…', '')); if (list.length < 8) ALL_TILES.filter((x) => !list.includes(x)).forEach((x) => sel.append(new Option(TILE_NAME(x), x)));
+      sel.disabled = list.length >= 8; sel.addEventListener('change', () => { if (!sel.value) return; const l = tilesFor(g); l.push(sel.value); tabLay(g).tiles = l; saveTab(g); drawTiles(); });
+      add.append(sel); kpis.append(add); }
+    kpis.classList.toggle('fd-notiles', !els.length && !ARR); kpis.classList.toggle('is-arr', ARR);
+  }
+  dash.onData(() => { try { drawTiles(); } catch {} });
+
+  // ---- sections: a customized tab is laid out on the same 12-column grid as reports ----
+  const FULLSPAN = new Set(['accounts', 'networth', 'sharedin', 'transactions', 'import', 'settings', 'budget', 'categories', 'vendors', 'review', 'health', 'bills', 'forecast', 'markets', 'economy', 'subscriptions', 'holdings']);
+  const docOrder = (ids) => ids.slice().sort((a, b) => { const x = q(a)[0], y = q(b)[0]; if (!x || !y) return 0; return x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1; });
+  const visibleIds = (g) => (g === 'all' ? ALL : GROUPS[g] || []).filter((id) => !HIDESEC.has(id) && !(SIMPLE && SIMPLE_HIDE.has(id)) && !(id === 'split' && SET().type !== 'shared') && q(id)[0]);
+  // Start from what the tab looks like now: measured widths on a wide screen, otherwise half width for paired sections.
+  const seedItems = (g) => { const wide = window.innerWidth >= 1100, main = document.getElementById('dash-root') || document.body, W = main.clientWidth || 1;
+    // the order you see (CSS can reorder sections on wide screens), then the page order for anything not on screen
+    const pos = (id) => { const r = q(id)[0].getBoundingClientRect(); return r.width ? [Math.round(r.top / 8), r.left] : null; };
+    const ids = docOrder(visibleIds(g)).filter((id) => !q(id)[0].classList.contains('fd-none'));
+    const seen = ids.map((id, i) => ({ id, i, p: pos(id) })).sort((a, b) => (a.p && b.p ? a.p[0] - b.p[0] || a.p[1] - b.p[1] : a.i - b.i));
+    return seen.map(({ id }) => { const s = q(id)[0]; let size = 'F';
+      if (wide && s.offsetWidth) { const r = s.offsetWidth / W; size = r > 0.8 ? 'F' : r > 0.58 ? 'L' : r > 0.4 ? 'M' : 'S'; }
+      else size = s.parentElement && s.parentElement.classList.contains('fd-grid2') && !FULLSPAN.has(id) ? 'M' : 'F';
+      return { id, size }; }); };
+  const customized = (g) => !isRepTab(g) && Array.isArray((LAYOUT.tabs[g] || {}).items);
+  let dragSec = null;
+  function drawTabGrid(g) {
+    goHome(); repBar.replaceChildren(); const L = tabLay(g), items = L.items || [];
+    repBar.hidden = !ARR;
+    if (ARR) { const name = document.createElement('strong'); name.textContent = 'Arranging: ' + (document.querySelector(`.fd-navb[data-group="${g}"]`)?.textContent || 'this tab').replace(/^⚙\s*/, '');
+      const add = document.createElement('select'); add.className = 'dash-select'; add.setAttribute('aria-label', 'Add a section'); add.append(new Option('+ Add a section…', ''));
+      ALL.filter((id) => !items.some((x) => x.id === id) && q(id)[0] && !(id === 'split' && SET().type !== 'shared')).forEach((id) => add.append(new Option(secTitle(id), id)));
+      add.addEventListener('change', () => { if (!add.value) return; items.push({ id: add.value, size: FULLSPAN.has(add.value) ? 'F' : 'M' }); L.items = items; saveTab(g); drawTabGrid(g); });
+      const help = document.createElement('span'); help.className = 'fd-zero'; help.className = 'fd-zero fd-arrhelp'; help.textContent = window.matchMedia('(max-width: 760px)').matches ? 'Use the arrows to move sections. Widths apply on larger screens.' : 'Drag ⠿ or use the arrows to move. S, M, L and F set the width (a third, half, two-thirds, full).';
+      repBar.append(name, add, sbtn('Reset tab to default', 'Put this tab back the way it came', (e) => { if (!e.target.dataset.sure) { e.target.dataset.sure = '1'; e.target.textContent = 'Click again to reset'; return; } delete LAYOUT.tabs[g]; laySave(); ARR = false; showGroup(g); }),
+        sbtn('Done', 'Finish arranging', () => { ARR = false; showGroup(g); }, true), help); }
+    items.forEach((it, i) => { const s = q(it.id)[0]; if (!s || HIDESEC.has(it.id)) return;
+      const span = (SIZES.find((z) => z[0] === it.size) || SIZES[1])[1];
+      const cell = document.createElement('div'); cell.className = 'fd-reptile' + (ARR ? ' is-arr' : ''); cell.style.setProperty('--span', span);
+      if (ARR) { const t = document.createElement('div'); t.className = 'fd-reptools';
+        const grip = sbtn('⠿', 'Drag to move', () => {}); grip.classList.add('fd-grip'); grip.addEventListener('mousedown', () => { cell.draggable = true; });
+        const lab = document.createElement('span'); lab.textContent = secTitle(it.id); t.append(grip, lab);
+        SIZES.forEach(([k, , full]) => { const b0 = sbtn(k, full + ' width', () => { it.size = k; saveTab(g); drawTabGrid(g); }, it.size === k); b0.classList.add('fd-sizebtn'); t.append(b0); });
+        const mv = (d) => () => { const j = i + d; if (j < 0 || j >= items.length) return; items.splice(j, 0, items.splice(i, 1)[0]); saveTab(g); drawTabGrid(g); };
+        t.append(sbtn('↑', 'Move earlier', mv(-1)), sbtn('↓', 'Move later', mv(1)), sbtn('×', 'Remove from this tab (add it back from “Add a section”)', () => { items.splice(i, 1); saveTab(g); drawTabGrid(g); }));
+        cell.append(t);
+        cell.addEventListener('dragstart', (e) => { dragSec = i; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', it.id); } catch {} });
+        cell.addEventListener('dragend', () => { cell.draggable = false; dragSec = null; });
+        cell.addEventListener('dragover', (e) => { if (dragSec != null) { e.preventDefault(); cell.classList.add('is-drop'); } }); cell.addEventListener('dragleave', () => cell.classList.remove('is-drop'));
+        cell.addEventListener('drop', (e) => { e.preventDefault(); cell.classList.remove('is-drop'); if (dragSec == null || dragSec === i) return; items.splice(i, 0, items.splice(dragSec, 1)[0]); dragSec = null; saveTab(g); drawTabGrid(g); }); }
+      s.hidden = false; cell.append(s); repGrid.append(cell); });
+    if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'No sections on this tab. Add one from “Add a section”, or reset the tab.'; repGrid.append(p); }
+    redrawIn(repGrid);
+  }
+  // Arrange button, next to ⚙ Settings
+  { const nav = document.getElementById('fd-nav'), set = nav && nav.querySelector('.fd-navset');
+    const ab = document.createElement('button'); ab.type = 'button'; ab.className = 'fd-navb fd-navarr'; ab.id = 'fd-arrange'; ab.textContent = '✎ Arrange'; ab.title = 'Move, resize, add or remove the tiles and sections on this tab';
+    ab.addEventListener('click', (e) => { e.stopPropagation(); const g = curTab(); if (g === 'settings' || g === 'import') return;
+      ARR = !ARR; if (ARR && !isRepTab(g) && !customized(g)) { const t0 = tilesFor(g); tabLay(g).items = seedItems(g); if (!Array.isArray(tabLay(g).tiles)) tabLay(g).tiles = t0; }
+      if (ARR && isRepTab(g)) { repEdit = true; } if (!ARR && isRepTab(g)) repEdit = false; showGroup(g); });
+    if (set) nav.insertBefore(ab, set); else if (nav) nav.append(ab); }
+  const arrBtn = () => document.getElementById('fd-arrange');
+  const prevShow = showGroup;
+  showGroup = (g) => {
+    if (g !== curTab()) ARR = false;
+    const leaveGrid = () => { if (repGrid.children.length && repOn == null) { const back = [...repGrid.querySelectorAll('section')]; goHome(); back.forEach(redrawIn); } };
+    if (isRepTab(g)) { repEdit = ARR || repEdit; repBar.hidden = false; prevShow(g); }
+    else if (customized(g)) {
+      leaveGrid(); prevShow(g); // nav state, tiles, hides the static sections' tab logic
+      NP.group = g; ALL.forEach((id) => q(id).forEach((s) => { s.hidden = true; })); repBox.hidden = false; drawTabGrid(g);
+    } else { leaveGrid(); repBar.hidden = false; prevShow(g); repBox.hidden = true; }
+    const ab = arrBtn(); if (ab) { ab.classList.toggle('is-on', ARR); ab.textContent = ARR ? '✓ Done arranging' : '✎ Arrange'; ab.hidden = g === 'settings' || g === 'import' || document.body.classList.contains('fd-readonly'); }
+    document.body.classList.toggle('fd-arranging', ARR);
+    try { drawTiles(); } catch {}
+  };
+  // a layout saved on another device arrives with the settings
+  const layoutSync = () => { if (ARR) return; const l = prefGet('layout', null); const next = l && l.tabs ? l : { v: 1, tabs: {} }; if (JSON.stringify(next) === JSON.stringify(LAYOUT)) return; LAYOUT = next; try { showGroup(curTab()); } catch {} };
+  window.__fdLayoutSync = layoutSync;
+  showGroup(curTab());
   NP.closed = NP.closed || {};
   ALL.forEach((id) => q(id).forEach((s) => {
     const h = s.querySelector(':scope > h2'); if (!h) return;
@@ -2467,6 +2629,9 @@
     for (let i = 0; i <= DAYS; i++) { if (i) bal -= daily; ev.filter((e) => e.day === i).forEach((e) => { bal += e.amt; }); if (bal < minB) { minB = bal; minDay = i; } const d = new Date(today.getTime() + i * 864e5); pts.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), v: Math.round(bal) }); }
     const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(i > 300 ? { year: 'numeric' } : {}), timeZone: 'UTC' });
     const fcName = FC_NAME[DAYS];
+    { const fp = ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day)[0], fb = ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day)[0];
+      FCSUM = { low: minB, lowWhen: when(minDay), end: bal, cash: cash.total, name: fcName, cushion: low, pay: fp && { amt: fp.amt, label: fp.label, when: when(fp.day) }, bill: fb && { amt: fb.amt, label: fb.label, when: when(fb.day) } };
+      setTimeout(() => { try { drawTiles(); } catch {} }, 0); }
     const head = document.createElement('p'); head.className = 'fd-note' + (minB < low ? ' fd-bad' : '');
     head.textContent = `Checking & savings: ${money0(cash.total)} today → about ${money0(bal)} in ${fcName}. Lowest point ≈ ${money0(minB)} around ${when(minDay)}.` + (minB < low ? ` ⚠ That's below your ${money0(low)} cushion.` : '');
     el.append(head);
