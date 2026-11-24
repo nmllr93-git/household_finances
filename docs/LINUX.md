@@ -110,6 +110,8 @@ A browser opening an `https://` address shows a one-time warning, because no pub
     - **Installer setup:** run `sudo tailscale set --operator=larenest`, or add `TS_PERMIT_CERT_UID=larenest` to `/etc/default/tailscaled`, then restart Larenest. Larenest asks Tailscale for a certificate for the server's `*.ts.net` name and renews it automatically.
     - **Docker:** the container can't reach the host's Tailscale. Use `tailscale serve --bg --https=443 https+insecure://localhost:8080` on the host instead, which gives you a trusted `https://<server>.<tailnet>.ts.net` address.
 
+Other devices must use the `https://` address: plain `http://` from another device is redirected (pages) or refused (sign-in and data). If an old device can't use HTTPS, set `LARENEST_ALLOW_HTTP=1`, or turn on **Allow unencrypted connections** in the desktop app's Host options. Behind your own reverse proxy (Caddy, nginx, Traefik) that handles HTTPS, set `LARENEST_TRUST_PROXY=1`.
+
 Tailscale also lets your phone reach Larenest away from home, with nothing opened to the internet. **Don't** forward Larenest's port on your router.
 
 ## Environment variables
@@ -122,5 +124,7 @@ Tailscale also lets your phone reach Larenest away from home, with nothing opene
 | `LARENEST_ADDRESSES` | (detected) | Comma-separated addresses other devices use to reach the server (needed for Docker bridge networking) |
 | `LARENEST_ADMIN_USER` / `LARENEST_ADMIN_PASSWORD` | – | Create the first login when there are none |
 | `TZ` | system | Time zone for bill dates and budgets |
+| `LARENEST_ALLOW_HTTP` | off | `1` lets other devices use plain `http://` (otherwise they're sent to `https://`; the server itself can always use http) |
+| `LARENEST_TRUST_PROXY` | off | `1` if a reverse proxy in front of Larenest handles HTTPS and sets `X-Forwarded-Proto` |
 
 Market and economy data keys (optional) are added in ⚙ Settings → Data sources, or in `$DATA_DIR/api-keys.json`.

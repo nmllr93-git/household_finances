@@ -6,6 +6,19 @@
 
 **Severity:** High = can silently lose, hide, or misrepresent financial data or its attachments. Medium = affects reliability or privacy under particular conditions. Feature and engineering priorities indicate sequencing, not bug severity.
 
+## Status (updated 2026-11-23, after Desktop 1.0.27)
+
+| Item | Status | Tests |
+|---|---|---|
+| R1 restore references | **Done**. IDs remapped (`txKey`, `fileId`); same-dashboard and cross-dashboard restore | `test/api.test.mjs` (restore keeps edits…), checked in phone-only mode with a browser test |
+| R2 atomic restore | **Done**. `store.replaceBook` runs one transaction on the host and in IndexedDB; the safety copy is required and includes photos on phones; legacy backups keep current photos | `test/api.test.mjs` (forced failure, legacy backup), checked in phone-only mode |
+| R3 duplicates | **Done**. Account-scoped; bank IDs (OFX FITID, sync) respected; per-statement multiset; preview, save, sync and totals share `makeDupeChecker`. Legacy policy: no stored data is rewritten. Identical rows that were hidden before (in different accounts, or genuine repeats in one statement) now count | `test/calcs.test.mjs` (5 new) |
+| R4 oversized imports | **Done** (guard). 5,000 rows per import, refused with the count in both the UI and the shared writer; never trimmed. Chunking is not needed yet | `test/api.test.mjs` (boundary and one over) |
+| R5 stale loads | **Done**. Load sequence numbers; writes bound to their dashboard | `test/runtime.test.mjs` |
+| R6 plain HTTP | **Done** as a host setting. HTTPS-only for other devices by default; loopback HTTP allowed; toggle in Host options or `LARENEST_ALLOW_HTTP`; proxy trust is opt-in | `test/https-only.test.mjs` |
+
+Not verified on real devices: Android WebView behavior after the HTTPS-only redirect for phones still on an old `http://` link. Phones on 1.6.5 and later upgrade on their own.
+
 ## 1. Findings and recommended fixes
 
 ### R1. Restored transaction references break | High

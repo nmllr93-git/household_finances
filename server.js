@@ -181,7 +181,14 @@ function serveStatic(req, res, urlPath) {
     fs.createReadStream(file).pipe(res);
   });
 }
-const isHttps = (req) => !!(req.socket && req.socket.encrypted) || req.headers['x-forwarded-proto'] === 'https'; // our own HTTPS, or a proxy in front
+// A reverse proxy that handles HTTPS in front of Larenest is only believed when you say you have one (LARENEST_TRUST_PROXY=1).
+const trustProxy = () => process.env.LARENEST_TRUST_PROXY === '1' || CFG.trustProxy === true;
+const isHttps = (req) => !!(req.socket && req.socket.encrypted) || (trustProxy() && req.headers['x-forwarded-proto'] === 'https');
+const isLoopback = (req) => /^(127\.|::1$|::ffff:127\.)/.test(String((req.socket && req.socket.remoteAddress) || ''));
+// Unencrypted (http://) sign-in and data from OTHER devices is off by default: they're sent to the https:// address instead.
+// The computer itself (localhost) can always use http. Host options → "Allow unencrypted connections" (or LARENEST_ALLOW_HTTP=1) turns it back on.
+const allowHttp = () => process.env.LARENEST_ALLOW_HTTP === '1' || CFG.allowHttp === true;
+function setAllowHttp(on) { saveCfg({ allowHttp: !!on }); return { allowHttp: !!on }; }
 const cookie = (req, v, maxAge) => `hf_session=${v}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
 
 // ---------- clean up what the page sends before storing it ----------
@@ -575,6 +582,11 @@ function start(opts = {}) {
   const handler = async (req, res) => {
     try {
       const url = new URL(req.url, 'http://x');
+      if (SELFTLS && !isHttps(req) && !isLoopback(req) && !allowHttp() && url.pathname !== '/api/ping') {
+        const to = `https://${String(req.headers.host || '').replace(/[^\w.:\[\]-]/g, '')}${req.url}`;
+        if (url.pathname.startsWith('/api/')) return send(res, 403, { error: 'This server only accepts encrypted connections from other devices. Open the https:// address instead.', https: to });
+        res.writeHead(307, { Location: to, 'Cache-Control': 'no-store' }); return res.end(); // pages: go to the encrypted address
+      }
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
       return serveStatic(req, res, url.pathname);
@@ -640,7 +652,7 @@ function stop() {
 // info(): what the tray/settings screen shows.
 function info() {
   const lan = RUN && RUN.host !== '127.0.0.1' ? lanAddrs() : [];
-  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `${SELFTLS ? 'https' : 'http'}://${a}:${RUN.port}`), dataDir: DATA_DIR, tsSeen: TS_SEEN, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null, tlsFp: SELFTLS ? SELFTLS.fp : '', tsHttps: tsHttps() };
+  return { running: !!RUN, mode: RUN ? RUN.mode : CFG.mode, port: RUN ? RUN.port : PORT, url: RUN ? `http://localhost:${RUN.port}` : '', lan: lan.map((a) => `${SELFTLS ? 'https' : 'http'}://${a}:${RUN.port}`), dataDir: DATA_DIR, tsSeen: TS_SEEN, writable: DB_WRITABLE, writeHelp: DB_WRITABLE ? '' : WRITE_HELP, users: (() => { try { return db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch { return 0; } })(), since: RUN ? RUN.since : null, allowHttp: allowHttp(), tlsFp: SELFTLS ? SELFTLS.fp : '', tsHttps: tsHttps() };
 }
 // setMode('local'|'host'): saves it and restarts if running, so the change takes effect immediately.
 async function setMode(mode, port) {
@@ -766,5 +778,5 @@ if (require.main === module) {
   const quit = () => stop().then(() => { try { db.close(); } catch {} process.exit(0); });
   process.on('SIGINT', quit); process.on('SIGTERM', quit);
 } else {
-  module.exports = { _store: BOOKS_STORE, start, stop, info, setMode, addUser, resetPassword, logins, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
+  module.exports = { _store: BOOKS_STORE, setAllowHttp, start, stop, info, setMode, addUser, resetPassword, logins, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
 }

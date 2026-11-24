@@ -20,6 +20,7 @@ process.on('message', async (m) => {
       case 'books': v = srv.books(); break;
       case 'logins': v = srv.logins(); break;
       case 'resetPassword': v = srv.resetPassword(m.name, m.password); break;
+      case 'setAllowHttp': v = srv.setAllowHttp(m.on); break;
       case 'backup': v = srv.backup(); break;
       case 'setCloud': v = srv.setCloudDir(m.dir); break;
       case 'cloudInfo': v = srv.cloudInfo(); break;

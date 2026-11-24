@@ -104,7 +104,8 @@ Server environment variables:
 - **Forgotten passwords:** the owner can reset any login's password from the PC app (Host options), on the basis that they have the computer. For self-hosting, `node server.js passwd <name>` does the same; it's `larenest passwd <name>` after the Linux installer and `docker exec -it larenest node server.js passwd <name>` in Docker. A reset signs that login out everywhere.
 - **First login on headless servers:** created from the command line, or once from `LARENEST_ADMIN_USER` / `LARENEST_ADMIN_PASSWORD`. Those are ignored once any login exists.
 - **Transport:**
-  - **One port, two protocols:** the server peeks at each connection's first byte. `0x16` is a TLS handshake and goes to HTTPS; anything else goes to HTTP, kept for compatibility.
+  - **One port, two protocols:** the server peeks at each connection's first byte. `0x16` is a TLS handshake and goes to HTTPS; anything else goes to HTTP.
+  - **HTTPS-only for other devices (default):** plain HTTP from a non-loopback address gets a 307 redirect to `https://` for pages and a 403 for the API. `/api/ping` stays open, because the apps use it to discover and pin the certificate. Loopback (the desktop app's own window) can always use HTTP. The Host options toggle or `LARENEST_ALLOW_HTTP=1` re-allows HTTP. `X-Forwarded-Proto` is only trusted with `LARENEST_TRUST_PROXY=1`.
   - **This PC's own certificate:** made once and pinned by the apps through its SHA-256 fingerprint. The fingerprint comes in the QR code (`/?fp=…`), or is trusted on first use when the user types the address.
     - **Android:** pinned in the WebView (`onReceivedSslError`) and in the widget refresh's `HttpsURLConnection`.
     - **Electron:** pinned through the `certificate-error` handler.
@@ -119,6 +120,20 @@ Server environment variables:
   - Phone-only data lives in the app's private storage.
   - The JavaScript bridge exposed to pages loaded from the PC (`LarenestWidgetNative`) can only save the widget summary, set the refresh schedule and ask for notification permission.
   - Certificate pinning goes through the Capacitor plugin, which only the app's own local pages can call.
+
+## 4a. Data integrity rules
+
+- **Restore** (`core/books.js` `restore`):
+  - It stages everything first and gives documents and photos new IDs.
+  - It remaps `txKey` (`i:<import>:<row>`, `m:<manual>`) in edits and receipts, and `fileId` in receipts.
+  - It requires a successful safety copy (with photos on phones), then replaces documents and photos in one transaction (`store.replaceBook`).
+  - A backup without `files` keeps the book's current photos.
+- **Duplicates** (`public/calcs.js` `makeDupeChecker`, shared by totals, import preview and save):
+  - Duplicates are judged per account. Rows with the bank's own ID (OFX `FITID`, provider IDs scoped as `provider:account:id`) match by ID.
+  - For rows without an ID, each statement counts its own identical rows, and an overlapping statement only adds rows beyond those already counted.
+  - Bank sync applies the same rule before saving.
+- **Imports:** a statement is saved whole or refused. The limit is `MAX_IMPORT_ROWS` = 5,000, and it's never trimmed.
+- **Loading:** `public/runtime.js` numbers each load, and only the newest one updates the screen. Writes stay with the dashboard they started in.
 
 ## 5. Backups
 
@@ -184,5 +199,4 @@ Highest value first:
 **Known gaps:**
 - There's no automated UI testing.
 - `public/page.js` is large (about 3,800 lines) and would benefit from being split up.
-- Plain `http://` is still accepted for browser compatibility.
 - Phone-only mode on iOS isn't built yet.

@@ -11,7 +11,7 @@
     "start": "node --disable-warning=ExperimentalWarning server.js",
     "users": "node --disable-warning=ExperimentalWarning server.js users",
     "backup": "node --disable-warning=ExperimentalWarning server.js backup",
-    "test": "node --test test/calcs.test.mjs test/api.test.mjs test/core.test.mjs test/market.test.mjs test/digest.test.mjs test/simplefin.test.mjs test/banklinks.test.mjs test/widgetdata.test.mjs test/tls.test.mjs test/vehicle.test.mjs test/runtime.test.mjs"
+    "test": "node --test test/calcs.test.mjs test/api.test.mjs test/core.test.mjs test/market.test.mjs test/digest.test.mjs test/simplefin.test.mjs test/banklinks.test.mjs test/widgetdata.test.mjs test/tls.test.mjs test/vehicle.test.mjs test/runtime.test.mjs test/https-only.test.mjs"
   },
   "license": "UNLICENSED"
 }

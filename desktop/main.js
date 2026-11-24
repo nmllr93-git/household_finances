@@ -274,7 +274,7 @@ function cloudFolders() {
 const refreshCloud = async () => { if (child) { try { CLOUD = await call('cloudInfo'); } catch {} } };
 const hostState = () => {
   const on = !!INFO.running, others = on && INFO.mode === 'host';
-  return { fp: INFO.tlsFp || '', tsHttps: INFO.tsHttps || null, version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, cloud: CLOUD, cloudFolders: cloudFolders(), tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
+  return { allowHttp: !!INFO.allowHttp, fp: INFO.tlsFp || '', tsHttps: INFO.tsHttps || null, version: app.getVersion(), running: on, mode: S.mode, port: INFO.port || S.port, url: INFO.url || '', dataDir: S.dataDir || defaultDataDir(), startWithWindows: !!S.startWithWindows, keepAwake: S.keepAwake !== false, sleep: SLEEP, cloud: CLOUD, cloudFolders: cloudFolders(), tsSeen: INFO.tsSeen || 0, platform: process.platform, writable: INFO.writable !== false, writeHelp: INFO.writeHelp || '',
     addrs: others ? [...new Set([...(INFO.lan || []).filter((u) => !/\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(u)), ...(INFO.tsHttps && INFO.tsHttps.url ? [INFO.tsHttps.url] : []), ...(TS.on && TS.name ? [`${INFO.tlsFp ? 'https' : 'http'}://${TS.name}:${INFO.port}`] : []), ...(TS.on && TS.ip ? [`${INFO.tlsFp ? 'https' : 'http'}://${TS.ip}:${INFO.port}`] : [])])] : [],
     addrLabels: Object.fromEntries([...(INFO.tsHttps && INFO.tsHttps.url ? [[INFO.tsHttps.url, 'Away from home, works in any browser with no warning (Tailscale HTTPS)']] : []), ...(INFO.lan || []).map((u) => [u, 'On your home network']), ...(TS.name ? [[`${INFO.tlsFp ? 'https' : 'http'}://${TS.name}:${INFO.port}`, 'Away from home (Tailscale name)']] : []), ...(TS.ip ? [[`${INFO.tlsFp ? 'https' : 'http'}://${TS.ip}:${INFO.port}`, 'Away from home (Tailscale number, same as the name)']] : [])]), ts: TS };
 };
@@ -298,6 +298,7 @@ ipcMain.handle('fd:hostAction', async (_e, act, arg) => {
     case 'mode': S.mode = arg ? 'host' : 'local'; saveSet(); if (child) INFO = await call('setMode', { mode: S.mode, port: S.port }); buildTray(); if (arg) maybeFirewallNote(); break;
     case 'startWithWindows': S.startWithWindows = !!arg; saveSet(); loginItem(); buildTray(); break;
     case 'keepAwake': S.keepAwake = !!arg; saveSet(); keepAwake(); break;
+    case 'allowHttp': if (child) { await call('setAllowHttp', { on: !!arg }); INFO = await call('info'); } break;
     case 'sleepSettings': openSleepSettings(); setTimeout(readSleep, 15000); break;
     case 'backup': { const r = await call('backup'); await refreshCloud(); notifyHost(); return r; }
     case 'cloudSet': { CLOUD = await call('setCloud', { dir: arg || '' }); notifyHost(); return hostState(); }

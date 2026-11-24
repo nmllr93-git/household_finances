@@ -75,6 +75,7 @@
     <div class="card">
       <h2>Addresses for phones &amp; other devices</h2>
       <div id="addrs"></div>
+      <div id="httpRow" class="row" hidden><div>Allow unencrypted connections (http://)<small>Off (recommended): other devices must use the encrypted https:// address, and old http:// links are sent there. Turn on only for an old device or browser that can’t use https. This computer can always use http.</small></div><label class="sw"><input type="checkbox" id="allowHttp"><span></span></label></div>
       <div id="tlsInfo" class="row" hidden><div><b>🔒 Encrypted connections</b><small id="tlsSub"></small></div></div>
       <div id="qrPop" hidden style="gap:16px;align-items:center;flex-wrap:wrap;margin:8px 0"><div id="qrImg" style="background:#fff;border-radius:8px;padding:4px;line-height:0"></div><div><b>Connect a phone</b><small>For the address just above. In the Larenest phone app, tap <i>Scan QR code</i>. On an iPhone, scan it with the camera to open it in the browser. Use a home-network address at home, a Tailscale one when you're away.<span id="qrAddr"></span></small></div></div>
       <details id="tsGuide"><summary>Use it away from home (optional)</summary>
@@ -147,6 +148,7 @@
       const sp = document.createElement('span'); sp.append(qb, ' ', b); r.append(d, sp); box.append(r);
       if (a === qrSel && window.FDQR) { QRI.innerHTML = FDQR.svg(/^https:/.test(a) && s.fp ? a + '/?fp=' + s.fp : a, 240); box.append(QRP); QRP.hidden = false; } });
     if (!s.addrs.length) QRP.hidden = true;
+    $('httpRow').hidden = !s.running || s.mode !== 'host' || !s.fp; $('allowHttp').checked = !!s.allowHttp;
     { const t = s.tsHttps || {}; $('tlsInfo').hidden = !s.running || s.mode !== 'host' || !s.fp;
       $('tlsSub').textContent = 'The Larenest phone and PC apps connect with HTTPS using this computer\u2019s own certificate, so everything between them is encrypted, even on plain home Wi-Fi. Scanning the QR code tells the app which certificate to trust. A regular web browser shows a one-time \u201cnot secure\u201d warning for these addresses, because the certificate is this computer\u2019s own.'
         + (t.state === 'ok' ? ' Browsers: use ' + t.url + ' (Tailscale\u2019s free certificate, no warning).'
@@ -172,6 +174,7 @@
   $('startStop').addEventListener('click', () => act(st.running ? 'stop' : 'start'));
   $('mode').addEventListener('change', (e) => act('mode', e.target.checked));
   $('sww').addEventListener('change', (e) => act('startWithWindows', e.target.checked));
+  $('allowHttp').addEventListener('change', (e) => act('allowHttp', e.target.checked, e.target.checked ? 'Unencrypted connections are allowed again.' : 'Other devices now have to use the encrypted address.'));
   $('awake').addEventListener('change', (e) => act('keepAwake', e.target.checked));
   $('cloudSel').addEventListener('change', (e) => act(e.target.value === '__pick' ? 'cloudPick' : 'cloudSet', e.target.value === '__pick' ? '' : e.target.value));
   $('cloudOpen').addEventListener('click', () => act('cloudOpen'));
