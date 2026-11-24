@@ -3,14 +3,20 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
-- Deleted accounts stay deleted: the match now ignores an owner name in brackets or in front and punctuation, and also hides balances recorded under that name. Adding an account again under the same name brings it back
+## Desktop 1.0.29
+- Tiles for each tab: Accounts, Expenses, Budget, Planning and Transactions each get their own row of tiles at the top; click one to jump to the section behind it
+- ✎ Arrange: move, resize, add and remove tiles and sections on any tab. Saved per dashboard and synced across devices; phones use arrows. Tabs you never arrange keep the built-in layout
+- Your own reports: spending, income, income minus spending, number or average of purchases, or account balances, grouped by category, vendor, account, tag, month or weekday, with filters, as bars, a line, a table or one number. Place them on any tab or add one as a tile
 - Cash forecast: look ahead 90 days, 6 months, 1 year or 2 years
-- Every tab has its own row of tiles (Accounts, Expenses, Budget, Planning, Transactions and more)
-- ✎ Arrange: move, resize, add and remove tiles and sections on any tab; layouts sync across devices
-- Your own reports: spending, income, net, counts, averages or balances, grouped by category, vendor, account, tag, month or weekday, with filters, as bars, a line, a table or one number
-- Wide screens: Accounts, Budget and Overview fill the width; personal dashboards no longer show Who paid what
-- Currency converter in its own box; the economic calendar no longer lists the Fed every day
+- Wide screens: Accounts, Budget and Overview fill the width. Personal dashboards no longer show Who paid what
+- Currency converter in its own box; charts resize to fit their space
+- Fixed: deleted accounts stay deleted, whichever way the name is written (owner in front or in brackets, punctuation). If one came back, delete it once more after updating
+- Fixed: the economic calendar no longer lists the Fed every day
+
+## Android 1.6.9
+- Tiles for each tab, ✎ Arrange (with arrows on phones) and your own reports (see Desktop 1.0.29)
+- Cash forecast up to 2 years ahead
+- Fixed: deleted accounts stay deleted; the economic calendar no longer lists the Fed every day
 
 ## Desktop 1.0.28
 - Check a statement adds up: type its opening balance while importing and Larenest compares opening + transactions with the ending balance, to the cent, and points at a missing or sign-flipped row. It never changes anything for you
