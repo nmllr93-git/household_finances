@@ -34,7 +34,8 @@ function createTeller(env) {
   }
   return {
     id: 'teller', label: 'Teller', multi: true, autoGap: 6 * 3600e3, manualGap: 5 * 60e3,
-    async start() { const k = cfg(); return { kind: 'teller', applicationId: k.appId, environment: k.env || 'development' }; },
+    // b.enrollment: reopen Teller Connect for a disconnected bank so you sign in again and the same connection is restored
+    async start(bookId, b) { const k = cfg(), enr = String((b && b.enrollment) || ''); return { kind: 'teller', applicationId: k.appId, environment: k.env || 'development', enrollmentId: /^enr_[\w-]{1,80}$/.test(enr) ? enr : '' }; },
     // b.connect = what Teller Connect's onSuccess gave the page: { accessToken, enrollment: { id, institution: { name } } }
     async connect(b, prev) {
       const c = b.connect || {}, token = String(c.accessToken || '').trim();
@@ -44,9 +45,9 @@ function createTeller(env) {
       return [...(Array.isArray(prev) ? prev : []).filter((x) => !enr || x.enrollment !== enr), { token, enrollment: enr, institution: inst }];
     },
     async pull(list, startUnix) {
-      const accounts = [], errors = [], from = ymd(startUnix * 1000);
+      const accounts = [], errors = [], repair = [], from = ymd(startUnix * 1000);
       for (const it of Array.isArray(list) ? list : []) {
-        let accts; try { accts = await get(it.token, '/accounts'); } catch (e) { errors.push(e.message === 'disconnected' ? `${it.institution} needs you to sign in again: remove it and connect it again.` : `${it.institution}: ${e.message}`); continue; }
+        let accts; try { accts = await get(it.token, '/accounts'); } catch (e) { if (e.message === 'disconnected') { repair.push({ enrollment: it.enrollment, institution: it.institution }); errors.push(`${it.institution} needs you to sign in again: press Reconnect ${it.institution}.`); } else errors.push(`${it.institution}: ${e.message}`); continue; }
         for (const a of Array.isArray(accts) ? accts : []) {
           if (a.status && a.status !== 'open') continue;
           let bal = null, tx = [];
@@ -59,8 +60,8 @@ function createTeller(env) {
               description: (t.details && t.details.counterparty && t.details.counterparty.name) || t.description || '' })) });
         }
       }
-      if (!accounts.length && errors.length) throw err(502, errors[0]);
-      return { accounts, errors: errors.slice(0, 5) };
+      if (!accounts.length && errors.length && !repair.length) throw err(502, errors[0]); // a bank needing sign-in isn't a failure: it gets a Reconnect button
+      return { accounts, errors: errors.slice(0, 5), repair };
     },
     emptyNote: 'Connected, but Teller didn’t list any open accounts for this bank yet. Press Sync now in a few minutes.',
   };

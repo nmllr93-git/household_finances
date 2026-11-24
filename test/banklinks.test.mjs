@@ -102,3 +102,15 @@ test('Plaid: "still gathering" and bad keys come back in plain words', async () 
   h = harness(createPlaid, PLAID_KEYS, () => ({ status: 400, text: JSON.stringify({ error_code: 'INVALID_API_KEYS' }) }));
   const s = await h.eng.handle('POST', ['start'], 'b1', body({})); assert.equal(s.status, 400); assert.match(s.body.error, /client ID or secret/);
 });
+
+test('Teller: a disconnected bank is listed for Reconnect, and start reopens that enrollment', async () => {
+  let down = false;
+  const h = harness(createTeller, TELLER_KEYS, (m, u) => (down && u.endsWith('/accounts') ? { status: 400, text: JSON.stringify({ error: { code: 'enrollment.disconnected.credentials_invalid', message: 'x' } }) } : teller(m, u)));
+  const c = await h.eng.handle('POST', [], 'b1', body({ connect: { accessToken: 'token_abc', enrollment: { id: 'enr_1', institution: { name: 'Test Bank' } } } }));
+  await h.eng.handle('POST', [], 'b1', body({ accounts: Object.fromEntries(c.body.accounts.map((a) => [a.id, {}])) }));
+  down = true; const r = await h.eng.handle('POST', ['sync'], 'b1', body({}));
+  assert.deepEqual(r.body.repair, [{ enrollment: 'enr_1', institution: 'Test Bank' }]);
+  const s = await h.eng.handle('POST', ['start'], 'b1', body({ enrollment: 'enr_1' })); assert.equal(s.body.enrollmentId, 'enr_1');
+  down = false; const fixed = await h.eng.handle('POST', [], 'b1', body({ connect: { accessToken: 'token_abc', enrollment: { id: 'enr_1', institution: { name: 'Test Bank' } } } }));
+  assert.deepEqual(fixed.body.repair, []); assert.equal(fixed.body.banks.length, 1); assert.equal(fixed.body.accounts.length, 1);
+});

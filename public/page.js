@@ -2636,14 +2636,15 @@
     if (host[tk] !== tok || host.querySelector('.fd-syncbox-' + P.id)) return;
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-syncbox fd-syncbox-' + P.id; host.append(box);
     // Teller Connect / Plaid Link: load their script only when you press Connect, then hand the result to this server
-    const widget = async (msg) => {
+    const widget = async (msg, enrollment) => {
       msg.className = 'fd-note'; msg.textContent = `Opening ${P.label}…`;
-      const cfg = await call('/start', 'POST', {});
+      const cfg = await call('/start', 'POST', enrollment ? { enrollment } : {});
       const src = cfg.kind === 'teller' ? 'https://cdn.teller.io/connect/connect.js' : 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
       if (!document.querySelector(`script[src="${src}"]`)) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error(`Couldn’t load ${P.label}. Check this device’s internet connection.`)); document.head.append(sc); });
       const done = async (connect) => { msg.textContent = 'Saving the connection…'; try { st = await call('', 'POST', { connect }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
       msg.textContent = '';
-      if (cfg.kind === 'teller') window.TellerConnect.setup({ applicationId: cfg.applicationId, environment: cfg.environment, products: ['transactions', 'balance'], onSuccess: (e) => done(e), onExit: () => {} }).open();
+      // selectAccount: you tick which accounts to share in Teller's own window; enrollmentId: sign in again to a disconnected bank, keeping its connection
+      if (cfg.kind === 'teller') window.TellerConnect.setup({ applicationId: cfg.applicationId, environment: cfg.environment, products: ['transactions', 'balance'], selectAccount: 'multiple', ...(cfg.enrollmentId ? { enrollmentId: cfg.enrollmentId } : {}), onSuccess: (e) => done(e), onExit: () => { msg.textContent = ''; } }).open();
       else window.Plaid.create({ token: cfg.linkToken, onSuccess: (pub, md) => done({ publicToken: pub, institution: (md && md.institution && md.institution.name) || '' }), onExit: () => {} }).open();
     };
     const ro = document.body.classList.contains('fd-readonly');
@@ -2686,6 +2687,10 @@
       box.append(phMsg(`Connected. Last sync: ${when}. New posted transactions are added about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}; pending ones wait until they post. Rules, categories and duplicate checks work the same as for imported statements.`));
       if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
       if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
+      // a bank that needs you to sign in again (password changed, new security code…): reconnect it in place
+      if (P.id === 'teller' && (st.repair || []).length && !ro) for (const rp of st.repair) { if (!rp.enrollment) continue;
+        const w = document.createElement('div'); w.className = 'fd-rb-row'; const n = phMsg(`${rp.institution} needs you to sign in again (for example after a password change). Your accounts and settings stay as they are.`); n.className = 'fd-note fd-bad';
+        const m2 = phMsg(''); w.append(rbtn(`Reconnect ${rp.institution}`, () => widget(m2, rp.enrollment).catch((e) => { m2.className = 'fd-note fd-bad'; m2.textContent = e.message; }), false), m2); box.append(n, w); }
       for (const n of st.notes || []) box.append(phMsg(P.label + ': ' + n));
       if ((st.accounts || []).some((a) => a.review)) { const w = phMsg('New accounts found. Untick any you don’t want, check the names and types, then press Save accounts. Nothing is brought in from them until you do.'); w.className = 'fd-note fd-warn'; box.append(w); }
       const draft = {};
@@ -2755,7 +2760,8 @@
           ['Copy your Application ID', 'In the Teller Dashboard, open Application Settings and copy the Application ID (it starts with “app_”). Paste it below.'],
           ['Make a certificate', 'Open Certificates and create a new certificate. Download the file it gives you (teller.zip) and unzip it: inside are a certificate and a private key. Keep them private; they work like a password for your Teller account.'],
           ['Add the two files here', 'Press “Choose certificate files” below and select both files from the unzipped folder (or paste their contents). Leave Environment on Development, which is free with real banks, and press Save Teller keys.'],
-          ['Connect your banks', 'A “Teller” bank-sync box appears in Settings. Press Connect a bank, sign in to your bank in Teller’s own window (Larenest never sees your bank password), then untick any accounts you don’t want and press Save accounts. Nothing is brought in until you save.']].forEach(([h, t], n) => {
+          ['Connect your banks', 'A “Teller” bank-sync box appears in Settings. Press Connect a bank, pick your bank and sign in in Teller’s own window (Larenest never sees your bank password), then tick the accounts you want to share. Back in Larenest, check the names and types and press Save accounts. Nothing is brought in until you save. Repeat for each bank.'],
+          ['If a bank stops syncing', 'Banks sometimes ask you to sign in again, for example after you change your password. Larenest shows a Reconnect button for that bank: sign in again in Teller’s window and syncing carries on with the same accounts and settings.']].forEach(([h, t], n) => {
           const f = document.createElement('figure'); f.className = 'fd-sfstep'; const c = document.createElement('figcaption'); const bb = document.createElement('b'); bb.textContent = `${n + 1}. ${h}`; c.append(bb, ' ', t); f.append(c); g.append(f); });
         box.append(g); }
       const a = inp('app_…'); a.value = k.teller.appId; const e = sel([['development', 'Development (real banks, free, up to 100)'], ['sandbox', 'Sandbox (test data only)'], ['production', 'Production (paid)']], k.teller.env);
