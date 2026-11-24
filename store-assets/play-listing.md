@@ -40,9 +40,9 @@ Larenest is a budget, bills and net-worth tracker that keeps your money data wit
 • Your layouts and reports follow you to every device
 
 **Your data, your way**
-• Import bank statements (CSV, OFX, QFX) or connect bank sync through SimpleFIN Bridge (a separate read-only service you subscribe to yourself)
+• Import bank statements (CSV, OFX, QFX or PDF) or connect bank sync through SimpleFIN Bridge (a separate read-only service you subscribe to yourself)
 • Phone-only mode: everything stays in the app's private storage
-• Or connect to Larenest on your own Windows or Mac computer and use it from every device at home
+• Or connect to Larenest on your own Windows, Mac or Linux computer and use it from every device at home
 • Backups are files you save wherever you choose
 • No ads, no analytics, no tracking
 
