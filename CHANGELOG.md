@@ -3,6 +3,23 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.28
+- Check a statement adds up: type its opening balance while importing and Larenest compares opening + transactions with the ending balance, to the cent, and points at a missing or sign-flipped row. It never changes anything for you
+- Import history: source, rows added and skipped, and whether the statement added up. Undo shows what it removes first; changes and receipts on those transactions go only if you tick them
+- Column choices are remembered per account and reused when the same bank's file comes back
+- Backup health in ⚙ Settings → Backup & privacy: server copies, cloud folder, a read-only check of the newest copy, and checking a backup file without restoring it
+- Settling up on shared dashboards: close a period to save who owes whom; record payments between you (never counted as spending)
+- Cash forecast: add confirmed bills and paydays (exact amount and date) that replace their estimates; skip or move one occurrence
+- Restoring a backup keeps edits, splits, ignores and receipts attached, and either completes fully or changes nothing; a safety copy (with photos on phones) is required first
+- Duplicates are judged per account: identical purchases in different accounts, or genuine repeats on one statement, now both count. OFX/QFX and bank sync use the bank's own transaction IDs. A few totals may go up slightly; that's the correct number
+- Statements over 5,000 transactions are refused with the count instead of being cut short
+- Other devices must use the encrypted (https) address; Host options has a switch to allow http:// for an old device
+
+## Android 1.6.8
+- Statement check, import history with undo, backup health, settling up and confirmed bills in the forecast (see Desktop 1.0.28)
+- Phone-only mode: undo and restore are all or nothing; the safety copy before a restore keeps receipt photos
+- Switching dashboards quickly no longer shows the wrong dashboard's numbers
+
 ## Desktop 1.0.27
 - Linux: desktop app as AppImage (updates itself) and .deb, for x86-64 and ARM64
 - Linux servers: Docker image (x86-64 and ARM64, including Raspberry Pi 4/5) and a one-line installer that sets Larenest up as a service; see larenest.app/linux

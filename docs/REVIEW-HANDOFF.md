@@ -6,7 +6,7 @@
 
 **Severity:** High = can silently lose, hide, or misrepresent financial data or its attachments. Medium = affects reliability or privacy under particular conditions. Feature and engineering priorities indicate sequencing, not bug severity.
 
-## Status (updated 2026-11-23, after Desktop 1.0.27)
+## Status (updated 2026-11-24, after Desktop 1.0.27; R1–R6 and the feature backlog are on main, not yet released)
 
 | Item | Status | Tests |
 |---|---|---|
@@ -17,7 +17,15 @@
 | R5 stale loads | **Done**. Load sequence numbers; writes bound to their dashboard | `test/runtime.test.mjs` |
 | R6 plain HTTP | **Done** as a host setting. HTTPS-only for other devices by default; loopback HTTP allowed; toggle in Host options or `LARENEST_ALLOW_HTTP`; proxy trust is opt-in | `test/https-only.test.mjs` |
 
-Not verified on real devices: Android WebView behavior after the HTTPS-only redirect for phones still on an old `http://` link. Phones on 1.6.5 and later upgrade on their own.
+| Statement reconciliation | **Done**. Optional opening balance and period in the import review; cents; deposit and credit sign rules; gap and candidate rows (missing or sign-flipped); saved with the import; never adjusts the ledger | `test/calcs.test.mjs` (balanced, omitted row, sign flip, credit card with period, 1,000 × $0.10) |
+| Import history, saved mappings, undo | **Done**. Imports record source, file rows, skipped and the statement check. Column choices are saved per account on the device. Undo previews dependents; only ticked edits and receipts are removed; one transaction per backend; a stale list is refused; reimport works after undo | `test/api.test.mjs` (history fields, confirmed dependents, forced failure, stale list, view-only), checked in phone-only mode in a browser |
+| Backup health | **Done**. Server copies, cloud folder (a file copy is not proof of upload), owner-only read-only integrity check of the newest SQLite copy, JSON backup check without restoring, last check stored on the device. Phone-only mode shows snapshots and the last downloaded file | `test/api.test.mjs` (verify-backup: complete, missing photos, not a backup, nothing changed) |
+| Household settlements | **Done**. Close a period (totals only, kept if shares change later); payments recorded separately and never counted as spending | `test/calcs.test.mjs` (payment reduces what's owed, uneven shares and cents, three people, closed split kept) |
+| Confirmed bills and paydays | **Done**. Weekly, every 2 weeks, monthly, yearly or once; skip or move one occurrence; confirmed replaces its estimate; labelled estimate or confirmed; never in actual totals | `test/calcs.test.mjs` (occurrences, month end, skip/move, replace not add, not transactions) |
+
+Not verified on real devices:
+- Android WebView behavior after the HTTPS-only redirect for phones still on an old `http://` link. Phones on 1.6.5 and later upgrade on their own.
+- Phone-only undo, backup check and backup health were checked in a desktop browser using the IndexedDB backend, not yet on an Android phone.
 
 ## 1. Findings and recommended fixes
 

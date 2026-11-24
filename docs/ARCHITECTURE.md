@@ -77,7 +77,7 @@ SQLite (`finance.db` in the data folder):
 - `activity`: who changed what.
 - `tls_self`: this PC's HTTPS certificate and key, kept in the database so backups keep phones paired.
 
-Collections (`core/books.js`): `imports` (statement batches), `manual`, `edits`, `rules`, `budgets`, `accounts`, `goals`, `holdings`, `prefs` (per-book settings as JSON, including assets/vehicles and the watchlist), `shares` (values shared from a personal book into a shared one), `receipts`.
+Collections (`core/books.js`): `imports` (statement batches, with `source`, `fileRows`, `skipped` and an optional `reconcile` record), `manual`, `edits`, `rules`, `budgets`, `accounts`, `goals`, `holdings`, `prefs` (per-book settings as JSON, including assets/vehicles, the watchlist, `settlements` and forecast `schedules`), `shares` (values shared from a personal book into a shared one), `receipts`.
 
 Everything the dashboard shows is calculated in the browser by `public/calcs.js` from these raw collections. The digest and widget summaries run the same `calcs.js` on the server (via `vm`), so numbers match everywhere.
 
@@ -85,7 +85,7 @@ Files kept next to the database (private, mode 600, not in backups):
 - `api-keys.json`: market and economy keys.
 - `simplefin.json`: bank-sync connections.
 - `banklink-keys.json`: the user's own Plaid keys.
-- `config.json`: mode, port, server id, cloud backup folder, last version.
+- `config.json`: mode, port, server id, cloud backup folder, last version, last backup check.
 
 Server environment variables:
 - `DATA_DIR`, `PORT`, `HOST`.
@@ -134,6 +134,13 @@ Server environment variables:
   - Bank sync applies the same rule before saving.
 - **Imports:** a statement is saved whole or refused. The limit is `MAX_IMPORT_ROWS` = 5,000, and it's never trimmed.
 - **Loading:** `public/runtime.js` numbers each load, and only the newest one updates the screen. Writes stay with the dashboard they started in.
+- **Undo an import** (`POST /api/books/<id>/undo-import`, `core/books.js` `undoImport`):
+  - The request names the import plus the edit and receipt IDs the user ticked. Anything else that points at the import is left alone.
+  - If the ticked list no longer matches what's stored, it's refused (409), so the preview is always what gets removed.
+  - Removal runs in one transaction (`store.removeMany`, SQLite on the host, IndexedDB on phones), photos included.
+- **Statement reconciliation** (`public/calcs.js` `reconcileStatement`): works in cents. Deposit accounts: closing = opening − money out + money in. Credit accounts: closing = opening + purchases − payments. It only reports; nothing is posted to the ledger. The result is saved on the import as `reconcile`.
+- **Settlements** (`settlementStatement`, `settlementBalances`): a closed period stores each person's paid-minus-share as totals. Payments are separate records that move balances between people and never enter `txns`.
+- **Forecast schedules** (`scheduleOccurrences`, `mergeForecast`): occurrences come from a start date and repeat rule, with per-occurrence skip or move overrides. A confirmed item replaces the estimate named in `replaces`. Schedules live in `prefs` and never enter `txns`.
 
 ## 5. Backups
 
@@ -142,7 +149,11 @@ Server environment variables:
   - **Update backups:** another one the first time a new version starts, before it's used.
   - **Cloud copies (optional):** the newest 14 are also copied to a cloud-synced folder (OneDrive, iCloud Drive and so on).
   - **Restoring:** stop hosting, copy a backup over `finance.db`, start again. The steps are shown in Host options.
-- **Phone-only:** "Download backup" exports a file. The phone-only restore uses the same `core/books.js` validation as the server.
+- **Phone-only:** "Download backup" exports a file. The phone-only restore uses the same `core/books.js` validation as the server. Daily in-app snapshots leave photos out; the one taken before a restore keeps them.
+- **Backup health:**
+  - `GET /api/backup-health` reports server copies, the cloud folder and the last check. Folder paths are shown to the owner only. Phone-only mode answers from its snapshots instead.
+  - `POST /api/backup-health/check` (owner only) opens the newest copy read-only and runs `PRAGMA integrity_check` plus counts.
+  - `POST /api/books/<id>/verify-backup` stages a JSON backup exactly like a restore and stops before writing anything.
 
 ## 6. Phone widgets and alerts
 

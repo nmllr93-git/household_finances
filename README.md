@@ -346,6 +346,8 @@ Click **+ Report** in the top bar to make your own tab. Click **Edit**, then **A
 
 ### Budget
 - Budget versus actual per category, with rollover, pace bars and the budget ring.
+- **Who paid what** (shared dashboards): each person's spending, credited by the account's Owner, against their agreed share.
+- **Settling up** (shared dashboards): **Close** a period to save what each person owes for it (totals only, no transaction detail). A closed period keeps its split even if the shares change later; **Reopen** it from History to redo it. **Record payment** notes who paid whom. Payments settle the balance and are never counted as spending. If the payment also shows in a statement (Venmo, Zelle, a transfer), mark that transaction as a transfer.
 - **Change** edits a category's budget; **Remove** stops budgeting that category from the month you're viewing onward (earlier months keep their history). This works for budgets set in the app and for ones imported from a spreadsheet.
 
 ### Accounts
@@ -392,7 +394,8 @@ On a **personal** dashboard, edit an account or asset and tick the shared dashbo
 - **Rates & economy:** mortgage and Treasury rates, inflation (overall and Midwest categories), gas and electricity prices, and local home prices. Updated daily.
 
 ### Planning
-- **90-day cash forecast:** checking and savings projected day by day: expected paychecks in (any income that arrived at least twice in the last 4 months, at its real monthly total), recurring bills out (from *Subscriptions & recurring*) and your typical other spending. It shows the lowest point and warns if it falls below your cushion (**Warn me below**, $500 by default). Lists the upcoming paychecks and bills.
+- **90-day cash forecast:** checking and savings projected day by day: expected paychecks in (any income that arrived at least twice in the last 4 months, at its real monthly total), recurring bills out (from *Subscriptions & recurring*) and your typical other spending. It shows the lowest point and warns if it falls below your cushion (**Warn me below**, $500 by default). Lists the upcoming paychecks and bills, each labelled *estimate* or *confirmed*.
+- **Confirmed bills & paydays** (under the forecast): enter an exact amount and date (rent, a paycheck, a bill that just arrived), repeating weekly, every 2 weeks, monthly, yearly or once. Choose which estimate it replaces so it's used instead of that estimate, not on top of it. **skip** or **move** changes one occurrence only. These are plans: they never appear in your actual totals.
 - **Debt payoff planner:** every credit card and loan with a balance (tick **Include mortgage** to add it). Compare **minimum payments only**, **avalanche** (highest rate first, least interest) and **snowball** (smallest balance first), and drag **Extra each month** to see the debt-free date and the interest saved. When a debt is paid off, its payment rolls into the next one. Uses each account's rate and payment from Accounts → Edit; cards with no payment set use a typical minimum (marked *est.*).
 
 - **Net worth projection & retirement:** enter your age, retirement age, monthly savings, the yearly spending you plan in retirement, expected return, inflation and withdrawal rate (sensible defaults come from your own history). It charts your investments to age 95 in today's and future dollars, the amount you'd need to retire (spending ÷ withdrawal rate), the age you'd reach it, and how long the money lasts.
@@ -408,7 +411,13 @@ Pick a year to see income, spending, what you kept, the biggest and lightest mon
 | **PDF** | Read on your own device. Checking, savings and card PDFs give transactions plus the ending balance; investment and loan PDFs give the balance only. If one PDF holds several accounts, pick one. |
 | **OFX / QFX** | Your bank's "Download for Quicken" option. Transactions and balance are filled in automatically. |
 
-Once a month has imported transactions, they replace any older spreadsheet-loaded rows for that month. Every import has a **Remove** button.
+Once a month has imported transactions, they replace any older spreadsheet-loaded rows for that month.
+
+- **Duplicates:** rows already in that account aren't added again (the preview says how many). Identical rows in different accounts, or genuine repeats on one statement, both count. OFX/QFX and bank sync use the bank's own transaction IDs.
+- **Check this statement adds up (optional):** type the opening balance (and, if you like, the statement period). Larenest adds up the transactions and compares the result with the ending balance, to the cent. If it's off, it says by how much and lists rows that would explain it (one missing, or one with the wrong sign). It never changes anything for you. Works for checking, savings and credit card statements.
+- **Saved column choices:** the columns and "Purchases appear as" you used are remembered for that account on this device, and reused when the same bank's file layout comes back.
+- **Large files:** one import holds up to 5,000 transactions. A bigger file is refused (nothing is saved); download a shorter date range.
+- **Import history:** every import, with its source (CSV, PDF, OFX/QFX, bank sync), rows added and skipped, and whether the statement added up. **Undo…** shows what it would remove. Changes and receipts on those transactions are removed only if you tick them. Undo happens all at once or not at all, and you can import the same file again afterwards.
 
 ---
 
@@ -465,6 +474,11 @@ Good to know:
 - **Per dashboard:** **⚙ Settings → Backup & restore → Download backup** saves a JSON file. **Restore from backup…** replaces that dashboard's data; the server saves a safety copy first.
 - **Off the machine:** copy the `backups` folder to a USB drive or cloud folder now and then.
 - **Full restore:** stop the server, replace `finance.db` in the data folder with a file from `backups`, then start it again.
+- **Backup health** (**⚙ Settings → Backup & privacy**): how many server copies are kept and when the newest was made, whether the cloud folder copy worked, and the last time a copy was checked.
+  - **Check the newest server copy** (owner only) opens it read-only and confirms it's a complete, readable database.
+  - **Check this file (doesn't restore)** runs a backup file through every restore check and reports what's in it, without changing anything.
+  - A copy in the cloud folder shows the file got there; whether OneDrive, iCloud or Drive has uploaded it is up to that app.
+  - In phone-only mode it shows the snapshots kept inside the app (daily ones leave photos out) and when you last downloaded a backup file. Snapshots disappear if the app is uninstalled, so keep a downloaded file elsewhere too.
 
 ### Logins and passwords
 - **View-only logins** can see a dashboard but not change it: the page shows a *View only* badge and hides editing controls, and the server refuses changes. Command line: `add-user <name> shared:view`. Desktop app: choose *View only* next to the dashboard when creating the login.
