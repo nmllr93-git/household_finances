@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm test
+        timeout-minutes: 10
       - id: v
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v3
