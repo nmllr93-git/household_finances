@@ -88,6 +88,12 @@ Larenest is not tax, legal or investment advice. Tax totals are a starting point
   4. `ipad-4-spending.png`
 - Apple scales these down for the smaller iPhones and iPads.
 
+## Creative assets (optional)
+- `creative-universal-5244x2950.png`: one **Universal** image (16:9, PNG, no transparency) used for both the product page header and search results.
+  - The logo, name and tagline sit inside Apple's safe area (1402 × 962 at x 1921, y 660).
+  - The phones around them may be cropped on some devices; that's expected.
+  - Preview it in App Store Connect before saving.
+
 ## App Review Information
 - **Sign-in required:** No.
 - **Notes:**
