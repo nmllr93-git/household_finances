@@ -169,3 +169,57 @@ test('reconcile: cents add up exactly (no floating-point drift)', () => {
   const many = Array.from({ length: 1000 }, (_, i) => tx('2026-05-01', 'X' + i, 0.1));
   assert.equal(RC({ kind: 'deposit', opening: 100, closing: 0, rows: many }).balanced, true);
 });
+
+// ---- household settlements ----
+const ST = (() => { const ctx = { dash: { calc: () => {}, params: () => ({}) }, console, Date, Math, JSON, Intl }; vm.runInNewContext(SRC, ctx); return { bal: ctx.settlementBalances, stm: ctx.settlementStatement }; })();
+test('settlements: a closed period says who owes whom; a payment reduces it without touching spending', () => {
+  const people = [{ name: 'Alex', pct: 50 }, { name: 'Sam', pct: 50 }];
+  const p1 = ST.stm(people, { Alex: 700, Sam: 300 });
+  assert.equal(p1.total, 1000); assert.equal(p1.net.Alex, 200); assert.equal(p1.net.Sam, -200);
+  let b = ST.bal([p1], []); assert.deepEqual(JSON.parse(JSON.stringify(b.transfers)), [{ from: 'Sam', to: 'Alex', amount: 200 }]);
+  b = ST.bal([p1], [{ from: 'Sam', to: 'Alex', amount: 150, date: '2026-06-01' }]); assert.equal(b.transfers[0].amount, 50);
+  assert.equal(p1.total, 1000); // the saved statement (and spending) is unchanged by the payment
+  b = ST.bal([p1], [{ from: 'Sam', to: 'Alex', amount: 200 }]); assert.equal(b.even, true);
+});
+test('settlements: uneven shares, several periods, cents and three people', () => {
+  const p = ST.stm([{ name: 'A', pct: 60 }, { name: 'B', pct: 40 }], { A: 100, B: 100.01 });
+  assert.equal(Math.round((p.net.A + p.net.B) * 100), 0); // shares always add back to the total
+  const q = ST.stm([{ name: 'A', pct: 34 }, { name: 'B', pct: 33 }, { name: 'C', pct: 33 }], { A: 0, B: 0, C: 300 });
+  const b = ST.bal([p, q], [{ from: 'A', to: 'A', amount: 5 }, { from: 'B', to: 'C', amount: -3 }]); // a payment to yourself or a negative one is ignored
+  const owedToC = b.transfers.filter((t) => t.to === 'C').reduce((s, t) => s + t.amount, 0);
+  assert.ok(Math.abs(owedToC - 201) < 0.01); // C's share is the remainder (99), so C paid 201 more than their share
+});
+test('settlements: a closed period keeps its recorded split even if the shares change later', () => {
+  const people = [{ name: 'Alex', pct: 50 }, { name: 'Sam', pct: 50 }];
+  const closed = ST.stm(people, { Alex: 600, Sam: 400 }); people[0].pct = 70; people[1].pct = 30;
+  assert.equal(ST.bal([closed], []).net.Alex, 100);
+});
+
+// ---- confirmed bills and paydays in forecasts ----
+const J = (x) => JSON.parse(JSON.stringify(x));
+const FC = (() => { const ctx = { dash: { calc: () => {}, params: () => ({}) }, console, Date, Math, JSON, Intl }; vm.runInNewContext(SRC, ctx); return { occ: ctx.scheduleOccurrences, merge: ctx.mergeForecast }; })();
+test('schedules: monthly, biweekly and one-time occurrences inside the window', () => {
+  const s = [{ id: 'r', kind: 'bill', label: 'Rent', amount: 1500, every: 'monthly', start: '2026-01-01' },
+    { id: 'p', kind: 'pay', label: 'Paycheck', amount: 2100, every: 'biweekly', start: '2026-11-06' },
+    { id: 'o', kind: 'bill', label: 'Tuition', amount: 900, every: 'once', start: '2027-01-10' }];
+  const ev = FC.occ(s, '2026-11-23', 60);
+  assert.deepEqual(J(ev.filter((e) => e.id === 'r').map((e) => e.date)), ['2026-12-01', '2027-01-01']);
+  assert.deepEqual(J(ev.filter((e) => e.id === 'p').map((e) => e.date)), ['2026-12-04', '2026-12-18', '2027-01-01', '2027-01-15']);
+  assert.equal(ev.find((e) => e.id === 'o').amt, -900); assert.ok(ev.filter((e) => e.id === 'p').every((e) => e.amt === 2100));
+});
+test('schedules: the 31st stays at month end; skip and reschedule change one occurrence only', () => {
+  const ev = FC.occ([{ id: 'c', kind: 'bill', label: 'Card', amount: 50, every: 'monthly', start: '2026-10-31', overrides: { '2026-12-31': { skip: true }, '2027-01-31': { date: '2027-02-03', amount: 75 } } }], '2026-11-01', 120);
+  assert.deepEqual(J(ev.map((e) => [e.date, e.amt])), [['2026-11-30', -50], ['2027-02-03', -75], ['2027-02-28', -50]]);
+  assert.ok(ev[1].moved && ev[1].changed);
+});
+test('forecast: a confirmed bill replaces its estimate instead of adding to it', () => {
+  const est = [{ day: 3, label: 'Electric Co', amt: -120 }, { day: 5, label: 'Netflix', amt: -15 }, { day: 7, label: 'Acme Payroll', amt: 2000 }];
+  const conf = FC.occ([{ id: 'e', kind: 'bill', label: 'Electric (confirmed)', amount: 143.2, every: 'monthly', start: '2026-12-04', replaces: 'Electric Co' }], '2026-12-01', 30);
+  const m = FC.merge(est, conf);
+  assert.equal(m.filter((e) => /Electric/.test(e.label)).length, 1); assert.equal(m.find((e) => /Electric/.test(e.label)).amt, -143.2);
+  assert.equal(m.length, 3); assert.equal(m.reduce((s, e) => s + e.amt, 0), 2000 - 15 - 143.2);
+});
+test('schedules never become transactions', () => {
+  const get = engine({ prefs: [{ book: 'Personal', key: 'schedules', value: JSON.stringify([{ id: 'r', kind: 'bill', label: 'Rent', amount: 1500, every: 'monthly', start: '2026-01-01' }]) }] });
+  assert.equal(get('txns').length, 0);
+});

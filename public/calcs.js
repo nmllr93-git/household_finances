@@ -34,6 +34,60 @@ function reconcileStatement({ kind, opening, closing, rows, from, to }) {
 }
 if (typeof window !== 'undefined') window.FDReconcile = reconcileStatement;
 
+// Household settlements. A closed period is a saved statement: for each person, what they paid minus their share
+// (positive = paid more than their share, so they're owed). Payments between people are kept apart from spending:
+// "A paid B $x" moves A's balance up and B's down, so it settles what's owed and never touches spending totals.
+// Returns each person's running balance (in cents, then dollars) and the fewest payments that would even everyone out.
+function settlementBalances(periods, payments) {
+  const c = (x) => Math.round(Number(x) * 100), net = {};
+  const add = (n, v) => { if (!n) return; net[n] = (net[n] || 0) + v; };
+  for (const p of periods || []) for (const [n, v] of Object.entries((p && p.net) || {})) if (isFinite(Number(v))) add(n, c(v));
+  for (const x of payments || []) { const a = c(x && x.amount); if (!(a > 0) || !x.from || !x.to || x.from === x.to) continue; add(x.from, a); add(x.to, -a); }
+  const owed = Object.entries(net).filter(([, v]) => v > 0).map(([n, v]) => [n, v]).sort((a, b) => b[1] - a[1]);
+  const owes = Object.entries(net).filter(([, v]) => v < 0).map(([n, v]) => [n, -v]).sort((a, b) => b[1] - a[1]);
+  const transfers = []; let i = 0, j = 0;
+  while (i < owes.length && j < owed.length) { const m = Math.min(owes[i][1], owed[j][1]); if (m > 0) transfers.push({ from: owes[i][0], to: owed[j][0], amount: m / 100 }); owes[i][1] -= m; owed[j][1] -= m; if (!owes[i][1]) i++; if (!owed[j][1]) j++; }
+  return { net: Object.fromEntries(Object.entries(net).map(([n, v]) => [n, v / 100])), transfers, even: transfers.every((t) => t.amount < 0.005) };
+}
+// A period's statement from who paid what: each person's paid minus (their % × the assigned total).
+function settlementStatement(people, paid) {
+  const c = (x) => Math.round(Number(x) * 100), tot = people.reduce((t, p) => t + c(paid[p.name] || 0), 0), net = {};
+  let left = tot; people.forEach((p, k) => { const share = k === people.length - 1 ? left : Math.round(tot * (Number(p.pct) || 0) / 100); left -= share; net[p.name] = (c(paid[p.name] || 0) - share) / 100; });
+  return { total: tot / 100, net, paid: Object.fromEntries(people.map((p) => [p.name, c(paid[p.name] || 0) / 100])), shares: people.map((p) => ({ name: p.name, pct: Number(p.pct) || 0 })) };
+}
+if (typeof window !== 'undefined') { window.FDSettle = settlementBalances; window.FDSettleStatement = settlementStatement; }
+
+// Confirmed bills and paydays for the cash forecast. A schedule repeats from its start date; one occurrence can be
+// skipped or moved (to another date and/or amount) without changing the rest. These are plans, not transactions:
+// they appear only in the forecast and never in actual totals.
+function scheduleOccurrences(schedules, todayIso, days) {
+  const DAY = 864e5, t0 = Date.parse(todayIso + 'T00:00:00Z'), end = t0 + days * DAY, out = [];
+  const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const step = (ms, every, startDay) => { const d = new Date(ms);
+    if (every === 'weekly') return ms + 7 * DAY; if (every === 'biweekly') return ms + 14 * DAY;
+    if (every === 'monthly' || every === 'yearly') { const y = d.getUTCFullYear(), m = d.getUTCMonth() + (every === 'monthly' ? 1 : 12); const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); return Date.UTC(y, m, Math.min(startDay, last)); } // the 31st stays at month end
+    return Infinity; };
+  for (const s of schedules || []) {
+    const amt = Math.abs(Number(s && s.amount)); if (!s || !(amt > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(s.start || '')) continue;
+    const sign = s.kind === 'pay' ? 1 : -1, ov = s.overrides || {}, startDay = Number(s.start.slice(8, 10));
+    let ms = Date.parse(s.start + 'T00:00:00Z'), guard = 0;
+    while (ms < end + 62 * DAY && guard++ < 1200) { // look a little past the end: an occurrence can be moved into the window
+      const key = iso(ms), o = ov[key];
+      if (!(o && o.skip)) { const when = o && /^\d{4}-\d{2}-\d{2}$/.test(o.date || '') ? Date.parse(o.date + 'T00:00:00Z') : ms; const a = o && Number(o.amount) > 0 ? Number(o.amount) : amt;
+        if (when >= t0 && when <= end) out.push({ id: s.id, key, date: iso(when), day: Math.round((when - t0) / DAY), label: s.label, amt: sign * a, confirmed: true, moved: when !== ms, changed: a !== amt, replaces: s.replaces || '' }); }
+      const nx = step(ms, s.every, startDay); if (nx === Infinity || nx <= ms) break; ms = nx;
+    }
+  }
+  return out.sort((a, b) => a.day - b.day);
+}
+// Put confirmed occurrences in place of the estimates they stand for (same name as the schedule's "replaces"), not alongside them.
+function mergeForecast(estimates, confirmed) {
+  const rep = new Set((confirmed || []).map((c) => String(c.replaces || '').trim().toLowerCase()).filter(Boolean));
+  const repById = new Set((confirmed || []).map((c) => c.id));
+  return [...(estimates || []).filter((e) => !rep.has(String(e.label || '').trim().toLowerCase())), ...(confirmed || [])].sort((a, b) => a.day - b.day || (repById.has(a.id) ? -1 : 1));
+}
+if (typeof window !== 'undefined') { window.FDSchedule = scheduleOccurrences; window.FDMergeForecast = mergeForecast; }
+
 dash.calc('all_txns', {
   title: 'All transactions, cleaned (including ignored ones)',
   description: 'Sheet rows, imported statement rows and manual entries, each with a cleaned-up vendor name. For any book and month with imported statement transactions, the imports replace the sheet rows. Your rules are applied next, then your edits to single transactions (including splits). Transactions you ignored, or that an ignore rule matches, are marked as ignored.',

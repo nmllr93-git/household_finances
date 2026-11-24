@@ -2454,6 +2454,9 @@
     const today = new Date(); today.setUTCHours(0, 0, 0, 0); const DAYS = 90, ev = [];
     rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 12 && d - today < DAYS * 864e5; g++) { ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: -x.lastCharge }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
     const inc = recurringIncome(); inc.forEach((x) => { let d = Date.parse(x.last + 'T00:00:00Z'); while ((d += x.every * 864e5) - today < DAYS * 864e5) if (d >= today) ev.push({ day: Math.round((d - today) / 864e5), label: x.vendor, amt: x.amount }); });
+    // confirmed bills and paydays (Planning → scheduled items) take the place of the estimates they stand for
+    const SCH = schedList(), conf = window.FDSchedule ? window.FDSchedule(SCH, today.toISOString().slice(0, 10), DAYS) : [];
+    const merged = window.FDMergeForecast ? window.FDMergeForecast(ev, conf) : ev; ev.length = 0; ev.push(...merged);
     const m = rows('monthly').filter((r) => r.book === book() && !isCurrent(r.month)).slice(-3), avg = (f) => (m.length ? m.reduce((s, r) => s + r[f], 0) / m.length : 0);
     const recurringMonthly = rows('subs').filter((x) => x.book === book() && Math.abs(x.yearly - x.lastCharge * 12) < 1).reduce((s, x) => s + x.lastCharge, 0);
     const daily = Math.max(0, avg('spend') - recurringMonthly) / 30.4;
@@ -2470,12 +2473,50 @@
     const li = document.createElement('input'); li.type = 'number'; li.min = 0; li.step = 100; li.value = low; li.style.width = '7em'; li.addEventListener('change', () => { prefSet('fcLow', Math.max(0, Number(li.value) || 0)); dash.draw('forecast90'); }); lab.append(li); row.append(lab); el.append(row);
     const g = document.createElement('div'); g.className = 'fd-grid2';
     const list = (title, items, empty1) => { const w = document.createElement('div'); w.append(rhead(title)); if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = empty1; w.append(p); }
-      items.forEach((e) => { const r2 = document.createElement('div'); r2.className = 'fd-alloc'; const a = document.createElement('span'); a.textContent = `${when(e.day)} · ${e.label}`; const b = document.createElement('span'); b.textContent = (e.amt > 0 ? '+' : '−') + money0(Math.abs(e.amt)); b.className = e.amt > 0 ? 'fd-good' : ''; r2.append(a, b); w.append(r2); }); return w; };
+      items.forEach((e) => { const r2 = document.createElement('div'); r2.className = 'fd-alloc' + (e.confirmed ? ' is-confirmed' : ''); const a = document.createElement('span'); a.textContent = `${when(e.day)} · ${e.label}`;
+        const tg = document.createElement('small'); tg.className = 'fd-fc-tag'; tg.textContent = e.confirmed ? (e.moved ? 'confirmed · moved' : 'confirmed') : 'estimate'; a.append(' ', tg);
+        if (e.confirmed) { const sk = document.createElement('button'); sk.type = 'button'; sk.className = 'fd-linkbtn'; sk.textContent = 'skip'; sk.title = 'Skip just this one'; sk.addEventListener('click', () => schedOverride(e.id, e.key, { skip: true }));
+          const mv = document.createElement('button'); mv.type = 'button'; mv.className = 'fd-linkbtn'; mv.textContent = 'move'; mv.title = 'Change the date or amount of just this one';
+          mv.addEventListener('click', () => { if (r2.querySelector('.fd-fc-move')) return; const f = document.createElement('span'); f.className = 'fd-fc-move'; const di = document.createElement('input'); di.type = 'date'; di.value = e.date; const ai = document.createElement('input'); ai.type = 'number'; ai.step = '0.01'; ai.value = Math.abs(e.amt); ai.style.width = '6.5em';
+            const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'fd-btn fd-sm'; ok.textContent = 'Save'; ok.addEventListener('click', () => schedOverride(e.id, e.key, { date: di.value, amount: Number(ai.value) || undefined }));
+            const un = document.createElement('button'); un.type = 'button'; un.className = 'fd-btn fd-sm fd-quiet'; un.textContent = 'Reset'; un.addEventListener('click', () => schedOverride(e.id, e.key, null)); f.append(di, ai, ok, un); r2.after(f); });
+          a.append(' ', sk, ' ', mv); }
+        const b = document.createElement('span'); b.textContent = (e.amt > 0 ? '+' : '−') + money0(Math.abs(e.amt)); b.className = e.amt > 0 ? 'fd-good' : ''; r2.append(a, b); w.append(r2); }); return w; };
     g.append(list('Expected income', ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day).slice(0, 12), 'No regular income found in the last 4 months (needs 2+ deposits from the same source).'),
       list('Bills & recurring', ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day).slice(0, 15), 'No recurring bills found.'));
     el.append(g);
-    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Also assumes about ${money0(daily * 30.4)} a month of other everyday spending (your last ${m.length} months, minus recurring bills). Paychecks are detected from income that arrived at least twice in the last 4 months.`; el.append(p);
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Also assumes about ${money0(daily * 30.4)} a month of other everyday spending (your last ${m.length} months, minus recurring bills). Paychecks are detected from income that arrived at least twice in the last 4 months. Items marked “estimate” are worked out from your history; “confirmed” ones are amounts and dates you entered below, and they replace the matching estimate. Neither counts in your actual totals until a real transaction arrives.`; el.append(p);
+    schedEditor(el, ev);
   });
+  // ---- scheduled (confirmed) bills and paydays, kept in this dashboard's settings ----
+  const schedList = () => { const l = prefGet('schedules', []); return Array.isArray(l) ? l : []; };
+  const schedSave = (l) => prefSet('schedules', l.slice(0, 60));
+  const schedOverride = async (id, key, val) => { const l = schedList().map((x) => { if (x.id !== id) return x; const ov = { ...(x.overrides || {}) }; if (val) ov[key] = val; else delete ov[key];
+    const keep = Object.fromEntries(Object.entries(ov).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 40)); return { ...x, overrides: keep }; }); await schedSave(l); };
+  let schEd = null;
+  function schedEditor(el, ev) {
+    const box = document.createElement('div'); box.className = 'fd-rb'; box.append(rhead('Confirmed bills & paydays'));
+    const L = schedList(); const EV = { weekly: 'Every week', biweekly: 'Every 2 weeks', monthly: 'Monthly', yearly: 'Yearly', once: 'Once' };
+    if (!L.length && !schEd) { const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Know an exact amount or date (rent, a paycheck, a bill that just arrived)? Add it here and the forecast uses it instead of its estimate.'; box.append(n); }
+    for (const x of L) { const r = document.createElement('div'); r.className = 'fd-alloc'; const a = document.createElement('span'); a.textContent = `${x.kind === 'pay' ? 'Payday' : 'Bill'} · ${x.label} · ${EV[x.every] || x.every} from ${x.start}${x.replaces ? ` · replaces the “${x.replaces}” estimate` : ''}`;
+      const b = document.createElement('span'); b.append((x.kind === 'pay' ? '+' : '−') + money2(Number(x.amount)) + ' ', rbtn('Edit', () => { schEd = { ...x }; dash.draw('forecast90'); }), rbtn('Remove', async () => { await schedSave(schedList().filter((y) => y.id !== x.id)); })); r.append(a, b); box.append(r); }
+    if (!schEd) { box.append(rbtn('Add a confirmed bill or payday', () => { schEd = { kind: 'bill', label: '', amount: '', every: 'monthly', start: new Date().toLocaleDateString('en-CA'), replaces: '' }; dash.draw('forecast90'); }, false)); el.append(box); return; }
+    const f = document.createElement('div'); f.className = 'fd-rb-row'; const E = schEd;
+    const kd = document.createElement('select'); kd.className = 'dash-select'; kd.append(new Option('Bill', 'bill'), new Option('Payday', 'pay')); kd.value = E.kind; kd.addEventListener('change', () => { E.kind = kd.value; dash.draw('forecast90'); });
+    const nm = rin(E.label, 'Name, e.g. Rent', (v) => { E.label = v; }); const am = rin(E.amount, 'Amount', (v) => { E.amount = v; }); am.inputMode = 'decimal'; am.style.maxWidth = '8em';
+    const evs = document.createElement('select'); evs.className = 'dash-select'; Object.entries(EV).forEach(([k, v]) => evs.append(new Option(v, k))); evs.value = E.every; evs.addEventListener('change', () => { E.every = evs.value; });
+    const st0 = rin(E.start, '', (v) => { E.start = v; }); st0.type = 'date';
+    const rp = document.createElement('select'); rp.className = 'dash-select'; rp.append(new Option('Doesn’t replace an estimate', ''));
+    [...new Set((ev || []).filter((e) => !e.confirmed && (E.kind === 'pay' ? e.amt > 0 : e.amt < 0)).map((e) => e.label))].sort().forEach((v) => rp.append(new Option('Replaces the “' + v + '” estimate', v)));
+    if (E.replaces && ![...rp.options].some((o) => o.value === E.replaces)) rp.append(new Option('Replaces the “' + E.replaces + '” estimate', E.replaces)); rp.value = E.replaces || ''; rp.addEventListener('change', () => { E.replaces = rp.value; });
+    f.append(kd, nm, am, evs, st0, rp); box.append(f);
+    const msg = document.createElement('p'); msg.className = 'fd-note fd-bad';
+    const rw = document.createElement('div'); rw.className = 'fd-rb-row';
+    rw.append(rbtn('Save', async () => { const a = Number(String(E.amount).replace(/[^0-9.]/g, '')); if (!String(E.label || '').trim()) { msg.textContent = 'Give it a name.'; return; } if (!(a > 0)) { msg.textContent = 'Enter the amount.'; return; } if (!/^\d{4}-\d{2}-\d{2}$/.test(E.start || '')) { msg.textContent = 'Pick the next date.'; return; }
+      const item = { id: E.id || Date.now().toString(36), kind: E.kind === 'pay' ? 'pay' : 'bill', label: String(E.label).trim().slice(0, 40), amount: Math.round(a * 100) / 100, every: EV[E.every] ? E.every : 'monthly', start: E.start, replaces: String(E.replaces || '').slice(0, 60), overrides: E.overrides || {} };
+      const l = schedList().filter((y) => y.id !== item.id); l.push(item); schEd = null; await schedSave(l); }, false), rbtn('Cancel', () => { schEd = null; dash.draw('forecast90'); }));
+    box.append(rw, msg); el.append(box);
+  }
 
   // ================= Broker positions import (Holdings) =================
   let posImp = null;
@@ -3374,7 +3415,7 @@
         }
         rowsH.push(line(!fv ? 'warn' : fv.ok ? 'ok' : 'bad', 'Last check of a backup file', !fv ? 'Never on this device. Choose a backup file above and press Check.' : `${fv.ok ? 'Complete' : 'Problems: ' + fv.detail} · ${fv.file} · checked ${ago(fv.at)}`));
         hb.replaceChildren(...rowsH);
-        if (h.canCheck) hb.append(rbtn('Check the newest server copy', async () => { try { await FDStore.json('POST', '/api/backup-health/check'); } catch (e) {} drawHealth(); }, false));
+        if (h.canCheck) { const cr = document.createElement('div'); cr.className = 'fd-rb-row'; cr.append(rbtn('Check the newest server copy', async () => { try { await FDStore.json('POST', '/api/backup-health/check'); } catch (e) {} drawHealth(); })); hb.append(cr); }
       }
       drawHealth();
       el.append(bk);
@@ -3410,7 +3451,59 @@
     side.append(owe);
     if (un > 0) { const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = `${money0(un)} came from accounts with no Owner set (${Object.keys(unSrc).slice(0, 4).join(', ')}${Object.keys(unSrc).length > 4 ? '…' : ''}). Set Owner on those accounts to count them. Unassigned spending is left out of the split.`; side.append(n); }
     el.append(ringBox(ring(sl, [money0(tot), 'shared spending'], { size: 160, width: 28, labels: true, title: 'Who paid', chart: 'ring-split' }), side, ['Who paid · ' + money0(tot), sl]));
+    settleBox(el, people, paid);
   });
+
+  // ---- settlements: close a period (its split is saved and won't change with later rules), record who paid whom ----
+  // Kept in this dashboard's settings as totals only (no transaction detail). Payments are separate from spending.
+  let stlOpen = false;
+  function settleBox(el, people, paid) {
+    if (!window.FDSettle) return;
+    const S0 = prefGet('settlements', { periods: [], payments: [] }) || {}, P = Array.isArray(S0.periods) ? S0.periods : [], PAY = Array.isArray(S0.payments) ? S0.payments : [];
+    const save = (next) => prefSet('settlements', { periods: next.periods.slice(-120), payments: next.payments.slice(-500) });
+    const months = period().map((m) => m.month).sort(), from = months[0], to = months[months.length - 1];
+    const label = (a, b) => { const f = (m) => new Date(m + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); return a === b ? f(a) : `${f(a)} – ${f(b)}`; };
+    const bal = window.FDSettle(P, PAY);
+    const box = document.createElement('div'); box.className = 'fd-rb fd-settle'; box.append(rhead('Settling up'));
+    const sum = document.createElement('p'); sum.className = 'fd-note';
+    sum.textContent = !P.length && !PAY.length ? 'Close a period to save what each person owes for it. Then record payments between you here; they settle the balance and are never counted as spending.'
+      : bal.even ? 'All settled: closed periods and payments are even.' : 'From closed periods and payments: ' + bal.transfers.map((t) => `${t.from} owes ${t.to} ${money2(t.amount)}`).join('; ') + '.';
+    box.append(sum);
+    const overlap = P.find((x) => !(x.to < from || x.from > to));
+    const row = document.createElement('div'); row.className = 'fd-rb-row';
+    if (from && !overlap) row.append(rbtn(`Close ${label(from, to)}`, async () => {
+      const stm = window.FDSettleStatement(people, paid);
+      await save({ periods: [...P, { id: Date.now().toString(36), from, to, label: label(from, to), closedAt: new Date().toISOString(), ...stm }].sort((a, b) => (a.from < b.from ? -1 : 1)), payments: PAY });
+    }, false));
+    else if (overlap) { const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = `${overlap.label} is already closed. To close the next period, pick a range after it.`; box.append(n); }
+    row.append(rbtn(stlOpen ? 'Hide history' : `History (${P.length} closed, ${PAY.length} payment${PAY.length === 1 ? '' : 's'})`, () => { stlOpen = !stlOpen; dash.draw('splitView'); }));
+    box.append(row);
+    // record a payment
+    const pr = document.createElement('div'); pr.className = 'fd-rb-row';
+    const selP = (v) => { const s2 = document.createElement('select'); s2.className = 'dash-select'; people.forEach((p) => s2.append(new Option(p.name, p.name))); if (v) s2.value = v; return s2; };
+    const t0 = bal.transfers[0], fr = selP(t0 && t0.from), tt = selP(t0 ? t0.to : people[1] && people[1].name);
+    const am = document.createElement('input'); am.type = 'number'; am.step = '0.01'; am.min = '0'; am.placeholder = t0 ? t0.amount.toFixed(2) : 'amount'; am.style.maxWidth = '8em';
+    const dt = document.createElement('input'); dt.type = 'date'; dt.value = new Date().toLocaleDateString('en-CA');
+    const pm = document.createElement('span'); pm.className = 'fd-zero';
+    const paidL = document.createElement('span'); paidL.textContent = 'paid';
+    pr.append(fr, paidL, tt, am, dt, rbtn('Record payment', async () => {
+      const a = Number(am.value || am.placeholder); if (!(a > 0)) { pm.textContent = 'Enter an amount.'; return; } if (fr.value === tt.value) { pm.textContent = 'Pick two different people.'; return; }
+      await save({ periods: P, payments: [...PAY, { id: Date.now().toString(36), date: dt.value, from: fr.value, to: tt.value, amount: Math.round(a * 100) / 100 }] });
+    }, false), pm);
+    box.append(pr);
+    const nt = document.createElement('p'); nt.className = 'fd-note'; nt.textContent = 'If that payment also shows up in an imported statement (Venmo, Zelle, a transfer), mark it as a transfer there so it isn’t counted as spending.'; box.append(nt);
+    if (stlOpen) {
+      const t = document.createElement('table'); t.className = 'fd-table'; const tb = document.createElement('tbody');
+      const items = [...P.map((x) => ({ d: x.to + '-31', k: 'p', x })), ...PAY.map((x) => ({ d: x.date, k: 'y', x }))].sort((a, b) => (a.d < b.d ? 1 : -1));
+      for (const it of items) { const tr = document.createElement('tr'); const x = it.x;
+        if (it.k === 'p') tr.append(td(x.label, 'fd-l'), td(`Closed: ${money2(x.total)} shared; ` + Object.entries(x.net).map(([n, v]) => `${n} ${v >= 0 ? '+' : '−'}${money2(Math.abs(v))}`).join(', '), 'fd-l'));
+        else tr.append(td(x.date, 'fd-l'), td(`Payment: ${x.from} paid ${x.to} ${money2(x.amount)}`, 'fd-l'));
+        const c = document.createElement('td'); c.append(rbtn(it.k === 'p' ? 'Reopen' : 'Remove', async () => { await save(it.k === 'p' ? { periods: P.filter((y) => y !== x), payments: PAY } : { periods: P, payments: PAY.filter((y) => y !== x) }); })); tr.append(c); tb.append(tr); }
+      if (!items.length) { const tr = document.createElement('tr'); tr.append(td('Nothing yet.', 'fd-l')); tb.append(tr); }
+      t.append(tb); box.append(t);
+    }
+    el.append(box);
+  }
 
   // ---- non-cash assets: home, vehicles, other (value entered by hand, vehicles depreciate) ----
   const ASSET_T = { home: ['Home', 0, 12], vehicle: ['Vehicle', 15, 3], other: ['Other', 0, 12] };
@@ -3835,7 +3928,7 @@
     const cbR = opt(`Also remove ${recs.length} receipt${recs.length === 1 ? '' : 's'} attached to them, photos included`, recs);
     if (cbE || cbR) { const k = document.createElement('p'); k.className = 'fd-note'; k.textContent = 'Unticked, they’re kept but won’t show (nothing points at them) until restored from a backup.'; box.append(k); }
     const msg = document.createElement('p'); msg.className = 'fd-note';
-    const go = document.createElement('button'); go.type = 'button'; go.className = 'fd-btn fd-sm fd-danger'; go.textContent = 'Undo import';
+    const go = document.createElement('button'); go.type = 'button'; go.className = 'fd-btn fd-sm fd-quiet fd-danger'; go.textContent = 'Undo import';
     const no = document.createElement('button'); no.type = 'button'; no.className = 'fd-btn fd-sm fd-quiet'; no.textContent = 'Cancel'; no.addEventListener('click', () => tr.remove());
     go.addEventListener('click', async () => {
       go.disabled = true; msg.className = 'fd-note'; msg.textContent = 'Undoing…';

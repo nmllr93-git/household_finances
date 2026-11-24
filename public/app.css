@@ -542,3 +542,11 @@ body.fd-brand .hf-tab.is-on, body.fd-brand .fd-tab.is-on { color: var(--brand); 
 @media (max-width: 560px) { .fd-health-row { grid-template-columns: 14px 1fr; } .fd-health-row span { grid-column: 2; } }
 .fd-undo-row > td { background: var(--color-surface-2, transparent); }
 .fd-recon-d { margin: 8px 0; } .fd-recon-d > summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+/* forecast: confirmed vs estimated items */
+.fd-fc-tag { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--color-surface-2, rgba(127,127,127,.12)); color: var(--color-text-2, inherit); }
+.fd-alloc.is-confirmed .fd-fc-tag { background: rgba(46,125,50,.14); color: var(--color-good, #2e7d32); }
+.fd-linkbtn { background: none; border: 0; padding: 0 2px; font: inherit; font-size: 12px; color: var(--brand, #2f6fd6); cursor: pointer; text-decoration: underline; }
+.fd-fc-move { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0 8px; }
+.fd-settle .fd-rb-row > span { align-self: center; }
+.fd-alloc > span .fd-btn { margin-left: 6px; }
+.fd-settle { flex: 1 1 100%; width: 100%; box-sizing: border-box; margin-top: var(--cds-gap-md, 12px); }
