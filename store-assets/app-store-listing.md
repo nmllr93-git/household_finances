@@ -67,7 +67,7 @@ Your data, your way
 Larenest is not tax, legal or investment advice. Tax totals are a starting point for you or your tax preparer.
 
 **Keywords** (100 max, commas, no spaces; leave out words already in the name):
-`budgeting,expense,tracker,spending,bills,savings,investment,private,offline,household,freelance,taxes`
+`budgeting,expense,tracker,spending,bills,savings,investing,private,offline,household,freelance,taxes`
 
 - **Support URL:** https://larenest.app
 - **Marketing URL:** https://larenest.app
