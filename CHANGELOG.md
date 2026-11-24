@@ -3,6 +3,14 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- Cash forecast: look ahead 90 days, 6 months, 1 year or 2 years
+- Every tab has its own row of tiles (Accounts, Expenses, Budget, Planning, Transactions and more)
+- ✎ Arrange: move, resize, add and remove tiles and sections on any tab; layouts sync across devices
+- Your own reports: spending, income, net, counts, averages or balances, grouped by category, vendor, account, tag, month or weekday, with filters, as bars, a line, a table or one number
+- Wide screens: Accounts, Budget and Overview fill the width; personal dashboards no longer show Who paid what
+- Currency converter in its own box; the economic calendar no longer lists the Fed every day
+
 ## Desktop 1.0.28
 - Check a statement adds up: type its opening balance while importing and Larenest compares opening + transactions with the ending balance, to the cent, and points at a missing or sign-flipped row. It never changes anything for you
 - Import history: source, rows added and skipped, and whether the statement added up. Undo shows what it removes first; changes and receipts on those transactions go only if you tick them

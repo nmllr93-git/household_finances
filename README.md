@@ -322,8 +322,37 @@ In **Transactions → Rules**, click **+ New rule**.
 - **Allow editing** lets you edit vendor, category and type right in the rows.
 - **Export CSV** downloads what's currently listed.
 
-### Custom reports
-Click **+ Report** in the top bar to make your own tab. Click **Edit**, then **Add a view** to add any section. Size each one S, M, L or F (full width) and reorder with ↑/↓. Reports sync across devices.
+### Tiles for each tab
+Every tab has its own row of tiles at the top. Click a tile to jump to the section behind it.
+- **Everything** and **Overview:** the original five cards.
+- **Accounts:** net worth, checking & savings, investments, credit cards owed, loans & mortgage.
+- **Expenses:** spent this month (against your usual month), average spending, top category, subscriptions, unusual this month.
+- **Budget:** the budget ring, budget left, categories over budget, spent this month.
+- **Planning:** lowest cash ahead, where cash ends up, next payday, next bill, savings rate. They follow the forecast's **Look ahead** setting.
+- **Transactions:** transactions that need a category, spent this month, income.
+
+### Arrange a tab
+Click **✎ Arrange** (next to ⚙ Settings) to change the tab you're on.
+- **Tiles:** drag them or use ‹ ›, remove one with ×, or add any of the 20 tile types (up to 8 per tab).
+- **Sections:** drag ⠿ or use ↑/↓ to move them, and set the width with S, M, L or F (a third, half, two-thirds, full). Remove one, or add any section, including ones from other tabs.
+- **Reset tab to default** (click twice) puts the tab back the way it came.
+- Arranging starts from what the tab looks like now. A tab you never arrange keeps the built-in layout.
+- On phones you move things with the arrows, and sections are always full width.
+- Layouts are saved per dashboard and sync across devices. View-only logins don't see Arrange.
+
+### Your own reports
+Build a section from the data already in Larenest. In **✎ Arrange**, choose **★ New custom report…** from "Add a section" (or from "Add a view" on a ★ report tab).
+- **Show:** spending, income, income minus spending, number of purchases, average purchase, or account balances.
+- **Grouped by:** category, vendor, account, tag, month, day of the week, or one total. Balances can be grouped by account, type of account or month.
+- **Time:** the dates picked at the top of the page, this month, the last 3 or 12 months, or this year.
+- **As:** bars, a line over time, a table, or a single number. "Show up to" keeps the biggest groups and puts the rest in "Everything else".
+- **Filters:** only certain categories or accounts (separate several with commas), vendor or description text, or a smallest amount.
+- The preview updates as you change things. Transfers never count as spending or income, and totals are worked out to the cent.
+- Once saved, place the report on any tab, add it to a ★ report, or add it as a tile showing its total. Use **✎ Edit report** to change it later. **Delete report** removes it from every tab and tile.
+- Saved reports also appear at the bottom of the Everything tab.
+
+### Report tabs
+Click **+ Report** in the top bar to make your own tab. Use **✎ Arrange** (or **Edit**) on it, then **Add a view** to add any section or custom report. Size each one S, M, L or F and reorder them. Report tabs sync across devices.
 
 ---
 

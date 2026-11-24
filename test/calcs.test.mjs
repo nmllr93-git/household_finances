@@ -223,3 +223,40 @@ test('schedules never become transactions', () => {
   const get = engine({ prefs: [{ book: 'Personal', key: 'schedules', value: JSON.stringify([{ id: 'r', kind: 'bill', label: 'Rent', amount: 1500, every: 'monthly', start: '2026-01-01' }]) }] });
   assert.equal(get('txns').length, 0);
 });
+
+// ---- custom reports ----
+const CR = (() => { const ctx = { dash: { calc: () => {}, params: () => ({}) }, console, Date, Math, JSON, Intl }; vm.runInNewContext(SRC, ctx); return (...a) => J(ctx.customReport(...a)); })();
+const T0 = [
+  { book: 'P', month: '2026-09', date: '2026-09-02', type: 'expense', amount: 60.1, category: 'Groceries', vendor: 'Grocer', source: 'Card', tags: ['trip'] },
+  { book: 'P', month: '2026-09', date: '2026-09-05', type: 'expense', amount: 0.1, category: 'Groceries', vendor: 'Grocer', source: 'Checking' },
+  { book: 'P', month: '2026-10', date: '2026-10-03', type: 'expense', amount: 0.2, category: 'Dining', vendor: 'Cafe', source: 'Card', tags: ['trip', 'work'] },
+  { book: 'P', month: '2026-10', date: '2026-10-04', type: 'income', amount: 1000, category: 'Paycheck', vendor: 'Acme', source: 'Checking' },
+  { book: 'P', month: '2026-10', date: '2026-10-06', type: 'transfer', amount: 500, category: 'Transfer', vendor: 'Savings', source: 'Checking' },
+  { book: 'S', month: '2026-10', date: '2026-10-06', type: 'expense', amount: 99, category: 'Dining', vendor: 'Other book', source: 'Card' }];
+const M2 = ['2026-09', '2026-10'];
+test('custom report: spending by category, in cents, this dashboard only, transfers left out', () => {
+  const r = CR({ measure: 'spend', by: 'category' }, T0, [], M2, 'P');
+  assert.deepEqual(r.groups.map((g) => [g.key, g.value]), [['Groceries', 60.2], ['Dining', 0.2]]);
+  assert.equal(r.total, 60.4); assert.equal(r.groups[0].byMonth['2026-09'], 60.2);
+});
+test('custom report: net by month, income, count, average, weekday and tags', () => {
+  assert.deepEqual(CR({ measure: 'net', by: 'month' }, T0, [], M2, 'P').groups.map((g) => [g.key, g.value]), [['2026-09', -60.2], ['2026-10', 999.8]]);
+  assert.equal(CR({ measure: 'income', by: 'none' }, T0, [], M2, 'P').total, 1000);
+  assert.equal(CR({ measure: 'count', by: 'none' }, T0, [], M2, 'P').total, 3);
+  assert.equal(CR({ measure: 'avg', by: 'none' }, T0, [], M2, 'P').total, 20.13);
+  assert.equal(CR({ measure: 'spend', by: 'weekday' }, T0, [], M2, 'P').groups[0].key, 'Wednesday'); // 2026-09-02
+  assert.deepEqual(CR({ measure: 'spend', by: 'tag' }, T0, [], M2, 'P').groups.map((g) => [g.key, g.value]), [['trip', 60.3], ['work', 0.2]]);
+});
+test('custom report: filters, top N with "everything else", and the month window', () => {
+  assert.equal(CR({ measure: 'spend', by: 'none', filter: { categories: ['groceries'] } }, T0, [], M2, 'P').total, 60.2);
+  assert.equal(CR({ measure: 'spend', by: 'none', filter: { accounts: ['card'] } }, T0, [], M2, 'P').total, 60.3);
+  assert.equal(CR({ measure: 'spend', by: 'none', filter: { text: 'caf' } }, T0, [], M2, 'P').total, 0.2);
+  assert.equal(CR({ measure: 'spend', by: 'none', filter: { min: 1 } }, T0, [], M2, 'P').total, 60.1);
+  const t1 = CR({ measure: 'spend', by: 'vendor', top: 1 }, T0, [], M2, 'P'); assert.equal(t1.groups.length, 1); assert.equal(t1.other.value, 0.2);
+  assert.equal(CR({ measure: 'spend', by: 'none' }, T0, [], ['2026-10'], 'P').total, 0.2);
+});
+test('custom report: balances use the latest month in the window, by account or as a monthly series', () => {
+  const B = [{ book: 'P', month: '2026-09', label: 'Checking', kind: 'deposit', balance: 100 }, { book: 'P', month: '2026-10', label: 'Checking', kind: 'deposit', balance: 150 }, { book: 'P', month: '2026-10', label: 'Brokerage', kind: 'investment', balance: 1000.01 }];
+  assert.deepEqual(CR({ measure: 'balance', by: 'account' }, [], B, M2, 'P').groups.map((g) => [g.key, g.value]), [['Brokerage', 1000.01], ['Checking', 150]]);
+  const bm = CR({ measure: 'balance', by: 'month' }, [], B, M2, 'P'); assert.deepEqual(bm.groups.map((g) => g.value), [100, 1150.01]); assert.equal(bm.total, 1150.01);
+});

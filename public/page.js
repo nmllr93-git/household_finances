@@ -367,8 +367,9 @@
     repBar.append(name, sbtn(repEdit ? 'Done' : 'Edit', 'Edit this report', () => { repEdit = !repEdit; drawReport(); }));
     if (repEdit) {
       const add = document.createElement('select'); add.className = 'dash-select'; add.append(new Option('+ Add a view…', ''));
-      ALL.filter((id) => !r.items.some((x) => x.id === id)).forEach((id) => add.append(new Option(secTitle(id), id)));
-      add.addEventListener('change', () => { if (add.value) { r.items.push({ id: add.value, size: 'M' }); repSave(); drawReport(); } });
+      add.append(new Option('★ New custom report…', '__new'));
+      ALL.filter((id) => !r.items.some((x) => x.id === id)).forEach((id) => add.append(new Option((/^cr-/.test(id) ? '★ ' : '') + secTitle(id), id)));
+      add.addEventListener('change', () => { if (add.value === '__new') { window.__fdCrNew((sid) => { r.items.push({ id: sid, size: 'M' }); repSave(); drawReport(); }); return; } if (add.value) { r.items.push({ id: add.value, size: 'M' }); repSave(); drawReport(); } });
       repBar.append(add,
         Object.assign(document.createElement('input'), { className: 'fd-repname', value: r.name, maxLength: 40, ariaLabel: 'Report name', onchange: (e) => { const n = e.target.value.trim(); if (n) { r.name = n; repSave(); navReports(); showGroup('rep:' + repOn); } } }),
         sbtn('Delete report', 'Delete this report', (e) => { if (e.target.dataset.sure) { REPS.splice(repOn, 1); repSave(); repEdit = false; navReports(); showGroup('all'); } else { e.target.dataset.sure = '1'; e.target.textContent = 'Click again to delete'; } }));
@@ -524,8 +525,9 @@
     repBar.hidden = !ARR;
     if (ARR) { const name = document.createElement('strong'); name.textContent = 'Arranging: ' + (document.querySelector(`.fd-navb[data-group="${g}"]`)?.textContent || 'this tab').replace(/^⚙\s*/, '');
       const add = document.createElement('select'); add.className = 'dash-select'; add.setAttribute('aria-label', 'Add a section'); add.append(new Option('+ Add a section…', ''));
-      ALL.filter((id) => !items.some((x) => x.id === id) && q(id)[0] && !(id === 'split' && SET().type !== 'shared')).forEach((id) => add.append(new Option(secTitle(id), id)));
-      add.addEventListener('change', () => { if (!add.value) return; items.push({ id: add.value, size: FULLSPAN.has(add.value) ? 'F' : 'M' }); L.items = items; saveTab(g); drawTabGrid(g); });
+      add.append(new Option('★ New custom report…', '__new'));
+      ALL.filter((id) => !items.some((x) => x.id === id) && q(id)[0] && !(id === 'split' && SET().type !== 'shared')).forEach((id) => add.append(new Option((/^cr-/.test(id) ? '★ ' : '') + secTitle(id), id)));
+      add.addEventListener('change', () => { if (add.value === '__new') { window.__fdCrNew((sid) => { items.push({ id: sid, size: 'M' }); L.items = items; saveTab(g); drawTabGrid(g); }); return; } if (!add.value) return; items.push({ id: add.value, size: FULLSPAN.has(add.value) ? 'F' : 'M' }); L.items = items; saveTab(g); drawTabGrid(g); });
       const help = document.createElement('span'); help.className = 'fd-zero'; help.className = 'fd-zero fd-arrhelp'; help.textContent = window.matchMedia('(max-width: 760px)').matches ? 'Use the arrows to move sections. Widths apply on larger screens.' : 'Drag ⠿ or use the arrows to move. S, M, L and F set the width (a third, half, two-thirds, full).';
       repBar.append(name, add, sbtn('Reset tab to default', 'Put this tab back the way it came', (e) => { if (!e.target.dataset.sure) { e.target.dataset.sure = '1'; e.target.textContent = 'Click again to reset'; return; } delete LAYOUT.tabs[g]; laySave(); ARR = false; showGroup(g); }),
         sbtn('Done', 'Finish arranging', () => { ARR = false; showGroup(g); }, true), help); }
@@ -572,6 +574,114 @@
   const layoutSync = () => { if (ARR) return; const l = prefGet('layout', null); const next = l && l.tabs ? l : { v: 1, tabs: {} }; if (JSON.stringify(next) === JSON.stringify(LAYOUT)) return; LAYOUT = next; try { showGroup(curTab()); } catch {} };
   window.__fdLayoutSync = layoutSync;
   showGroup(curTab());
+  // ==== Custom reports: build your own section from the data already here (saved per dashboard as "customs") ====
+  const CR_MEAS = { spend: 'Spending', income: 'Income', net: 'Income minus spending', count: 'Number of purchases', avg: 'Average purchase', balance: 'Account balances' };
+  const CR_BY = { category: 'Category', vendor: 'Vendor', account: 'Account', tag: 'Tag', month: 'Month', weekday: 'Day of the week', none: 'Nothing (one total)' };
+  const CR_BY_BAL = { account: 'Account', kind: 'Type of account', month: 'Month', none: 'Nothing (one total)' };
+  const CR_WHEN = { range: 'The dates picked at the top', month: 'This month', '3m': 'Last 3 months', '12m': 'Last 12 months', ytd: 'This year' };
+  const CR_SHOW = { bars: 'Bars', line: 'Line over time', table: 'Table', number: 'Single number' };
+  const crList = () => { const l = prefGet('customs', []); return Array.isArray(l) ? l.filter((x) => x && x.id) : []; };
+  const crSave = (l) => prefSet('customs', l.slice(0, 40));
+  const crMonths = (w) => { if (w === 'range' || !w) return period().map((m) => m.month); const now = new Date(), y = now.getUTCFullYear(), m = now.getUTCMonth();
+    const back = (n) => Array.from({ length: n }, (_, i) => new Date(Date.UTC(y, m - (n - 1 - i), 15)).toISOString().slice(0, 7));
+    return w === 'month' ? back(1) : w === '3m' ? back(3) : w === '12m' ? back(12) : back(m + 1); };
+  const crFmt = (spec) => (v) => (spec.measure === 'count' ? Math.round(v).toLocaleString('en-US') : money0(v));
+  const crRun = (spec) => window.FDCustom(spec, rows('txns'), rows('balances'), crMonths(spec.when), book());
+  const crDesc = (s) => `${CR_MEAS[s.measure] || 'Spending'}${s.by && s.by !== 'none' ? ' by ' + ((s.measure === 'balance' ? CR_BY_BAL : CR_BY)[s.by] || s.by).toLowerCase() : ''} · ${(CR_WHEN[s.when] || CR_WHEN.range).replace('The dates picked at the top', rangeLabel())}`
+    + (() => { const f = s.filter || {}, p = []; if ((f.categories || []).length) p.push('categories: ' + f.categories.join(', ')); if ((f.accounts || []).length) p.push('accounts: ' + f.accounts.join(', ')); if (f.text) p.push(`matching “${f.text}”`); if (f.min) p.push(`${money0(f.min)} and up`); return p.length ? ' · ' + p.join(' · ') : ''; })();
+  const crHome = document.createElement('div'); crHome.id = 'fd-customs'; (document.querySelector('.fd') || document.body).append(crHome);
+  const crDraft = {}; // id → spec being edited (preview draws from it)
+  function crSection(spec) {
+    const id = 'cr-' + spec.id; let s = document.getElementById(id);
+    if (!s) { s = document.createElement('section'); s.id = id; s.className = 'fd-custom';
+      const h = document.createElement('h2'); const n = document.createElement('p'); n.className = 'fd-note fd-crdesc';
+      const ed = document.createElement('button'); ed.type = 'button'; ed.className = 'fd-btn fd-quiet fd-sm fd-credit'; ed.textContent = '✎ Edit report';
+      ed.addEventListener('click', () => { crDraft[spec.id] = JSON.parse(JSON.stringify(crList().find((x) => x.id === spec.id) || spec)); dash.draw('crView'); });
+      const body = document.createElement('div'); body.dataset.draw = 'crView'; body.dataset.cr = spec.id; body.dataset.source = 'txns balances period prefs';
+      s.append(h, n, ed, body); crHome.append(s);
+      if (!ALL.includes(id)) ALL.push(id); const mark = document.createComment('home:' + id); s.before(mark); home.set(s, mark);
+      // fold like other sections
+      h.classList.add('fd-fold'); h.tabIndex = 0; h.setAttribute('role', 'button'); const set = (c) => { s.classList.toggle('fd-collapsed', c); h.setAttribute('aria-expanded', c ? 'false' : 'true'); }; set(!!(NP.closed || {})[id]);
+      const flip = () => { NP.closed = NP.closed || {}; NP.closed[id] = !NP.closed[id]; npSave(); set(NP.closed[id]); }; h.addEventListener('click', flip); h.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+      s.hidden = true; }
+    s.querySelector('h2').textContent = spec.title || 'My report'; s.querySelector('.fd-crdesc').textContent = crDesc(spec);
+    // as a tile: the report's total
+    const tk = 'cr:' + spec.id; GT[tk] = T('★ ' + (spec.title || 'My report'), id, () => { const r = crRun(spec); return [crFmt(spec)(r.total), crDesc(spec).split(' · ').slice(0, 2).join(' · ')]; });
+    if (!ALL_TILES.includes(tk)) ALL_TILES.push(tk); if (gtiles[tk]) gtiles[tk].querySelector('h3').textContent = GT[tk].title;
+    return s;
+  }
+  function crSync() { const l = crList(), ids = new Set(l.map((x) => 'cr-' + x.id)); l.forEach(crSection);
+    crHome.querySelectorAll('section.fd-custom').forEach((s) => { if (!ids.has(s.id) && !crDraft[s.id.slice(3)]) { const i = ALL.indexOf(s.id); if (i >= 0) ALL.splice(i, 1); delete GT['cr:' + s.id.slice(3)]; const j = ALL_TILES.indexOf('cr:' + s.id.slice(3)); if (j >= 0) ALL_TILES.splice(j, 1); home.delete(s); s.remove(); } }); }
+  // ---- drawing a report ----
+  function crDraw(el, spec) {
+    const r = crRun(spec), fmt = crFmt(spec), show = spec.show || 'bars';
+    if (!r.groups.length && !r.other) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = spec.measure === 'balance' ? 'No balances recorded in these months.' : 'Nothing matches in these months. Try a longer time span or fewer filters.'; el.append(p); return; }
+    if (show === 'number') { const b = document.createElement('p'); b.className = 'fd-big fd-crnum'; b.textContent = fmt(r.total); const sub = document.createElement('p'); sub.className = 'fd-sub';
+      sub.textContent = spec.measure === 'balance' ? 'latest balance in these months' : `${r.months.length} month${r.months.length === 1 ? '' : 's'}` + (r.months.length > 1 && !['count', 'avg'].includes(spec.measure) ? ` · ${fmt(r.total / r.months.length)} a month` : ''); el.append(b, sub); return; }
+    if (show === 'line') { const box = document.createElement('div'); box.className = 'fd-box'; el.append(box);
+      const series = ['month', 'none'].includes(spec.by) || spec.measure === 'balance' && spec.by === 'month' ? [{ name: CR_MEAS[spec.measure], byMonth: Object.fromEntries(r.months.map((m) => [m, r.groups.reduce((t, g) => t + (g.byMonth[m] || 0), 0)])) }] : r.groups.slice(0, 6).map((g) => ({ name: g.key, byMonth: g.byMonth }));
+      const lab = (m) => new Date(m + '-15T12:00:00Z').toLocaleDateString('en-US', { month: 'short', ...(r.months.length > 12 ? { year: '2-digit' } : {}), timeZone: 'UTC' });
+      window.FD.lineChart(box, { labels: r.months.map(lab), zero: spec.measure !== 'balance', aria: crDesc(spec), fmt, series: series.map((x) => ({ name: x.name, points: r.months.map((m) => ({ label: lab(m), v: Math.round((x.byMonth[m] || 0) * 100) / 100 })) })) }); return; }
+    const list = [...r.groups, ...(r.other ? [r.other] : [])], tot = r.total;
+    if (show === 'table') { const t = document.createElement('table'); t.className = 'fd-table'; const hd = document.createElement('tr'); [spec.by === 'none' ? '' : (spec.measure === 'balance' ? CR_BY_BAL : CR_BY)[spec.by], CR_MEAS[spec.measure], ...(['count', 'avg', 'balance'].includes(spec.measure) ? [] : ['Share']), ...(spec.measure === 'balance' ? [] : ['Transactions'])].forEach((x, i) => { const th = document.createElement('th'); th.textContent = x; if (!i) th.className = 'fd-l'; hd.append(th); });
+      const tb = document.createElement('tbody'); tb.append(hd);
+      list.forEach((g) => { const tr = document.createElement('tr'); tr.append(td(g.key, 'fd-l'), td(fmt(g.value)), ...(['count', 'avg', 'balance'].includes(spec.measure) ? [] : [td(tot ? Math.round((g.value / tot) * 100) + '%' : '—')]), ...(spec.measure === 'balance' ? [] : [td(g.n ? String(g.n) : '')])); tb.append(tr); });
+      if (!['avg'].includes(spec.measure) && list.length > 1) { const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.append(td('Total', 'fd-l'), td(fmt(tot)), ...(['count', 'balance'].includes(spec.measure) ? [] : [td('')]), ...(spec.measure === 'balance' ? [] : [td('')])); tb.append(tr); }
+      t.append(tb); const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(t); el.append(sc); return; }
+    const max = Math.max(...list.map((g) => Math.abs(g.value)), 0.01), wrap = document.createElement('div'); wrap.className = 'fd-crbars';
+    list.forEach((g) => { const row = document.createElement('div'); row.className = 'fd-crbar'; const a = document.createElement('span'); a.className = 'fd-crlab'; a.textContent = g.key; a.title = g.key;
+      const bar = document.createElement('span'); bar.className = 'fd-crtrack'; const fill = document.createElement('i'); fill.style.width = Math.max(1, (Math.abs(g.value) / max) * 100) + '%'; if (g.value < 0) fill.className = 'is-neg'; bar.append(fill);
+      const v = document.createElement('span'); v.className = 'fd-crval'; v.textContent = fmt(g.value); row.append(a, bar, v); wrap.append(row); });
+    el.append(wrap);
+    if (list.length > 1 && !['avg', 'balance'].includes(spec.measure)) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Total ${fmt(tot)}${r.count > list.length ? ` across ${r.count} ${(CR_BY[spec.by] || '').toLowerCase()}${/y$/.test(CR_BY[spec.by] || '') ? '' : 's'}` : ''}.`; el.append(p); }
+  }
+  // ---- the editor (inside the section; the preview below it updates as you change things) ----
+  function crEditor(el, d) {
+    const box = document.createElement('div'); box.className = 'fd-rb fd-creditor';
+    const redraw = () => dash.draw('crView');
+    const sel = (label, opts, val, on) => { const l = document.createElement('label'); l.className = 'fd-field'; l.textContent = label; const s = document.createElement('select'); s.className = 'dash-select'; Object.entries(opts).forEach(([k, v]) => s.append(new Option(v, k))); s.value = val in opts ? val : Object.keys(opts)[0]; s.addEventListener('change', () => { on(s.value); redraw(); }); l.append(s); return l; };
+    const inp = (label, val, ph, on, list) => { const l = document.createElement('label'); l.className = 'fd-field'; l.textContent = label; const i = document.createElement('input'); i.type = 'text'; i.value = val || ''; i.placeholder = ph || ''; if (list) i.setAttribute('list', list); let tm; i.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { on(i.value); redraw(); }, 350); }); l.append(i); return l; };
+    const csv = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
+    d.filter = d.filter || {};
+    const r1 = document.createElement('div'); r1.className = 'fd-crrow';
+    r1.append(inp('Title', d.title, 'e.g. Eating out by month', (v) => { d.title = v.slice(0, 60); }),
+      sel('Show', CR_MEAS, d.measure, (v) => { d.measure = v; if (v === 'balance' && !(d.by in CR_BY_BAL)) d.by = 'account'; if (v !== 'balance' && d.by === 'kind') d.by = 'category'; }),
+      sel('Grouped by', d.measure === 'balance' ? CR_BY_BAL : CR_BY, d.by, (v) => { d.by = v; }),
+      sel('Time', CR_WHEN, d.when, (v) => { d.when = v; }),
+      sel('As', CR_SHOW, d.show, (v) => { d.show = v; }),
+      sel('Show up to', { 5: '5 groups', 10: '10 groups', 20: '20 groups', 50: '50 groups' }, String(d.top || 10), (v) => { d.top = Number(v); }));
+    const r2 = document.createElement('div'); r2.className = 'fd-crrow';
+    if (d.measure !== 'balance') r2.append(inp('Only these categories', (d.filter.categories || []).join(', '), 'all categories (separate with commas)', (v) => { d.filter.categories = csv(v); }, 'fd-cats'));
+    r2.append(inp(d.measure === 'balance' ? 'Only these accounts' : 'Only these accounts', (d.filter.accounts || []).join(', '), 'all accounts', (v) => { d.filter.accounts = csv(v); }, 'fd-accts'));
+    r2.append(inp(d.measure === 'balance' ? 'Account name contains' : 'Vendor or description contains', d.filter.text, 'any', (v) => { d.filter.text = v.trim().slice(0, 40); }));
+    if (d.measure !== 'balance') r2.append(inp('Smallest amount', d.filter.min == null ? '' : String(d.filter.min), 'any', (v) => { const n = Number(String(v).replace(/[^0-9.]/g, '')); d.filter.min = v.trim() && n > 0 ? n : null; }));
+    const msg = document.createElement('span'); msg.className = 'fd-zero';
+    const r3 = document.createElement('div'); r3.className = 'fd-rb-row';
+    r3.append(sbtn('Save', 'Save this report', async () => { if (!String(d.title || '').trim()) d.title = crDesc(d).split(' · ')[0]; const l = crList().filter((x) => x.id !== d.id); const at = crList().findIndex((x) => x.id === d.id); l.splice(at < 0 ? l.length : at, 0, d); delete crDraft[d.id]; msg.textContent = 'Saving…'; await crSave(l); crSync(); dash.draw('crView'); }, true),
+      sbtn('Cancel', 'Close without saving', () => { const existed = crList().some((x) => x.id === d.id); delete crDraft[d.id]; if (!existed) { crRemoveEverywhere(d.id); } else dash.draw('crView'); }),
+      sbtn('Delete report', 'Delete this report', async (e) => { if (!e.target.dataset.sure) { e.target.dataset.sure = '1'; e.target.textContent = 'Click again to delete'; return; } delete crDraft[d.id]; await crSave(crList().filter((x) => x.id !== d.id)); crRemoveEverywhere(d.id); }), msg);
+    const note = document.createElement('p'); note.className = 'fd-note'; note.textContent = 'The preview below updates as you change things. Separate several categories or accounts with commas. Saved reports can be placed on any tab with ✎ Arrange, added to a ★ report, or shown as a tile.';
+    const fl = d.filter || {}, nF = (fl.categories || []).length + (fl.accounts || []).length + (fl.text ? 1 : 0) + (fl.min ? 1 : 0);
+    const fd = document.createElement('details'); fd.className = 'fd-crfilters'; fd.open = nF > 0 || window.innerWidth >= 760; const fs = document.createElement('summary'); fs.textContent = nF ? `Filters (${nF})` : 'Filters'; fd.append(fs, r2);
+    box.append(r1, fd, note, r3); el.append(box);
+  }
+  function crRemoveEverywhere(id) { const sid = 'cr-' + id;
+    for (const t of Object.values(LAYOUT.tabs)) { if (Array.isArray(t.items)) t.items = t.items.filter((x) => x.id !== sid); if (Array.isArray(t.tiles)) t.tiles = t.tiles.filter((x) => x !== 'cr:' + id); }
+    REPS.forEach((r) => { r.items = (r.items || []).filter((x) => x.id !== sid); if (Array.isArray(r.tiles)) r.tiles = r.tiles.filter((x) => x !== 'cr:' + id); }); laySave(); repSave();
+    const s = document.getElementById(sid); if (s) { const i = ALL.indexOf(sid); if (i >= 0) ALL.splice(i, 1); home.delete(s); s.remove(); } delete GT['cr:' + id]; const j = ALL_TILES.indexOf('cr:' + id); if (j >= 0) ALL_TILES.splice(j, 1);
+    showGroup(curTab()); }
+  dash.draw('crView', (el) => {
+    const id = el.dataset.cr, saved = crList().find((x) => x.id === id), d = crDraft[id], spec = d || saved; el.replaceChildren();
+    const sec = el.closest('section'); if (sec) { const eb = sec.querySelector('.fd-credit'); if (eb) eb.hidden = !!d; if (spec) { sec.querySelector('h2').textContent = spec.title || 'My report'; sec.querySelector('.fd-crdesc').textContent = crDesc(spec); } }
+    if (!spec) return; if (st('txns', 'balances', 'period') !== 'ok') return;
+    if (d) crEditor(el, d);
+    try { crDraw(el, spec); } catch (e) { const p = document.createElement('p'); p.className = 'fd-note fd-bad'; p.textContent = 'This report couldn’t be drawn: ' + e.message; el.append(p); }
+  });
+  // New report: from Arrange's "Add a section" list, or a ★ report's "Add a view" list
+  const crNew = (place) => { const id = Date.now().toString(36); const d = { id, title: '', measure: 'spend', by: 'category', when: 'range', show: 'bars', top: 10, filter: {} };
+    crDraft[id] = d; crSection(d); place('cr-' + id); setTimeout(() => { const s = document.getElementById('cr-' + id); if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 120); };
+  window.__fdCrNew = crNew;
+  dash.onData(() => { if (st('prefs') === 'ok') crSync(); });
   NP.closed = NP.closed || {};
   ALL.forEach((id) => q(id).forEach((s) => {
     const h = s.querySelector(':scope > h2'); if (!h) return;

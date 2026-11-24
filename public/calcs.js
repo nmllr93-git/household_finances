@@ -682,3 +682,47 @@ dash.calc('balance_totals', {
     return rows;
   },
 });
+
+// ---- Custom reports: one spec → grouped totals, plus a month-by-month series for each group ----
+// spec = { measure: spend|income|net|count|avg|balance, by: category|vendor|account|tag|month|weekday|none,
+//          filter: { categories: [], accounts: [], text: '', min: number|null }, top: n }
+// months: the months to include ('YYYY-MM'). Works in cents. Transfers never count as spending or income.
+const CR_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function customReport(spec, txns, balances, months, book) {
+  const s = spec || {}, f = s.filter || {}, inM = new Set(months || []), c = (x) => Math.round(Number(x) * 100);
+  const lc = (x) => String(x || '').trim().toLowerCase();
+  const cats = new Set((f.categories || []).map(lc).filter(Boolean)), accts = new Set((f.accounts || []).map(lc).filter(Boolean)), text = lc(f.text), min = f.min == null || f.min === '' ? null : c(f.min);
+  const groups = new Map(); const g = (key) => { if (!groups.has(key)) groups.set(key, { key, value: 0, n: 0, inc: 0, exp: 0, byMonth: {} }); return groups.get(key); };
+  if (s.measure === 'balance') {
+    const rowsB = (balances || []).filter((r) => r.book === book && inM.has(r.month) && (!accts.size || accts.has(lc(r.label)) || accts.has(lc(r.account))) && (!text || lc(r.label).includes(text)));
+    const last = [...new Set(rowsB.map((r) => r.month))].sort().pop();
+    for (const r of rowsB) { const key = s.by === 'account' ? r.label || r.account : s.by === 'month' ? r.month : s.by === 'kind' ? r.kind : 'Total';
+      const x = g(key); x.byMonth[r.month] = (x.byMonth[r.month] || 0) + c(r.balance); if (r.month === last && s.by !== 'month') x.value += c(r.balance); }
+    if (s.by === 'month') for (const x of groups.values()) x.value = x.byMonth[x.key] || 0;
+  } else {
+    const want = s.measure === 'income' ? ['income'] : s.measure === 'net' ? ['income', 'expense'] : ['expense'];
+    for (const t of txns || []) {
+      if (t.book !== book || !inM.has(t.month) || !want.includes(t.type)) continue;
+      if (cats.size && !cats.has(lc(t.category || 'Uncategorized'))) continue;
+      if (accts.size && !accts.has(lc(t.source))) continue;
+      if (text && !(lc(t.vendor).includes(text) || lc(t.description).includes(text))) continue;
+      const a = c(t.amount); if (min != null && Math.abs(a) < min) continue;
+      const keys = s.by === 'category' ? [t.category || 'Uncategorized'] : s.by === 'vendor' ? [t.vendor || t.description || 'Unknown'] : s.by === 'account' ? [t.source || 'Unknown'] : s.by === 'tag' ? (t.tags && t.tags.length ? t.tags : []) : s.by === 'month' ? [t.month] : s.by === 'weekday' ? [CR_DAYS[new Date(String(t.date).slice(0, 10) + 'T12:00:00Z').getUTCDay()] || 'Unknown'] : ['Total'];
+      for (const k of keys) { const x = g(k); x.n++; if (t.type === 'income') x.inc += Math.abs(a); else x.exp += Math.abs(a);
+        const v = s.measure === 'count' ? 100 : t.type === 'income' ? Math.abs(a) : s.measure === 'net' ? -Math.abs(a) : Math.abs(a); x.byMonth[t.month] = (x.byMonth[t.month] || 0) + v; }
+    }
+    for (const x of groups.values()) x.value = s.measure === 'count' ? x.n * 100 : s.measure === 'avg' ? (x.n ? Math.round(x.exp / x.n) : 0) : s.measure === 'net' ? x.inc - x.exp : s.measure === 'income' ? x.inc : x.exp;
+  }
+  let list = [...groups.values()];
+  const ORDER = s.by === 'month' ? (a, b) => (a.key < b.key ? -1 : 1) : s.by === 'weekday' ? (a, b) => CR_DAYS.indexOf(a.key) - CR_DAYS.indexOf(b.key) : (a, b) => Math.abs(b.value) - Math.abs(a.value);
+  list.sort(ORDER);
+  const top = Math.max(1, Math.min(50, Number(s.top) || 10)), all = list.length;
+  let other = null;
+  if (!['month', 'weekday', 'none'].includes(s.by) && list.length > top) { const rest = list.slice(top); list = list.slice(0, top);
+    if (!['count', 'avg', 'balance'].includes(s.measure)) other = { key: `Everything else (${rest.length})`, value: rest.reduce((t, x) => t + x.value, 0), byMonth: {} }; }
+  const out = (x) => ({ key: x.key, value: x.value / 100, n: x.n || 0, byMonth: Object.fromEntries((months || []).map((m) => [m, (x.byMonth[m] || 0) / 100])) });
+  const totalC = s.measure === 'avg' ? (() => { const e = [...groups.values()].reduce((t, x) => t + x.exp, 0), n = [...groups.values()].reduce((t, x) => t + x.n, 0); return n ? Math.round(e / n) : 0; })()
+    : s.measure === 'balance' && s.by === 'month' ? (list.length ? list[list.length - 1].value : 0) : [...groups.values()].reduce((t, x) => t + x.value, 0);
+  return { groups: list.map(out), other: other && out(other), total: totalC / 100, count: all, months: months || [] };
+}
+if (typeof window !== 'undefined') window.FDCustom = customReport;
