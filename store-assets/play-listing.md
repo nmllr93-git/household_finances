@@ -51,7 +51,7 @@ Optional market and economy data comes straight from free public services (with 
 Questions or ideas: contact@larenest.app
 
 **Category:** Finance
-**Tags:** Budgeting, Personal finance, Money management
+**Tags:** Personal finance (the only fitting tag in the Play Console list)
 **Contact email:** contact@larenest.app · **Website:** https://larenest.app · **Privacy policy:** https://larenest.app/privacy
 
 ---
