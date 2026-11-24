@@ -1720,7 +1720,8 @@
           // Google Sheets history is read-only, so leave a "removed" marker: its sheet balances stop counting and it leaves every list
           const reg = ae.id ? (dash.data('accounts').data || []).find((x) => x.id === ae.id) : null;
           const names = [...new Set([ae.name, ae.match, ...((reg && reg.aliases) || [])].filter(Boolean))];
-          const nk = (x) => String(x || '').trim().toLowerCase().replace(/^[^–]+ – /, '');
+          // same loose match the balances use: owner in front or in brackets at the end, punctuation ignored
+          const nk = (x) => String(x || '').trim().toLowerCase().replace(/^[^–]+ – /, '').replace(/\s*\([^)]*\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
           if (!sib.length && (dash.data('sheet_balances').data || []).some((r) => r.book === book() && names.some((n) => nk(n) === nk(r.account))))
             await d.collection('data/household/accounts').add({ book: book(), name: names[0], match: ae.match || names[0], aliases: names.slice(1), removed: true, kind: '', type: '', active: false, createdAt: new Date().toISOString() });
           if (ae.id) await d.doc('data/household/accounts/' + ae.id).delete();

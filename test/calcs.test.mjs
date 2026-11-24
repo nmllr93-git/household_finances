@@ -260,3 +260,22 @@ test('custom report: balances use the latest month in the window, by account or 
   assert.deepEqual(CR({ measure: 'balance', by: 'account' }, [], B, M2, 'P').groups.map((g) => [g.key, g.value]), [['Brokerage', 1000.01], ['Checking', 150]]);
   const bm = CR({ measure: 'balance', by: 'month' }, [], B, M2, 'P'); assert.deepEqual(bm.groups.map((g) => g.value), [100, 1150.01]); assert.equal(bm.total, 1150.01);
 });
+
+// ---- deleted accounts stay deleted ----
+const SB = (account, balance) => ({ book: 'Personal', month: '2026-10', kind: 'investment', account, balance, estimate: false, source: 'Sheet' });
+const OCT = imp('oct', 'Checking', 'deposit', [tx('2026-10-05', 'COFFEE', 3)]); // puts October in the date range
+const balNames = (get) => [...new Set(get('balances').map((r) => r.label))].sort();
+test('a removed account stays hidden whichever way its name is written (owner prefix or suffix, punctuation)', () => {
+  const marker = { book: 'Personal', name: 'Example 401k', match: 'Example 401k', aliases: [], removed: true };
+  for (const written of ['Example 401k', 'Example 401k (Pat)', 'Pat – Example 401k', 'Example-401k', 'EXAMPLE 401K']) {
+    const get = engine({ imports: [OCT], sheet_balances: [SB(written, 500), SB('Other IRA', 100)], accounts: [marker] });
+    assert.deepEqual(J(balNames(get)), ['Other IRA'], written);
+  }
+});
+test('a removed account also hides balances recorded under that name, and adding it back wins', () => {
+  const marker = { book: 'Personal', name: 'Example Roth IRA (Pat)', match: 'Example Roth IRA (Pat)', aliases: [], removed: true };
+  const b = imp('b1', 'Example Roth IRA', 'investment', [], { balance: 900, balanceMonth: '2026-10' });
+  assert.deepEqual(J(balNames(engine({ imports: [OCT, b], sheet_balances: [SB('Example Roth IRA (Pat)', 800)], accounts: [marker] }))), []);
+  const again = { book: 'Personal', name: 'Example Roth IRA', match: 'Example Roth IRA', aliases: [], kind: 'investment' };
+  assert.ok(balNames(engine({ imports: [OCT, b], accounts: [marker, again] })).includes('Example Roth IRA'));
+});

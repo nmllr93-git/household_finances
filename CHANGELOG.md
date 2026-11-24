@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Deleted accounts stay deleted: the match now ignores an owner name in brackets or in front and punctuation, and also hides balances recorded under that name. Adding an account again under the same name brings it back
 - Cash forecast: look ahead 90 days, 6 months, 1 year or 2 years
 - Every tab has its own row of tiles (Accounts, Expenses, Budget, Planning, Transactions and more)
 - ✎ Arrange: move, resize, add and remove tiles and sections on any tab; layouts sync across devices

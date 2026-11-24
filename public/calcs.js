@@ -587,12 +587,16 @@ dash.calc('balances', {
   fn: (sheet, importBatches, period, accts) => {
     // One identity per account: names match ignoring capitals and an "Owner – " prefix, and names merged into an account (aliases) count as it.
     const nk = (s) => String(s || '').trim().toLowerCase().replace(/^[^–]+ – /, '');
-    const alias = {}, gone = new Set();
-    // deleted accounts that had Google Sheets history leave a "removed" marker: their sheet balances no longer count
-    for (const a of accts || []) for (const n of [a.name, a.match, ...(Array.isArray(a.aliases) ? a.aliases : [])]) if (n) { if (a.removed) gone.add(`${a.book}|${nk(n)}`); else alias[`${a.book}|${nk(n)}`] = a.name; }
+    // Looser key for "removed" markers: also ignores an owner in brackets at the end ("… (Nate)") and punctuation,
+    // so a deleted account stays deleted whichever way its name was written in the sheet or a statement.
+    const gk = (s) => nk(s).replace(/\s*\([^)]*\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const alias = {}, goneK = new Set(), live = new Set();
+    for (const a of accts || []) for (const n of [a.name, a.match, ...(Array.isArray(a.aliases) ? a.aliases : [])]) if (n) { if (a.removed) goneK.add(`${a.book}|${gk(n)}`); else { alias[`${a.book}|${nk(n)}`] = a.name; live.add(`${a.book}|${gk(n)}`); } }
+    // An account you add again under the same name wins over an old "removed" marker.
+    const isGone = (book, n) => goneK.has(`${book}|${gk(n)}`) && !live.has(`${book}|${gk(n)}`);
     const canon = (book, n) => alias[`${book}|${nk(n)}`] || String(n || '').replace(/^[^–]+ – /, '') || 'Account';
-    importBatches = (importBatches || []).map((b) => ({ ...b, accountName: canon(b.book, b.accountName) }));
-    sheet = (sheet || []).filter((r) => !gone.has(`${r.book}|${nk(r.account)}`)).map((r) => ({ ...r, account: canon(r.book, r.account) }));
+    importBatches = (importBatches || []).filter((b) => !isGone(b.book, b.accountName)).map((b) => ({ ...b, accountName: canon(b.book, b.accountName) }));
+    sheet = (sheet || []).filter((r) => !isGone(r.book, r.account)).map((r) => ({ ...r, account: canon(r.book, r.account) }));
     const inWin = new Set((period || []).map((m) => m.month));
     const latest = {};
     for (const b of importBatches || []) {
