@@ -4289,7 +4289,8 @@
       el.append(box); return;
     }
     el.append(rbtn('+ Add home, vehicle or other asset', () => { asEd = { i: null, type: 'home', name: '', value: '', asOf: new Date().toLocaleDateString('en-CA'), depr: 0, _autoDepr: true, vin: '', loan: '' }; dash.draw('assetView'); }, false));
-    if (!list.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Add your home, vehicles or other valuables to include them in your net worth.'; el.append(p); return; }
+    const shA = (() => { try { return sharedIn().filter((d) => d.kind === 'asset'); } catch { return []; } })();
+    if (!list.length && !shA.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Add your home, vehicles or other valuables to include them in your net worth.'; el.append(p); return; }
     const t = document.createElement('table'); t.className = 'fd-table'; const tb = document.createElement('tbody');
     const hr = document.createElement('tr'); ['Asset', 'Value now', 'Owed', 'Equity', 'Last updated'].forEach((c, i) => { const th = document.createElement('th'); th.textContent = c; if (!i) th.className = 'fd-l'; hr.append(th); }); tb.append(hr);
     list.forEach((a, i) => {
@@ -4303,6 +4304,14 @@
       tr.addEventListener('click', () => { asEd = { i, ...a, _autoDepr: false }; dash.draw('assetView'); });
       tb.append(tr);
     });
+    // assets shared into this dashboard from another one: shown with ⇄, edited on their own dashboard
+    for (const d of shA) {
+      const from = (meBooks().find((b) => b.id === d.src) || {}).name || 'another dashboard', inc = shIncl(d).nw, val = Number(d.balance) || 0;
+      const tr = document.createElement('tr'); tr.className = 'fd-sharedrow'; const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = d.name; nm.append(b);
+      const ic = document.createElement('span'); ic.className = 'fd-shared'; ic.textContent = '⇄'; ic.title = `Shared from ${from}${inc ? '' : ' (not counted in net worth here)'}`; ic.setAttribute('aria-label', ic.title); nm.append(' ', ic);
+      const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = `${(ASSET_T[d.type] || ASSET_T.other)[0]} · from ${from}. Edit it there.`; nm.append(sub);
+      tr.append(nm, td(money0(val), inc ? '' : 'fd-zero'), td('–'), td(money0(val), (inc ? 'fd-good' : 'fd-zero')), td(d.asOf ? new Date(d.asOf + '-15T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '–', 'fd-zero')); tb.append(tr);
+    }
     t.append(tb); el.append(t);
   });
 
