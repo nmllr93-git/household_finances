@@ -1941,6 +1941,7 @@
   });
 
   // ---- data health: things worth fixing so the numbers stay right ----
+  const HDONE = {}; // account alerts just dismissed on this screen: their row stays to offer “Don’t check this account”
   const healthItems = () => {
     const out = [], now = new Date();
     const lastTx = {};
@@ -1948,16 +1949,18 @@
       let l = b.txns; if (typeof l === 'string') { try { l = JSON.parse(l); } catch { l = []; } }
       const k = keyA(b.accountName); for (const t of l || []) if (t.date && (!lastTx[k] || t.date > lastTx[k])) lastTx[k] = t.date;
     }
+    const MUTED = new Set(prefGet('healthMuted', []) || []); // accounts you asked not to check for new statements
     for (const a of acctList()) {
       if (a.active === false) continue;
       const keys = [a.key, keyA(a.name), ...((a.reg && a.reg.aliases) || []).map(keyA)];
-      if ((a.kind === 'deposit' || a.kind === 'credit') && a.reg) {
+      if (MUTED.has(a.key)) { /* not checked for statements or balances */ }
+      else if ((a.kind === 'deposit' || a.kind === 'credit') && a.reg) {
         const lt = keys.map((k) => lastTx[k]).filter(Boolean).sort().pop();
-        if (!lt) out.push({ id: 'notx:' + a.key, sig: '0', lvl: 'info', text: `${a.name}: no transactions imported yet, so its balance won't update on its own. Import a statement.`, go: 'import' });
-        else if (daysSince(lt) > 35) out.push({ id: 'stale:' + a.key, sig: lt, lvl: 'warn', text: `${a.name}: newest transaction is ${daysSince(lt)} days old (${lt}). Import a newer statement.`, go: 'import' });
+        if (!lt) out.push({ id: 'notx:' + a.key, acct: a.key, acctName: a.name, sig: '0', lvl: 'info', text: `${a.name}: no transactions imported yet, so its balance won't update on its own. Import a statement.`, go: 'import' });
+        else if (daysSince(lt) > 35) out.push({ id: 'stale:' + a.key, acct: a.key, acctName: a.name, sig: lt, lvl: 'warn', text: `${a.name}: newest transaction is ${daysSince(lt)} days old (${lt}). Import a newer statement.`, go: 'import' });
       } else if (a.bal && a.bal.balance !== 0 && a.kind !== 'deposit' && a.kind !== 'credit') {
         const m = a.bal.month, age = now.getUTCFullYear() * 12 + now.getUTCMonth() - (+m.slice(0, 4) * 12 + +m.slice(5, 7) - 1);
-        if (age >= 2) out.push({ id: 'oldbal:' + a.key, sig: m, lvl: 'info', text: `${a.name}: latest balance is from ${longName(m)}. Record a newer one.`, go: 'import' });
+        if (age >= 2) out.push({ id: 'oldbal:' + a.key, acct: a.key, acctName: a.name, sig: m, lvl: 'info', text: `${a.name}: latest balance is from ${longName(m)}. Record a newer one.`, go: 'import' });
       }
       if (a.rateEnds) {
         const d = -daysSince(a.rateEnds);
@@ -1983,17 +1986,31 @@
     // Dismissed alerts are saved with the dashboard (every device). One comes back only if what it's about changes
     // (a newer statement that also goes stale, a different count, a new price), because its "sig" no longer matches.
     const DIS = prefGet('healthDismissed', {}) || {}, all = healthItems().map((it) => ({ ...it, id: it.id || 'msg:' + it.text, sig: it.sig || it.text }));
-    const items = all.filter((it) => DIS[it.id] !== it.sig), hiddenN = all.length - items.length;
+    const items = all.filter((it) => DIS[it.id] !== it.sig || HDONE[it.id]), hiddenN = all.length - items.length;
     const saveDis = (next) => prefSet('healthDismissed', Object.fromEntries(Object.entries(next).filter(([k]) => all.some((x) => x.id === k)).slice(-200)));
     if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note fd-good'; p.textContent = hiddenN ? 'Nothing else needs attention.' : 'All good: accounts are up to date and nothing needs attention.'; el.append(p); }
+    const confirmRow = (r, it) => { r.replaceChildren(); r.className = 'fd-hl fd-hl-done'; const m = document.createElement('span'); m.textContent = `Dismissed. ${it.acctName} will be flagged again if a newer statement also goes stale.`;
+        const a2 = document.createElement('span'); a2.className = 'fd-hl-acts';
+        const mute = rbtn('Don’t check this account', () => { delete HDONE[it.id]; const l = new Set(prefGet('healthMuted', []) || []); l.add(it.acct); prefSet('healthMuted', [...l].slice(-100)); });
+        mute.title = 'Never warn about statements or balances for this account. Undo with “Check again” below the alerts.';
+        a2.append(mute, rbtn('Undo', () => { delete HDONE[it.id]; const n = { ...DIS }; delete n[it.id]; saveDis(n); }), rbtn('OK', () => { delete HDONE[it.id]; dash.draw('healthRows'); }));
+        r.append(m, a2); };
     for (const it of items.slice(0, 12)) {
       const r = document.createElement('div'); r.className = 'fd-hl ' + it.lvl;
+      if (HDONE[it.id]) { confirmRow(r, it); el.append(r); continue; }
       const t = document.createElement('span'); t.textContent = (it.lvl === 'warn' ? '⚠ ' : '• ') + it.text;
       const acts = document.createElement('span'); acts.className = 'fd-hl-acts';
       acts.append(rbtn({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show' }[it.go] || 'Open', () => goTo(it.go)));
-      if (!document.body.classList.contains('fd-readonly')) { const x = rbtn('Dismiss', () => { r.remove(); saveDis({ ...DIS, [it.id]: it.sig }); }); x.title = 'Remove this alert on every device. It comes back only if something about it changes.'; acts.append(x); }
+      if (!document.body.classList.contains('fd-readonly')) { const x = rbtn('Dismiss', () => {
+        if (!it.acct) { r.remove(); saveDis({ ...DIS, [it.id]: it.sig }); return; }
+        HDONE[it.id] = true; confirmRow(r, it); saveDis({ ...DIS, [it.id]: it.sig }); }); // an account alert: offer to stop checking that account
+        x.title = 'Remove this alert on every device. It comes back only if something about it changes.'; acts.append(x); }
       r.append(t, acts); el.append(r);
     }
+    { const muted = (prefGet('healthMuted', []) || []).filter(Boolean); if (muted.length && !document.body.classList.contains('fd-readonly')) {
+      const names = muted.map((k) => (acctList().find((a) => a.key === k) || {}).name).filter(Boolean);
+      const p = document.createElement('p'); p.className = 'fd-note'; p.append(`Not checked for new statements: ${names.join(', ') || muted.length + ' account' + (muted.length === 1 ? '' : 's')}. `);
+      const u = document.createElement('button'); u.type = 'button'; u.className = 'fd-link'; u.textContent = 'Check again'; u.addEventListener('click', () => prefSet('healthMuted', [])); p.append(u); el.append(p); } }
     if (hiddenN && !document.body.classList.contains('fd-readonly')) { const p = document.createElement('p'); p.className = 'fd-note'; p.append(`${hiddenN} dismissed. `);
       const u = document.createElement('button'); u.type = 'button'; u.className = 'fd-link'; u.textContent = 'Show them again'; u.addEventListener('click', () => saveDis({})); p.append(u); el.append(p); }
   });

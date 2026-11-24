@@ -627,3 +627,4 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-gs-acts { display: inline-flex; gap: 14px; align-items: center; }
 .fd-gs.is-folded .fd-gs-head { margin-bottom: 0; }
 .fd-hl-acts { display: inline-flex; gap: 6px; flex: none; }
+.fd-hl.fd-hl-done > span:first-child { color: var(--color-fg-muted); }
