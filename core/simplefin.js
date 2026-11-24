@@ -108,19 +108,28 @@
         const start = (st.lastSync ? st.lastSync - OVERLAP_DAYS * 864e5 : now - FIRST_DAYS * 864e5) / 1000;
         let res; try { res = await P.pull(st.access, start); } catch (e) { st.lastError = e.message; await env.save(bookId, st); throw e; }
         refreshList(st, res.accounts);
-        const data = (await env.bookData(bookId)) || {}, have = new Map(), known = [...(data.accounts || [])];
+        // What's already in each account, by the same rule the dashboard uses (public/calcs.js makeDupeChecker): a synced
+        // transaction is skipped if its id is already there, or if it matches a row from a statement without ids that
+        // hasn't been matched yet. Two genuine identical purchases stay two.
+        const data = (await env.bookData(bookId)) || {}, known = [...(data.accounts || [])], have = new Map();
+        const acctOf = (name) => { const k = String(name || '').toLowerCase(); if (!have.has(k)) have.set(k, { ids: new Set(), fp: new Map() }); return have.get(k); };
         for (const imp of data.imports || []) { let l = imp.txns; if (typeof l === 'string') { try { l = JSON.parse(l); } catch { l = []; } }
-          const k = String(imp.accountName || '').toLowerCase(); if (!have.has(k)) have.set(k, new Set()); for (const t of l || []) have.get(k).add(`${t.date}|${Number(t.amount)}|${t.description}`); }
+          const A = acctOf(imp.accountName || imp.fileName), per = new Map();
+          for (const t of l || []) { if (t.id) { A.ids.add(String(t.id)); continue; } const f = `${t.date}|${Number(t.amount)}|${String(t.description || '').trim()}`; per.set(f, (per.get(f) || 0) + 1); }
+          for (const [f, n] of per) A.fp.set(f, Math.max(A.fp.get(f) || 0, n)); }
         let added = 0, docs = 0;
         for (const a of res.accounts) {
           const m = st.accounts[String(a.id)]; if (!m || m.skip || m.review) continue;
-          const seen = new Set(m.seen || []), dup = have.get(String(m.map).toLowerCase()) || new Set(), txns = [];
+          const seen = new Set(m.seen || []), A = acctOf(m.map), txns = [];
           for (const t of Array.isArray(a.transactions) ? a.transactions : []) {
             if (t.pending || !t.posted) continue; // only posted transactions, so nothing counts twice when a pending charge settles
             const id = String(t.id || ''); if (id && seen.has(id)) continue;
             const amount = Math.round((m.flip ? 1 : -1) * Number(t.amount) * 100) / 100; if (!isFinite(amount) || !amount) { if (id) seen.add(id); continue; }
-            const row = { date: day(t.posted), description: String(t.description || t.payee || '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Transaction', amount };
-            if (id) seen.add(id); if (dup.has(`${row.date}|${row.amount}|${row.description}`)) continue;
+            const sid = id ? (P.id || 'sync') + ':' + String(a.id) + ':' + id : ''; // the provider's id, scoped to provider and account
+            const row = { date: day(t.posted), description: String(t.description || t.payee || '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Transaction', amount, ...(sid ? { id: sid } : {}) };
+            if (id) seen.add(id);
+            if (sid && A.ids.has(sid)) continue;
+            const f = `${row.date}|${row.amount}|${row.description}`, left = A.fp.get(f) || 0; if (left > 0) { A.fp.set(f, left - 1); continue; } // already imported from a statement
             txns.push(row);
           }
           const rawBal = Number(a.balance), bal = isFinite(rawBal) ? Math.round((OWED.test(m.kind) ? Math.abs(rawBal) : rawBal) * 100) / 100 : null;

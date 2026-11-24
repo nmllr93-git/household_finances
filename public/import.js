@@ -75,7 +75,8 @@
     const body = g.slice(hr + 1);
     const find = (re) => S.header.findIndex((h) => re.test(h.toLowerCase()));
     const c = { date: find(/trans.*date|^date$|posted|post date|date/), desc: find(/desc|payee|merchant|name|memo|details|transaction$/),
-      amount: find(/^amount|amount/), debit: find(/debit|withdraw|charge/), credit: find(/credit(?!.*card)|deposit/), balance: find(/balance/) };
+      amount: find(/^amount|amount/), debit: find(/debit|withdraw|charge/), credit: find(/credit(?!.*card)|deposit/), balance: find(/balance/),
+      id: find(/^fitid$|^transaction id$|^transaction number$|^reference( number| no\.?| #)?$|^ref(erence)? ?(no|#)$/) }; // the bank's own transaction id, when the file has one
     if (hr < 0) { // no header: guess from the cells
       const sample = body.slice(0, 20);
       const score = (i, f) => sample.filter((r) => f(r[i])).length;
@@ -90,6 +91,18 @@
     if (c.amount >= 0) { c.debit = -1; c.credit = -1; }
     S.cols = c;
   }
+  // Rows of this file that aren't already in the chosen account, by the same rule the dashboard uses (calcs.js makeDupeChecker).
+  // Saving keeps only these, so what the preview says is exactly what's added.
+  function newRows(rows) {
+    const fm = document.querySelector('#fd-import-form'), f = fm ? new FormData(fm) : null, book = f ? f.get('book') : '', acct = f ? String(f.get('account') || '') : '';
+    if (!acct || !window.FDDupeChecker) return rows;
+    const isDup = window.FDDupeChecker(), imp = dash.data('imports').status === 'ok' ? dash.data('imports').data || [] : [];
+    for (const b of imp) { if (String(b.accountName || b.fileName || '').toLowerCase() !== acct.toLowerCase()) continue; if (book && b.book !== book) continue;
+      let l = b.txns; if (typeof l === 'string') { try { l = JSON.parse(l); } catch { l = []; } }
+      for (const t of l || []) { const a = Number(t.amount); if (t.date && isFinite(a) && a) isDup({ ...b, book: 'x' }, t, a); } }
+    const me = { id: '__new__', book: 'x', accountName: acct };
+    return rows.filter((t) => !isDup(me, t, Number(t.amount)));
+  }
   function parseRows() {
     const c = S.cols, body = S.grid.slice(S.hdrRow + 1);
     const raw = [];
@@ -100,7 +113,7 @@
       if (c.amount >= 0) v = toNum(r[c.amount]);
       else { const d = toNum(r[c.debit]), cr = toNum(r[c.credit]); if (d === null && cr === null) continue; v = Math.abs(d || 0) - Math.abs(cr || 0); }
       if (v === null || v === 0) continue;
-      raw.push({ date, description: String(r[c.desc] ?? '').replace(/\s+/g, ' ').slice(0, 120), v, bal: c.balance >= 0 ? toNum(r[c.balance]) : null });
+      raw.push({ date, description: String(r[c.desc] ?? '').replace(/\s+/g, ' ').slice(0, 120), v, bal: c.balance >= 0 ? toNum(r[c.balance]) : null, id: c.id >= 0 ? String(r[c.id] ?? '').trim().slice(0, 80) : '' });
     }
     // Amount sign: stored as positive = money out
     let flip = false;
@@ -108,7 +121,7 @@
       if (S.sign === 'neg') flip = true;
       else if (S.sign === 'auto') flip = raw.filter((x) => x.v < 0).length > raw.length / 2;
     }
-    S.parsed = raw.map((x) => ({ date: x.date, description: x.description, amount: Math.round((flip ? -x.v : x.v) * 100) / 100, bal: x.bal }));
+    S.parsed = raw.map((x) => ({ date: x.date, description: x.description, amount: Math.round((flip ? -x.v : x.v) * 100) / 100, bal: x.bal, ...(x.id ? { id: x.id } : {}) }));
     S.flip = flip;
   }
   function fillBalance() {
@@ -167,12 +180,10 @@
     el.append(sum);
     if (p.length) {
       const fm = document.querySelector('#fd-import-form');
-      const bk = fm ? new FormData(fm).get('book') : '', seen = new Set();
-      const imp = dash.data('imports').status === 'ok' ? dash.data('imports').data || [] : [];
-      for (const b of imp) { if (b.book !== bk) continue; let l = b.txns; if (typeof l === 'string') { try { l = JSON.parse(l); } catch { l = []; } } for (const t of l || []) seen.add(`${t.date}|${Number(t.amount)}|${t.description}`); }
-      const dup = p.filter((x) => seen.has(`${x.date}|${Number(x.amount)}|${x.description}`)).length;
+      const acct = fm ? String(new FormData(fm).get('account') || '') : '';
+      const dup = p.length - newRows(p).length;
       const n = document.createElement('p'); n.className = 'fd-note' + (dup ? ' fd-warn' : '');
-      n.textContent = dup ? `${dup} of ${p.length} rows are already in the dashboard and will be skipped.` : `All ${p.length} rows are new.`;
+      n.textContent = !acct ? `${p.length} rows. Choose the account above to check them against what’s already there.` : dup ? `${dup} of ${p.length} rows are already in ${acct} and won’t be added again.` : `All ${p.length} rows are new for ${acct}.`;
       el.append(n);
     }
     if (p.length) {
@@ -334,10 +345,10 @@
       const b = m[1], amt = Number(tag(b, 'TRNAMT').replace(/,/g, '')), date = dt(tag(b, 'DTPOSTED'));
       if (!date || !isFinite(amt) || !amt) continue;
       const desc = [tag(b, 'NAME'), tag(b, 'MEMO')].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' ').replace(/&amp;/g, '&').slice(0, 120);
-      rows.push([date, desc || tag(b, 'TRNTYPE') || 'Transaction', amt < 0 ? String(-amt) : '', amt > 0 ? String(amt) : '']);
+      rows.push([date, desc || tag(b, 'TRNTYPE') || 'Transaction', amt < 0 ? String(-amt) : '', amt > 0 ? String(amt) : '', tag(b, 'FITID')]); // FITID: the bank's id, so overlapping downloads aren't counted twice
     }
     S.pdf = null; dash.draw('pdfPick');
-    S.grid = rows.length ? [['Date', 'Description', 'Debit', 'Credit'], ...rows] : []; S.sign = 'auto';
+    S.grid = rows.length ? [['Date', 'Description', 'Debit', 'Credit', 'FITID'], ...rows] : []; S.sign = 'auto';
     if (S.grid.length) detect(); refresh();
     const lb = text.match(/<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|<\/CCSTMTRS>)/i);
     if (lb) { const bal = Number(tag(lb[1], 'BALAMT').replace(/,/g, '')), d = dt(tag(lb[1], 'DTASOF'));
@@ -367,7 +378,9 @@
     const bal = String(fd.get('balance') || '').trim();
     // refuse a too-large statement up front (with the count) rather than saving part of it
     const MAXR = 5000; if (S.parsed.length > MAXR) { impMsg = `This file has ${S.parsed.length.toLocaleString()} transactions; one import can hold up to ${MAXR.toLocaleString()}. Nothing was saved. Download a shorter date range (a year at a time, say) and import each one.`; dash.draw('impDebug'); return; }
-    const txns = S.parsed.map((x) => ({ date: x.date, description: x.description, amount: x.amount }));
+    const fresh = newRows(S.parsed), skipped = S.parsed.length - fresh.length;
+    if (!fresh.length && bal === '') { impMsg = `Nothing new: all ${S.parsed.length} rows are already in this account.`; dash.draw('impDebug'); return; }
+    const txns = fresh.map((x) => ({ date: x.date, description: x.description, amount: x.amount, ...(x.id ? { id: x.id } : {}) }));
     const dates = txns.map((x) => x.date).sort();
     const doc = { book: fd.get('book'), accountKind: String(fd.get('kind')).split(':')[0], accountType: String(fd.get('kind')).split(':')[1] || '', accountName: String(fd.get('account') || S.fileName).slice(0, 60), owner: '',
       fileName: S.fileName.slice(0, 80), importedAt: new Date().toISOString(), rowCount: txns.length, dateFrom: dates[0] || S.asOf || null, dateTo: dates[dates.length - 1] || S.asOf || null,
@@ -379,7 +392,7 @@
       if (!db) throw new Error('no db');
       await db.collection('data/household/imports').add(doc);
       await regAcct(db, doc);
-      show(IMP, 'fd-imp-ok');
+      show(IMP, 'fd-imp-ok'); document.querySelectorAll('#fd-imp-ok').forEach((el) => { el.textContent = `Saved ${txns.length} transaction${txns.length === 1 ? '' : 's'}${skipped ? ` (${skipped} already in this account were skipped)` : ''}. The dashboard now includes this statement.`; });
       S.grid = []; S.parsed = []; S.pdf = null; form.reset(); dash.draw('importPreview'); dash.draw('pdfPick');
       if (window.__fdQueueSaved) window.__fdQueueSaved();
     } catch (e) { show(IMP, 'fd-imp-err'); if (btn) btn.disabled = false; impMsg = 'Save error: ' + String((e && e.message) || e); dash.draw('impDebug'); }

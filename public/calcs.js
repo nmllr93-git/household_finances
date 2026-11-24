@@ -1,5 +1,21 @@
 // Calculations behind every number on the page. Each one is shown in Sources.
 
+// Duplicate rule shared by the dashboard, the import preview and saving (see where it's used in 'txns').
+function makeDupeChecker() {
+  const dupe = new Map(), ids = new Set();
+  return (b, t, amt) => {
+    const acct = `${b.book}|${String(b.accountName || b.fileName || '').toLowerCase()}`, fp = `${acct}|${t.date}|${amt}|${String(t.description || '').trim()}`;
+    let r = dupe.get(fp); if (!r) dupe.set(fp, (r = { byBatch: new Map(), counted: 0, anon: 0 }));
+    if (t.id) { const k = acct + '|id|' + t.id; if (ids.has(k)) return true; ids.add(k);
+      if (r.anon > 0) { r.anon--; return true; } // the same transaction already came in from a statement without ids
+      r.counted++; return false; }
+    const c = (r.byBatch.get(b.id) || 0) + 1; r.byBatch.set(b.id, c);
+    if (c <= r.counted) return true;
+    r.counted++; r.anon++; return false;
+  };
+}
+if (typeof window !== 'undefined') window.FDDupeChecker = makeDupeChecker;
+
 dash.calc('all_txns', {
   title: 'All transactions, cleaned (including ignored ones)',
   description: 'Sheet rows, imported statement rows and manual entries, each with a cleaned-up vendor name. For any book and month with imported statement transactions, the imports replace the sheet rows. Your rules are applied next, then your edits to single transactions (including splits). Transactions you ignored, or that an ignore rule matches, are marked as ignored.',
@@ -47,16 +63,18 @@ dash.calc('all_txns', {
     // Imported statements
     const imp = [];
     const importedMonths = new Map(); // book|month -> earliest imported date in that month
-    const seen = new Set();
+    // Duplicates (overlapping statements, a statement plus bank sync) are found per ACCOUNT, never across accounts:
+    //  - rows with the bank's own id (OFX FITID, bank-sync ids) are the same only if the id matches;
+    //  - rows without one: each statement counts its own identical rows (two $4.50 coffees on one day are two),
+    //    and an overlapping statement for the same account only adds rows beyond what's already counted.
+    const isDuplicate = makeDupeChecker();
     for (const b of importBatches || []) {
       let list = b.txns;
       if (typeof list === 'string') { try { list = JSON.parse(list); } catch { list = []; } }
       (list || []).forEach((t, j) => {
         const amt = Number(t.amount);
         if (!t.date || !isFinite(amt) || amt === 0) return;
-        const k = `${b.book}|${t.date}|${amt}|${t.description}`;
-        if (seen.has(k)) return;
-        seen.add(k);
+        if (isDuplicate(b, t, amt)) return;
         const kindAcct = b.accountKind;
         let type;
         if (kindAcct === 'investment' || kindAcct === 'mortgage' || kindAcct === 'loan' || TRANSFER.test(t.description || '')) type = 'transfer';

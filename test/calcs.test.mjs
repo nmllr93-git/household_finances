@@ -113,3 +113,29 @@ test('mortgage payments count in budgets once, and the setting can leave them ou
   const bank = { imports: [imp('c', 'Checking', 'deposit', [tx('2026-10-01', 'ONLINE TRANSFER TO MORTGAGE', 1850)]), imp('m', 'Home loan', 'mortgage', [tx('2026-10-02', 'PAYMENT RECEIVED', -1850)])] };
   assert.equal(mtg(engine(bank)), 1850);
 });
+
+// ---- review R3: duplicates are judged per account, with the bank's own ids when there are any ----
+const spend = (get) => get('txns').filter((x) => x.type === 'expense').reduce((s, x) => s + x.amount, 0);
+test('identical purchases in two different accounts both count', () => {
+  const get = engine({ imports: [imp('a', 'Checking', 'deposit', [tx('2026-10-03', 'COFFEE SHOP', 4.5)]), imp('b', 'Visa', 'credit', [tx('2026-10-03', 'COFFEE SHOP', 4.5)])] });
+  assert.equal(spend(get), 9);
+});
+test('two genuine identical purchases on one statement both count', () => {
+  const get = engine({ imports: [imp('a', 'Checking', 'deposit', [tx('2026-10-03', 'COFFEE SHOP', 4.5), tx('2026-10-03', 'COFFEE SHOP', 4.5)])] });
+  assert.equal(spend(get), 9);
+});
+test('importing the same statement again adds nothing; an overlapping one adds only what is new', () => {
+  const rows = [tx('2026-10-03', 'COFFEE SHOP', 4.5), tx('2026-10-03', 'COFFEE SHOP', 4.5), tx('2026-10-05', 'GROCER', 60)];
+  assert.equal(spend(engine({ imports: [imp('a', 'Checking', 'deposit', rows), imp('b', 'Checking', 'deposit', rows)] })), 69);
+  assert.equal(spend(engine({ imports: [imp('a', 'Checking', 'deposit', rows), imp('b', 'Checking', 'deposit', [...rows, tx('2026-10-03', 'COFFEE SHOP', 4.5), tx('2026-10-09', 'GAS', 30)])] })), 103.5);
+});
+test('overlapping OFX exports: the same FITID counts once, different FITIDs count separately', () => {
+  const a = [{ ...tx('2026-10-03', 'COFFEE SHOP', 4.5), id: 'F1' }, { ...tx('2026-10-04', 'GROCER', 60), id: 'F2' }];
+  const b = [{ ...tx('2026-10-04', 'GROCER', 60), id: 'F2' }, { ...tx('2026-10-04', 'GROCER', 60), id: 'F3' }];
+  assert.equal(spend(engine({ imports: [imp('a', 'Checking', 'deposit', a), imp('b', 'Checking', 'deposit', b)] })), 124.5);
+});
+test('a statement without ids and bank sync with ids for the same purchases count once', () => {
+  const st = [tx('2026-10-03', 'COFFEE SHOP', 4.5), tx('2026-10-03', 'COFFEE SHOP', 4.5)];
+  const sync = [{ ...tx('2026-10-03', 'COFFEE SHOP', 4.5), id: 'S1' }, { ...tx('2026-10-03', 'COFFEE SHOP', 4.5), id: 'S2' }, { ...tx('2026-10-04', 'GAS', 30), id: 'S3' }];
+  assert.equal(spend(engine({ imports: [imp('a', 'Checking', 'deposit', st), imp('b', 'Checking', 'deposit', sync)] })), 39);
+});
