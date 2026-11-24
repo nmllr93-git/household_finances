@@ -1,0 +1,14 @@
+# keep personal data, build output and anything not needed by the server out of the image
+seed
+.git
+node_modules
+desktop
+mobile
+apps
+test
+store-assets
+docs
+deploy
+scripts
+*.db
+*.log

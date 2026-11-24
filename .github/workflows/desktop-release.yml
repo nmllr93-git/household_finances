@@ -1,6 +1,6 @@
 # Builds the Windows installer (and the Mac apps) and publishes them to the PUBLIC repo <owner>/household_finances-releases,
 # which the desktop app's "Check for updates" reads.
-# Windows runs automatically when main is pushed to the release branch; the Mac apps only when run by hand (mac_publish).
+# Windows and Linux run automatically when main is pushed to the release branch; the Mac apps only when run by hand (mac_publish).
 # Previously: runs automatically when desktop/package.json changes on main, but only publishes if that version
 # hasn't been released yet, so bumping "version" is all it takes. Can also be run by hand (Actions → Run workflow).
 name: Desktop release
@@ -11,6 +11,10 @@ on:
     inputs:
       mac_test:
         description: Build the Mac apps as a test download (not published)
+        type: boolean
+        default: false
+      linux_test:
+        description: Build the Linux apps and server download as a test (not published)
         type: boolean
         default: false
       mac_publish:
@@ -101,3 +105,43 @@ jobs:
         run: |
           V=$(node -p "require('../package.json').version")
           gh release upload "v$V" --clobber --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" *.dmg latest-mac.yml
+
+  # Linux: AppImage (any distribution, updates itself) and .deb (Debian/Ubuntu/Mint), for x86-64 and ARM64, plus the
+  # server download used by the Linux installer (larenest-server-<version>.tar.gz + install-linux.sh). Linux minutes are 1x.
+  linux:
+    needs: windows
+    if: needs.windows.outputs.new == 'true' || inputs.linux_test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sed -i "s/GITHUB_OWNER/${GITHUB_REPOSITORY_OWNER}/" desktop/package.json
+      - run: npm install
+        working-directory: desktop
+      - name: Build for x86-64
+        working-directory: desktop
+        run: node scripts/prepare.js && npx electron-builder --linux --x64 --publish never
+      - name: Build for ARM64 (with an ARM64 Node inside)
+        working-directory: desktop
+        run: |
+          NV=$(node -v); curl -fsSL "https://nodejs.org/dist/$NV/node-$NV-linux-arm64.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
+          FD_NODE_BIN="$RUNNER_TEMP/node-$NV-linux-arm64/bin/node" node scripts/prepare.js && npx electron-builder --linux --arm64 --publish never
+      - name: Server download for the Linux installer
+        run: |
+          bash scripts/pack-server.sh desktop/dist
+          cp scripts/install-linux.sh desktop/dist/install-linux.sh
+          ls -la desktop/dist
+      - name: Keep the Linux test build as a download
+        if: ${{ inputs.linux_test }}
+        uses: actions/upload-artifact@v4
+        with: { name: linux-test, path: "desktop/dist/*.AppImage\ndesktop/dist/*.deb\ndesktop/dist/*.tar.gz", retention-days: 7 }
+      - name: Add the Linux files to the release
+        if: needs.windows.outputs.new == 'true'
+        working-directory: desktop/dist
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          V=$(node -p "require('../package.json').version")
+          gh release upload "v$V" --clobber --repo "${GITHUB_REPOSITORY_OWNER}/household_finances-releases" *.AppImage *.deb latest-linux*.yml larenest-server-*.tar.gz install-linux.sh

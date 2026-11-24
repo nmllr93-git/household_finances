@@ -152,7 +152,7 @@ function buildTray() {
     { label: 'Phone & other device addresses', enabled: addrs.length > 0, submenu: addrs.length ? addrs.map((a) => ({ label: `Copy ${a}`, click: () => clipboard.writeText(a) })) : [{ label: 'none', enabled: false }] },
     tsItem,
     { type: 'separator' },
-    { label: process.platform === 'darwin' ? 'Open at login' : 'Start with Windows', type: 'checkbox', checked: !!S.startWithWindows, click: (it) => { S.startWithWindows = it.checked; saveSet(); loginItem(); } },
+    { label: process.platform === 'darwin' ? 'Open at login' : process.platform === 'linux' ? 'Start at login' : 'Start with Windows', type: 'checkbox', checked: !!S.startWithWindows, click: (it) => { S.startWithWindows = it.checked; saveSet(); loginItem(); } },
     { label: 'Back up now', enabled: on, click: async () => { try { const f = await call('backup'); dialog.showMessageBox({ message: 'Backup saved', detail: f }); } catch (e) { dialog.showErrorBox('Backup failed', e.message); } } },
     { label: 'Open data folder', click: () => shell.openPath(S.dataDir || defaultDataDir()) },
     { label: `Check for updates… (v${app.getVersion()})`, click: () => checkUpdates(true) },
@@ -164,7 +164,14 @@ function buildTray() {
 let fwShown = false;
 function maybeFirewallNote() { if (fwShown || process.platform !== 'win32') return; fwShown = true;
   dialog.showMessageBox({ type: 'info', message: 'Other devices can now connect', detail: 'If Windows asks whether to allow "Node.js" through the firewall, choose Private networks so your phone can reach it at home. Away from home, use Tailscale.' }); }
-const loginItem = () => { try { app.setLoginItemSettings({ openAtLogin: !!S.startWithWindows, args: ['--hidden'] }); } catch {} };
+const loginItem = () => {
+  if (process.platform === 'linux') { // freedesktop autostart: ~/.config/autostart/larenest.desktop
+    try { const dir = path.join(process.env.XDG_CONFIG_HOME || path.join(app.getPath('home'), '.config'), 'autostart'), f = path.join(dir, 'larenest.desktop');
+      if (S.startWithWindows) { fs.mkdirSync(dir, { recursive: true }); const exe = process.env.APPIMAGE || process.execPath;
+        fs.writeFileSync(f, `[Desktop Entry]\nType=Application\nName=Larenest\nExec="${exe}" --hidden\nIcon=larenest\nX-GNOME-Autostart-enabled=true\nComment=Keeps your Larenest server running\n`); }
+      else fs.rmSync(f, { force: true }); } catch {}
+    return; }
+  try { app.setLoginItemSettings({ openAtLogin: !!S.startWithWindows, args: ['--hidden'] }); } catch {} };
 
 // ---------- setup + connect screens (preload.js) ----------
 ipcMain.handle('fd:defaults', () => ({ ...S, defaultDataDir: defaultDataDir(), dataDir: S.dataDir || defaultDataDir() }));
@@ -243,7 +250,7 @@ function readSleep() {
     else if (process.platform === 'darwin') execFile('pmset', ['-g'], { timeout: 5000 }, (e, out) => { if (e) return; const m = /^\s*sleep\s+(\d+)/m.exec(out); done({ pluggedMin: m ? Number(m[1]) : null, batteryMin: null }); });
   } catch {}
 }
-const openSleepSettings = () => shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.Lock-Screen-Settings.extension' : 'ms-settings:powersleep');
+const openSleepSettings = () => process.platform === 'linux' ? null : shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.Lock-Screen-Settings.extension' : 'ms-settings:powersleep');
 
 // ---------- host options tab (same controls as the tray, for remote desktops / virtual displays) ----------
 // ---------- backups to a cloud folder: find the folders that OneDrive, iCloud Drive, Google Drive or Dropbox keep in sync ----------
@@ -259,6 +266,8 @@ function cloudFolders() {
     try { for (const f of fs.readdirSync(path.join(h, 'Library', 'CloudStorage'))) { const p = path.join(h, 'Library', 'CloudStorage', f);
       if (/^GoogleDrive/i.test(f)) add('Google Drive', fs.existsSync(path.join(p, 'My Drive')) ? path.join(p, 'My Drive') : p); else if (/^OneDrive/i.test(f)) add('OneDrive', p); else if (/^Dropbox/i.test(f)) add('Dropbox', p); } } catch {}
     add('Dropbox', path.join(h, 'Dropbox'));
+  } else { // Linux: the usual sync-client folders
+    add('Dropbox', path.join(h, 'Dropbox')); add('Nextcloud', path.join(h, 'Nextcloud')); add('OneDrive', path.join(h, 'OneDrive')); add('pCloud', path.join(h, 'pCloudDrive')); add('Google Drive', path.join(h, 'GoogleDrive')); add('Syncthing', path.join(h, 'Sync'));
   }
   return out;
 }

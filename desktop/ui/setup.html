@@ -92,6 +92,7 @@
     $('s2note').textContent = m === 'host' && !house ? 'This computer will host your finances for your own devices. Next you\u2019ll create your login, then connect your phone by scanning a QR code. Only people you give a login to can sign in. Tip: keep this computer plugged in and on; the app keeps it awake while hosting.' : m === 'host' ? 'This computer will host your household\u2019s finances. Next you\u2019ll create your login; afterwards, invite the others from \u2699 Settings \u2192 Invite someone, and connect phones by scanning a QR code. Tip: keep this computer plugged in and on; the app keeps it awake while hosting.' : 'Your finances will stay on this computer only. You can let other devices connect later from Host options.';
     step('s2'); };
   if (navigator.platform && /mac/i.test(navigator.platform)) $('swwLbl').textContent = 'Open at login (runs quietly in the menu bar)';
+  else if (navigator.platform && /linux/i.test(navigator.platform)) $('swwLbl').textContent = 'Start at login (runs quietly in the tray)';
   $('c-me').addEventListener('click', () => who('local'));
   $('c-mine').addEventListener('click', () => who('host', false));
   $('c-house').addEventListener('click', () => who('host', true));

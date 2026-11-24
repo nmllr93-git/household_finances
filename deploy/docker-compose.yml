@@ -1,0 +1,25 @@
+# Larenest with Docker Compose.
+#   1. Save this file in a folder, e.g. ~/larenest/docker-compose.yml
+#   2. Set the first login below (or create it later: docker exec -it larenest node server.js add-user alex personal,shared)
+#   3. docker compose up -d     then open https://<this-server's-address>:8080
+services:
+  larenest:
+    image: ghcr.io/nmllr93-git/larenest:latest
+    container_name: larenest
+    restart: unless-stopped
+    # "host" networking lets Larenest see your server's real network address, so the QR codes your
+    # phones scan point at the right place. (On Docker Desktop for Mac/Windows, remove this line,
+    # uncomment "ports" and set LARENEST_ADDRESSES.)
+    network_mode: host
+    # ports:
+    #   - "8080:8080"
+    environment:
+      TZ: America/Chicago            # your time zone, for bill dates and budgets
+      # PORT: "8080"
+      # LARENEST_ADDRESSES: "192.168.1.20,myserver.local"   # what other devices use to reach this server
+      # First login (only used when there are no logins yet; remove the password once you've signed in):
+      # LARENEST_ADMIN_USER: alex
+      # LARENEST_ADMIN_PASSWORD: change-me-please
+      # Optional market/economy keys can also go in /data/api-keys.json from the app's Settings.
+    volumes:
+      - ./data:/data                 # your database, backups and settings

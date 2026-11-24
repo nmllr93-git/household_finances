@@ -127,7 +127,7 @@
         : fl.length ? 'Each daily backup can also go to a folder your cloud app keeps in sync, so a copy is safe if this computer fails. Your cloud app does the uploading; nothing goes through us.'
         : 'No OneDrive, iCloud Drive, Google Drive or Dropbox folder found on this computer. Install one of those apps, or choose any folder (a USB drive works too).';
       $('cloudSub').className = c.error ? 'bad' : ''; }
-    $('awake').checked = s.keepAwake; if (s.platform === 'darwin') $('swwLabel').textContent = 'Open at login';
+    $('awake').checked = s.keepAwake; if (s.platform === 'darwin') $('swwLabel').textContent = 'Open at login'; else if (s.platform === 'linux') $('swwLabel').textContent = 'Start at login';
     { const sl = s.sleep || {}, mins = sl.pluggedMin, never = mins === 0;
       $('sleepState').textContent = !sl.known || mins == null ? 'Sleep setting' : never ? 'Sleep: never (good for hosting)' : `Sleep: after ${mins} minute${mins === 1 ? '' : 's'}${s.platform === 'win32' ? ' when plugged in' : ''}`;
       $('sleepSub').textContent = !sl.known || mins == null ? 'Check that this computer doesn\u2019t go to sleep, so phones can always reach it.' : never ? 'This computer stays on, so other devices can always connect.'

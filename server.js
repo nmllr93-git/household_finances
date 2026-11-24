@@ -3,7 +3,7 @@
 // No npm packages needed: uses Node's built-in http, crypto and sqlite (Node 22.13+).
 //
 //   node server.js                         start the server
-//   node server.js add-user <name> <books> add a login, e.g. add-user nate nate,shared
+//   node server.js add-user <name> <books> add a login, e.g. add-user alex personal,shared
 //   node server.js passwd <name>           change a password
 //   node server.js users                   list logins and their budgets
 //   node server.js backup                  write a backup copy of the database now
@@ -546,14 +546,20 @@ function setCloudDir(dir) {
 const cloudInfo = () => ({ dir: CFG.cloudDir || '', target: cloudTarget(), last: CFG.cloudLast || '', error: CFG.cloudError || '' });
 
 let SERVER = null, BTIMER = null, DTIMER = null, RUN = null, TS_SEEN = 0;
-const lanAddrs = () => Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => n.address);
+// The addresses other devices use to reach this server. Inside Docker (bridge network) the container only sees its own
+// internal address, so LARENEST_ADDRESSES (e.g. "192.168.1.20,nas.local") says what to show in QR codes and links.
+const lanAddrs = () => { const o = String(process.env.LARENEST_ADDRESSES || '').split(',').map((x) => x.trim()).filter((x) => /^[\w.:-]{1,253}$/.test(x));
+  return o.length ? o : Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => n.address); };
 // start({ mode, port, quiet }) → Promise<info>. Used by `node server.js` and by the desktop app (require('./server.js')).
 function start(opts = {}) {
   if (SERVER) return Promise.resolve(info());
   const mode = opts.mode || CFG.mode, port = Number(opts.port || PORT), host = opts.host || (process.env.HOST && !opts.mode ? process.env.HOST : mode === 'local' ? '127.0.0.1' : '0.0.0.0'), log = opts.quiet ? () => {} : console.log;
   let nUsers = 0; try { nUsers = db.prepare('SELECT COUNT(*) n FROM users').get().n; } catch (e) { if (/readonly/i.test(e.message)) return Promise.reject(new Error(WRITE_HELP)); throw e; }
   if (nUsers === 0) {
-    log('\nNo logins yet. Stop the server and run setup first (see README):\n  node server.js add-user nate nate,shared\n  node server.js add-user mckenna mckenna,shared\n');
+    // headless first run (Docker, a Linux service): the first login can come from the environment
+    const fu = String(process.env.LARENEST_ADMIN_USER || '').trim(), fp = String(process.env.LARENEST_ADMIN_PASSWORD || '');
+    if (fu && fp) { try { addUser(fu, fp, db.prepare('SELECT id FROM books').all().map((b) => b.id)); nUsers = 1; log(`Created the first login, ${fu.toLowerCase()}, with access to every budget. You can remove LARENEST_ADMIN_PASSWORD now.`); } catch (e) { log('Couldn’t create the first login: ' + e.message); } }
+    if (!nUsers) log('\nNo logins yet. Create the first one (it can see every budget), then sign in:\n  node server.js add-user alex personal,shared\n(In Docker: docker exec -it larenest node server.js add-user alex personal,shared)\n');
   }
   const handler = async (req, res) => {
     try {
@@ -590,7 +596,8 @@ function start(opts = {}) {
       if (host !== '127.0.0.1') { tsCertCheck(); if (!TSTIMER) { TSTIMER = setInterval(tsCertCheck, 12 * 3600e3); if (TSTIMER.unref) TSTIMER.unref(); } }
       RUN = { mode, port, host, since: Date.now() };
       log(`Larenest is running on http://localhost:${port}`);
-      if (host !== '127.0.0.1') for (const a of lanAddrs()) log(`  on your network: http://${a}:${port}`);
+      if (host !== '127.0.0.1') for (const a of lanAddrs()) log(`  on your network: ${SELFTLS ? 'https' : 'http'}://${a}:${port}`);
+      if (SELFTLS && host !== '127.0.0.1') log(`  certificate fingerprint (the apps check this; it’s in the QR code): ${SELFTLS.fp.match(/.{4}/g).join(' ')}`);
       else log('  local only: other devices cannot connect (node server.js mode host to change)');
       resolve(info());
     });

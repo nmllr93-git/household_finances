@@ -2,14 +2,15 @@
   "name": "household-finances-desktop",
   "productName": "Larenest",
   "version": "1.0.26",
-  "description": "Larenest for Windows: runs your finance server and dashboard in one app.",
+  "description": "Larenest for Windows, Mac and Linux: runs your finance server and dashboard in one app.",
   "main": "main.js",
   "private": true,
   "scripts": {
     "prepare-app": "node scripts/prepare.js",
     "start": "node scripts/prepare.js && electron .",
     "dist": "node scripts/prepare.js && electron-builder --win",
-    "release": "node scripts/prepare.js && electron-builder --win --publish always"
+    "release": "node scripts/prepare.js && electron-builder --win --publish always",
+    "dist-linux": "node scripts/prepare.js && electron-builder --linux"
   },
   "devDependencies": {
     "electron": "^38.0.0",
@@ -81,10 +82,46 @@
     },
     "dmg": {
       "artifactName": "Larenest-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "icons/icon-512.png",
+      "category": "Office;Finance",
+      "executableName": "larenest",
+      "synopsis": "Self-hosted budgeting and net worth",
+      "description": "Budget, bills, accounts and investments. Your data stays on your computer.",
+      "maintainer": "Larenest <contact@larenest.app>",
+      "artifactName": "Larenest-${version}-linux-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "Larenest"
+        }
+      }
+    },
+    "appImage": {
+      "artifactName": "Larenest-${version}-linux-${arch}.AppImage"
+    },
+    "deb": {
+      "artifactName": "Larenest-${version}-linux-${arch}.deb",
+      "depends": [
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libappindicator3-1"
+      ]
     }
   },
   "dependencies": {
     "electron-updater": "^6.3.0"
   },
-  "author": "Nathan Miller"
+  "author": "Nathan Miller",
+  "homepage": "https://larenest.app"
 }
