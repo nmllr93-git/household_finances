@@ -1107,7 +1107,7 @@
     keepY = window.scrollY;
     if (btn) btn.disabled = true;
     try { const d = await db(); if (!d) throw new Error('no db');
-      await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, ...(t.biz != null ? { biz: t.biz, bizPct: t.bizPct || 100, schedC: t.schedC || '' } : {}), ...extra, createdAt: new Date().toISOString() }); }
+      await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, ...(t.biz != null ? { biz: t.biz, bizPct: t.bizPct || 100, schedC: t.schedC || '' } : {}), ...(t.note ? { note: t.note } : {}), ...extra, createdAt: new Date().toISOString() }); }
     catch { if (btn) { btn.disabled = false; btn.textContent = 'Not saved'; } }
   };
   const txMatches = () => {
@@ -1116,7 +1116,7 @@
     const needs = !!(document.querySelector('#fd-tneeds') || {}).checked;
     return rows('txns').filter((t) => t.book === book() && inPer.has(t.month) && (!cat || t.category === cat) && (!type || t.type === type)
       && (!needs || t.category === 'Uncategorized')
-      && (!tq || `${t.vendor} ${t.description} ${t.category} ${t.source} ${(t.tags || []).join(' ')}`.toLowerCase().includes(tq)))
+      && (!tq || `${t.vendor} ${t.description} ${t.category} ${t.source} ${(t.tags || []).join(' ')} ${t.note || ''}`.toLowerCase().includes(tq)))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)) || b.amount - a.amount);
   };
   dash.draw('txNeeds', (el) => {
@@ -1177,6 +1177,7 @@
         tr.append(...cols().map((k) => (k === 'vendor' ? cell(vi, 'fd-l') : k === 'category' ? cc : k === 'type' ? cell(ti, 'fd-l') : k === 'tags' ? cell(tgi, 'fd-l') : base[k]())));
       } else tr.append(...cols().map((k) => base[k]()));
       [...tr.children].forEach((c, i) => { const k = cols()[i]; if (k) c.classList.add('c-' + k); });
+      if (t.note) { const host = tr.querySelector('.c-vendor') || tr.firstChild; const n = document.createElement('div'); n.className = 'fd-txnote'; n.textContent = '📝 ' + t.note; n.title = t.note; n.translate = false; host && host.append(n); }
       const c = document.createElement('td'); c.className = 'fd-nowrap c-actions'; const b = document.createElement('button');
       b.type = 'button'; b.className = 'fd-btn fd-quiet fd-sm'; b.textContent = 'Edit';
       b.addEventListener('click', () => openEditor(t));
@@ -1202,6 +1203,7 @@
     f.elements.vendor.value = t.vendor; f.elements.category.value = base.length > 1 ? '' : t.category;
     f.elements.type.value = t.type; f.elements.oneTime.checked = !!t.oneTime;
     if (f.elements.tags) f.elements.tags.value = (t.tags || []).join(', ');
+    if (f.elements.note) f.elements.note.value = t.note || '';
     if (f.elements.biz) { const bs = f.elements.biz, L = BIZ().list; bs.replaceChildren(new Option('Personal (not business)', ''), ...L.map((x) => new Option(x.name, x.name)));
       if (t.biz && !L.some((x) => x.name === t.biz)) bs.append(new Option(t.biz, t.biz)); bs.value = t.biz != null ? t.biz : acctMap()[t.source] || ''; f.elements.bizPct.value = t.biz ? t.bizPct || 100 : 100; if (!L.some((x) => x.name === bs.value) && bs.value) bs.append(new Option(bs.value, bs.value));
       const ls = f.elements.schedC; ls.replaceChildren(new Option('Automatic (from the category)', '')); (window.FDSchedC || []).filter(([k]) => k !== 'cogs' || sells()).forEach(([k, l]) => ls.append(new Option(k === 'cogs' ? l : `${k} · ${l}`, k))); ls.value = t.schedC || '';
@@ -1298,6 +1300,7 @@
         if (splits.length < 2 || Math.abs(splitTotal() - editing.total) > 0.009) { show(ids, 'fd-tx-miss'); return; }
       }
       const change = { vendor: E.vendor.value.trim().slice(0, 40), category: E.split.checked ? '' : E.category.value.trim().slice(0, 40), type: E.type.value, oneTime: E.oneTime.checked, tags: E.tags ? parseTags(E.tags.value) : editing.t.tags || [] };
+      if (E.note) change.note = E.note.value.trim().slice(0, 500);
       if (E.biz && hasBiz()) Object.assign(change, { biz: E.biz.value, bizPct: Math.min(100, Math.max(1, Math.round(Number(E.bizPct.value) || 100))), schedC: E.biz.value ? E.schedC.value : '' });
       try {
         const d = await db(); if (!d) throw new Error('no db');
@@ -3832,11 +3835,11 @@
       ...r.lines.filter((l) => l.code !== 'cogs').map((l) => [l.code, l.label, l.amount.toFixed(2)]), ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)], ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)],
       ['30', `Home office, simplified (${B.list.reduce((s0, x) => s0 + (!BZSEL.biz || x.name === BZSEL.biz ? Number(x.sqft) || 0 : 0), 0)} sq ft)`, r.homeOffice.toFixed(2)], ['31', 'Net profit', r.net.toFixed(2)]]) });
     const rk = rcptKeys();
-    files.push({ name: 'business-transactions.csv', data: csv([['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt'],
-      ...r.list.map((t) => [t.date || t.month, t.biz, t.line === 'income' ? 'Income' : `${t.line} ${lineName(t.line)}`, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.bizPct || 100, t.share.toFixed(2), t.source, rk.has(t.splitOf || t.key) ? 'yes' : ''])]) });
+    files.push({ name: 'business-transactions.csv', data: csv([['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt', 'Notes'],
+      ...r.list.map((t) => [t.date || t.month, t.biz, t.line === 'income' ? 'Income' : `${t.line} ${lineName(t.line)}`, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.bizPct || 100, t.share.toFixed(2), t.source, rk.has(t.splitOf || t.key) ? 'yes' : '', t.note || ''])]) });
     const am = acctMap(), all = rows('txns').filter((t) => t.book === book() && String(t.date || t.month).startsWith(String(Y))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    files.push({ name: `all-transactions-${Y}.csv`, data: csv([['Date', 'Type', 'Vendor', 'Category', 'Description', 'Amount', 'Account', 'Tags', 'Business', 'Business %'],
-      ...all.map((t) => { const bz = t.biz != null ? t.biz : am[t.source] || ''; return [t.date || t.month, t.type, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.source, (t.tags || []).join('; '), bz, bz ? t.bizPct || 100 : '']; })]) });
+    files.push({ name: `all-transactions-${Y}.csv`, data: csv([['Date', 'Type', 'Vendor', 'Category', 'Description', 'Amount', 'Account', 'Tags', 'Business', 'Business %', 'Notes'],
+      ...all.map((t) => { const bz = t.biz != null ? t.biz : am[t.source] || ''; return [t.date || t.month, t.type, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.source, (t.tags || []).join('; '), bz, bz ? t.bizPct || 100 : '', t.note || '']; })]) });
     const trips = tripsFor(Y).filter((x) => !BZSEL.biz || x.biz === BZSEL.biz);
     files.push({ name: 'mileage-log.csv', data: csv([['Date', 'Miles', 'Purpose', 'Business', 'Rate', 'Deduction'], ...trips.map((x) => [x.date, x.miles, x.purpose, x.biz, window.FDMileRate(x.date), ((Number(x.miles) || 0) * window.FDMileRate(x.date)).toFixed(2)])]) });
     const rq = bizSum(Y, '');
@@ -3894,7 +3897,7 @@
     const row2 = document.createElement('div'); row2.className = 'fd-row'; row2.append(field('Business', bs), field('Business share %', pc), field('Schedule C line', ls));
     const msg = phMsg('');
     const markAll = rbtn('Mark these', async (e) => { const todo = go(); if (!todo.length) return; e.target.disabled = true; msg.className = 'fd-note'; msg.textContent = `Marking ${todo.length}…`;
-      try { const d = await db(); for (const t of todo) await d.collection('data/household/edits').add({ book: book(), txKey: t.splitOf || t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, biz: BM.biz, bizPct: BM.pct, schedC: BM.line || t.schedC || '', createdAt: new Date().toISOString() });
+      try { const d = await db(); for (const t of todo) await d.collection('data/household/edits').add({ book: book(), txKey: t.splitOf || t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, biz: BM.biz, bizPct: BM.pct, schedC: BM.line || t.schedC || '', ...(t.note ? { note: t.note } : {}), createdAt: new Date().toISOString() });
         msg.className = 'fd-note fd-good'; msg.textContent = `✓ Marked ${todo.length} as ${BM.biz}.`; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } e.target.disabled = false; }, false);
     const rule = rbtn('Also mark future ones (make a rule)', async (e) => { if (!BM.text.trim()) { msg.className = 'fd-note fd-bad'; msg.textContent = 'Rules match description text: type some text first.'; return; } e.target.disabled = true;
       try { const d = await db(); await d.collection('data/household/rules').add({ book: book(), match: BM.text.trim().slice(0, 60), vendor: '', category: '', type: '', oneTime: false, biz: BM.biz, bizPct: BM.pct, schedC: BM.line, createdAt: new Date().toISOString() });

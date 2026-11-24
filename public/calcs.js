@@ -260,6 +260,7 @@ dash.calc('all_txns', {
       if (e.category) base.category = e.category;
       if (e.type) base.type = e.type;
       if (Array.isArray(e.tags)) base.tags = e.tags.filter(Boolean);
+      if (e.note != null) base.note = String(e.note);
       if (e.biz !== undefined && e.biz !== null) { base.biz = e.biz; base.bizPct = e.bizPct || 100; base.schedC = e.schedC || ''; }
       if (e.oneTime !== undefined && e.oneTime !== null) base.oneTime = !!e.oneTime;
       let splits = e.splits;

@@ -319,6 +319,8 @@ In **Transactions → Rules**, click **+ New rule**.
 - A live preview shows what a rule will match before you save. Rules run top to bottom; use ↑/↓ to reorder. If two rules set the same field, the lower one wins.
 
 ### Transactions table
+- **Notes:** Edit → Notes, for anything to remember later. Notes are searchable and show under the vendor.
+- **Possible duplicates:** when bank sync and a statement (or a typed entry) both have the same purchase a few days apart, a box at the top of Transactions lets you keep one copy.
 - **⚙ Columns** shows, hides and reorders columns. Drag a header edge to resize it.
 - **Allow editing** lets you edit vendor, category and type right in the rows.
 - **Export CSV** downloads what's currently listed.

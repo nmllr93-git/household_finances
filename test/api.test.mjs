@@ -253,3 +253,9 @@ test('business marks on edits and rules are kept (and cleaned)', async () => {
   assert.equal(e2.biz, undefined); // not touched: no business fields at all
   assert.equal(r.biz, 'Photo'); assert.equal(r.bizPct, 30); assert.equal(r.schedC, '24b');
 });
+
+test('transaction notes are kept and trimmed to 500 characters', async () => {
+  const b = books()[0];
+  await req('POST', `/api/books/${b}/edits`, { txKey: 'zz:n', vendor: 'V', category: 'C', type: 'expense', note: 'x'.repeat(600) });
+  const e = (await req('GET', `/api/books/${b}/data`)).json.edits.find((x) => x.txKey === 'zz:n'); assert.equal(e.note.length, 500);
+});

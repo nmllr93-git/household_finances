@@ -44,7 +44,7 @@
     if (coll === 'edits') {
       const splits = Array.isArray(d.splits) ? d.splits.slice(0, 6).map((s) => ({ category: str(s.category, 40), amount: num(s.amount) })).filter((s) => s.category && s.amount !== null) : null;
       return { book: label, txKey: str(d.txKey, 80), vendor: str(d.vendor, 40), category: str(d.category, 40), type: TYPES_OK.includes(d.type) ? d.type : '',
-        oneTime: !!d.oneTime, splits: splits && splits.length >= 2 ? splits : null, ignored: !!d.ignored, tags: Array.isArray(d.tags) ? d.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) : null, ...bizOf(d), createdAt: now };
+        oneTime: !!d.oneTime, splits: splits && splits.length >= 2 ? splits : null, ignored: !!d.ignored, tags: Array.isArray(d.tags) ? d.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) : null, ...bizOf(d), ...(d.note != null ? { note: str(d.note, 500) } : {}), createdAt: now };
     }
     if (coll === 'rules') {
       const cc = (arr) => (Array.isArray(arr) ? arr.slice(0, 8).map((c) => ({ field: ['description', 'vendor', 'category', 'type', 'amount'].includes(c && c.field) ? c.field : 'description', op: ['is', 'lt', 'gt', 'gte', 'eq'].includes(c && c.op) ? c.op : 'contains', value: str(c && c.value, 60) })).filter((c) => c.value) : []);
