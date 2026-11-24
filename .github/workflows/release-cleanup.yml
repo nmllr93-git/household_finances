@@ -1,0 +1,30 @@
+# Tidies the public releases page. Runs only when started by hand: Actions → Release cleanup → Run workflow.
+# Major releases (scripts/release-majors.json) get their title and a rolled-up description; the smaller releases
+# inside each major's range are deleted (their git tags stay). Tick "dry run" to only list what it would do.
+name: Release cleanup
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run: { description: 'Only list what would change (delete nothing)', type: boolean, default: false }
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Titles and rolled-up notes for major releases
+        env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}", DRY: "${{ inputs.dry_run }}" }
+        run: |
+          REPO="${GITHUB_REPOSITORY_OWNER}/household_finances-releases"
+          node -e "const m=require('./scripts/release-majors.json'); for (const [v,x] of Object.entries(m)) if (!v.startsWith('_')) console.log(v+'\t'+x.title)" | while IFS=$'\t' read -r VER TITLE; do
+            if gh release view "v$VER" --repo "$REPO" >/dev/null 2>&1; then
+              node scripts/release-notes.js Desktop "$VER" > notes.md
+              if [ "$DRY" = "true" ]; then echo "Would update v$VER: Larenest $VER — $TITLE"; else gh release edit "v$VER" --repo "$REPO" --title "Larenest $VER — $TITLE" --notes-file notes.md && echo "Updated v$VER"; fi
+            fi
+          done
+      - name: Delete smaller releases inside each major's range
+        env: { GH_TOKEN: "${{ secrets.RELEASES_TOKEN }}", DRY: "${{ inputs.dry_run }}" }
+        run: |
+          REPO="${GITHUB_REPOSITORY_OWNER}/household_finances-releases"
+          gh release list --repo "$REPO" --limit 200 --json tagName -q '.[].tagName' | node scripts/release-cleanup.js | while read -r TAG; do
+            if [ "$DRY" = "true" ]; then echo "Would delete release $TAG"; else gh release delete "$TAG" --repo "$REPO" --yes && echo "Deleted release $TAG (tag kept)"; sleep 1; fi
+          done
