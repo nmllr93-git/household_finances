@@ -2658,7 +2658,6 @@
       }
       if (!st.connected) {
         box.append(phMsg('Pull balances and new transactions from your banks automatically, instead of importing statements. It uses SimpleFIN Bridge, a separate read-only service you subscribe to yourself (about $15 a year). Your bank passwords go to SimpleFIN, never to this app, and nothing passes through us.'));
-        if (!window.FD_LOCAL) box.append(phMsg('Prefer a free option? Further down, “Free bank sync with your own Teller account” walks you through a free Teller developer account instead.'));
         const ol = document.createElement('ol'); ol.className = 'fd-note';
         for (const t of ['Sign up at SimpleFIN Bridge (link below), start a subscription and connect your banks there.', 'In SimpleFIN Bridge, create a new “setup token” for this app and copy it.', 'Paste it below and press Connect. Then untick any accounts you don’t want, check the names and types, and press Save accounts. Nothing syncs until you save.'])
           { const li = document.createElement('li'); li.textContent = t; ol.append(li); }
@@ -2746,14 +2745,14 @@
     if (k.teller.appId) syncBox(host, SYNC_P.teller).catch(() => {});
     if (k.plaid.hasSecret) syncBox(host, SYNC_P.plaid).catch(() => {});
     if (!k.canEdit) return;
-    const box = document.createElement('details'); box.className = 'fd-rb fd-bkbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Free bank sync with your own Teller account (or Plaid), advanced'; box.append(sm);
-    box.append(phMsg('Instead of SimpleFIN, you can sync banks with a free developer account of your own. Teller is the easier one for personal use: its free “development” level connects up to 100 real bank logins. Plaid needs Plaid to approve “production” access before it works with real banks. Keys stay on this computer, in a private file outside your backups.'));
+    const box = document.createElement('details'); box.className = 'fd-rb fd-bkbox'; const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; sm.textContent = 'Your own Plaid keys (advanced)'; box.append(sm);
+    box.append(phMsg('For developers: instead of SimpleFIN, sync banks with Plaid keys of your own. Plaid needs to approve your account for real banks first, so SimpleFIN is the simpler choice for most people. Keys stay on this computer.'));
     const msg = phMsg(''), field = (lab, el) => { const r = document.createElement('label'); r.className = 'fd-field'; r.append(lab, el); return r; };
     const inp = (ph, type) => { const i = document.createElement(type === 'area' ? 'textarea' : 'input'); i.className = 'fd-in'; i.placeholder = ph; i.autocomplete = 'off'; i.spellcheck = false; if (type === 'area') { i.rows = 3; i.style.fontFamily = 'monospace'; i.style.fontSize = '12px'; } else if (type) i.type = type; return i; };
     const sel = (opts, v) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([a, b]) => x.append(new Option(b, a))); x.value = v; return x; };
     const save = async (bodyObj, done) => { msg.className = 'fd-note'; msg.textContent = 'Saving…'; try { await FDStore.json('POST', '/api/bankkeys', bodyObj); msg.className = 'fd-note fd-good'; msg.textContent = done; setTimeout(() => location.reload(), 1200); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } };
-    // Teller
-    { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Teller' + (k.teller.appId ? ' · set up' : ''); box.append(h);
+    // Teller closed its API to new sign-ups in 2026: its section only shows for someone who already set it up
+    if (k.teller.appId) { const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Teller' + (k.teller.appId ? ' · set up' : ''); box.append(h);
       box.append(phMsg('Free for up to 100 bank logins (one login can hold checking, savings and a card). You need a free Teller developer account; it takes about 10 minutes. It works while Larenest runs on this computer (not in phone-only mode). SimpleFIN stays the simplest choice if you’d rather not.'));
       { const g = document.createElement('details'); g.className = 'fd-sfguide fd-tlguide'; const gs = document.createElement('summary'); gs.textContent = 'Show me step by step'; g.append(gs);
         [['Create a free Teller account', 'Go to teller.io and sign up for a developer account, then confirm your email.'],
