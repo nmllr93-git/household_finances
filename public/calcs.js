@@ -242,6 +242,7 @@ dash.calc('all_txns', {
         if (r.oneTime !== undefined && r.oneTime !== null && r.oneTime !== '') t.oneTime = !!r.oneTime;
         if (r.ignore) t.ignored = true;
         if (r.tag) t.tags = [...new Set([...(t.tags || []), r.tag])];
+        if (r.biz !== undefined && r.biz !== null) { t.biz = r.biz; t.bizPct = r.bizPct || 100; t.schedC = r.schedC || ''; }
         t.rule = (r._g.find((g) => g.every(test)) || r._g[0]).map((c) => `${c.field} ${({ is: 'is', lt: 'under', gt: 'over', gte: 'at least', eq: 'equals' })[c.op] || 'contains'} “${c.value}”`).join(' and ');
       }
     }
@@ -259,6 +260,7 @@ dash.calc('all_txns', {
       if (e.category) base.category = e.category;
       if (e.type) base.type = e.type;
       if (Array.isArray(e.tags)) base.tags = e.tags.filter(Boolean);
+      if (e.biz !== undefined && e.biz !== null) { base.biz = e.biz; base.bizPct = e.bizPct || 100; base.schedC = e.schedC || ''; }
       if (e.oneTime !== undefined && e.oneTime !== null) base.oneTime = !!e.oneTime;
       let splits = e.splits;
       if (typeof splits === 'string') { try { splits = JSON.parse(splits); } catch { splits = null; } }
@@ -730,3 +732,66 @@ function customReport(spec, txns, balances, months, book) {
   return { groups: list.map(out), other: other && out(other), total: totalC / 100, count: all, months: months || [] };
 }
 if (typeof window !== 'undefined') window.FDCustom = customReport;
+
+// ---- Personal business (sole proprietor, IRS Schedule C) ----
+// Transactions marked with a business (t.biz) count toward it at t.bizPct percent. Expense lines follow Schedule C Part II.
+const SCHED_C = [['8', 'Advertising'], ['9', 'Car and truck expenses'], ['10', 'Commissions and fees'], ['11', 'Contract labor'], ['13', 'Depreciation'],
+  ['15', 'Insurance (other than health)'], ['16b', 'Interest (other than mortgage)'], ['17', 'Legal and professional services'], ['18', 'Office expense'],
+  ['20a', 'Rent: vehicles and equipment'], ['20b', 'Rent: other business property'], ['21', 'Repairs and maintenance'], ['22', 'Supplies'], ['23', 'Taxes and licenses'],
+  ['24a', 'Travel'], ['24b', 'Meals'], ['25', 'Utilities'], ['26', 'Wages'], ['27a', 'Other expenses']];
+const SCHED_GUESS = [[/advertis|marketing|promot/i, '8'], [/\b(gas|fuel|parking|tolls?|auto)\b|car wash/i, '9'], [/commission|merchant fee|paypal fee|stripe fee|etsy fee/i, '10'],
+  [/contract|freelanc/i, '11'], [/insurance/i, '15'], [/interest/i, '16b'], [/legal|lawyer|attorney|accounting|bookkeep|tax prep|cpa/i, '17'],
+  [/software|subscription|office|postage|shipping|stationery|printing/i, '18'], [/equipment rental/i, '20a'], [/\brent\b|cowork/i, '20b'], [/repair|maintenance/i, '21'],
+  [/suppl|materials/i, '22'], [/license|permit|tax/i, '23'], [/travel|hotel|lodging|airfare|airline|flight|uber|lyft|taxi/i, '24a'],
+  [/dining|restaurant|meal|coffee|food/i, '24b'], [/utilit|electric|internet|phone|mobile|wireless/i, '25'], [/payroll|wages/i, '26']];
+const schedLine = (t) => t.schedC || (SCHED_GUESS.find(([re]) => re.test(`${t.category || ''} ${t.vendor || ''}`)) || [0, '27a'])[1];
+// IRS business standard mileage rates (dollars per mile), by the date they start. 2026 changed mid-year.
+const MILEAGE = [['2023-01-01', 0.655], ['2024-01-01', 0.67], ['2025-01-01', 0.70], ['2026-01-01', 0.725], ['2026-07-01', 0.76]];
+const mileRate = (date) => { let r = MILEAGE[0][1]; for (const [d, v] of MILEAGE) if (String(date) >= d) r = v; return r; };
+// Quarterly estimated tax: the months each payment covers and when it's due (moved past weekends).
+function quarterDue(year, q) {
+  const d = q === 4 ? new Date(Date.UTC(year + 1, 0, 15)) : new Date(Date.UTC(year, [3, 5, 8][q - 1], 15));
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+const Q_MONTHS = [[1, 3], [4, 5], [6, 8], [9, 12]];
+// opts: { biz: name or '' for every business, year, receipts: Set of txKeys with a photo, trips: [{date, miles, biz}],
+//         homeSqft, setAside (percent), receiptMin }
+function businessSummary(txns, opts) {
+  const o = opts || {}, year = String(o.year), c = (x) => Math.round(Number(x) * 100);
+  const mine = (t) => t.biz && (!o.biz || t.biz === o.biz) && String(t.date || t.month || '').startsWith(year) && t.type !== 'transfer';
+  const rec = o.receipts || new Set(), min = o.receiptMin == null ? 75 : Number(o.receiptMin);
+  const lines = {}, months = {}, list = [], missing = [];
+  let inc = 0, exp = 0, meals = 0;
+  for (const t of txns || []) {
+    if (!mine(t)) continue;
+    const share = c(Math.abs(Number(t.amount) || 0) * (Number(t.bizPct) || 100) / 100), m = String(t.date || t.month).slice(0, 7);
+    months[m] = months[m] || { inc: 0, exp: 0 };
+    if (t.type === 'income') { inc += share; months[m].inc += share; list.push({ ...t, share: share / 100, line: 'income' }); continue; }
+    const line = schedLine(t); lines[line] = lines[line] || { amount: 0, count: 0 }; lines[line].amount += share; lines[line].count++;
+    exp += share; months[m].exp += share; if (line === '24b') meals += share;
+    list.push({ ...t, share: share / 100, line });
+    if (share >= c(min) && !rec.has(t.splitOf || t.key)) missing.push({ key: t.splitOf || t.key, date: t.date, vendor: t.vendor, amount: share / 100 });
+  }
+  const trips = (o.trips || []).filter((x) => String(x.date || '').startsWith(year) && (!o.biz || x.biz === o.biz));
+  const miles = trips.reduce((s, x) => s + (Number(x.miles) || 0), 0), mileC = trips.reduce((s, x) => s + c((Number(x.miles) || 0) * mileRate(x.date)), 0);
+  const sqft = Math.min(300, Math.max(0, Number(o.homeSqft) || 0)), homeC = sqft * 500; // simplified method: $5 a square foot, up to 300
+  const mealsCut = Math.round(meals / 2); // meals are usually 50% deductible
+  const deductC = exp - mealsCut + mileC + homeC, netC = inc - deductC, rate = Math.max(0, Number(o.setAside) || 0) / 100;
+  for (const x of trips) { const m = String(x.date).slice(0, 7); months[m] = months[m] || { inc: 0, exp: 0 }; months[m].exp += c((Number(x.miles) || 0) * mileRate(x.date)); }
+  const quarters = Q_MONTHS.map(([a, b], i) => {
+    let p = 0; for (const [m, v] of Object.entries(months)) { const k = Number(m.slice(5)); if (k >= a && k <= b) p += v.inc - v.exp; }
+    const share = Math.max(0, p);
+    return { q: i + 1, due: quarterDue(Number(year), i + 1), profit: p / 100, estimate: Math.round(share * rate) / 100 };
+  });
+  // the home office deduction is yearly: spread it over the quarters' estimates evenly
+  if (homeC && rate) quarters.forEach((q) => { q.estimate = Math.max(0, Math.round((q.estimate - (homeC / 400) * rate) * 100) / 100); });
+  return {
+    income: inc / 100, expenses: exp / 100, mealsSpent: meals / 100, mealsDeductible: (meals - mealsCut) / 100, miles, mileage: mileC / 100, homeOffice: homeC / 100,
+    deductions: deductC / 100, net: netC / 100, setAside: Math.round(Math.max(0, netC) * rate) / 100,
+    lines: SCHED_C.filter(([k]) => lines[k]).map(([k, label]) => ({ code: k, label, amount: lines[k].amount / 100, count: lines[k].count })),
+    months: Object.keys(months).sort().map((m) => ({ month: m, income: months[m].inc / 100, expenses: months[m].exp / 100, net: (months[m].inc - months[m].exp) / 100 })),
+    quarters, missing: missing.sort((a, b) => b.amount - a.amount), list: list.sort((a, b) => String(b.date).localeCompare(String(a.date))), trips: trips.length,
+  };
+}
+if (typeof window !== 'undefined') { window.FDBusiness = businessSummary; window.FDSchedC = SCHED_C; window.FDSchedLine = schedLine; window.FDMileRate = mileRate; }

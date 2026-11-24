@@ -241,3 +241,15 @@ test('verify-backup checks a backup and changes nothing', async () => {
   assert.equal((await req('POST', `/api/books/${b}/verify-backup`, { nope: 1 })).status, 400);
   assert.equal(JSON.stringify((await req('GET', `/api/books/${b}/export`)).json.docs), before);
 });
+
+test('business marks on edits and rules are kept (and cleaned)', async () => {
+  const b = books()[0];
+  await req('POST', `/api/books/${b}/edits`, { txKey: 'zz:1', vendor: 'Adobe', category: 'Software', type: 'expense', biz: 'Photo', bizPct: 250, schedC: '18<x>' });
+  await req('POST', `/api/books/${b}/rules`, { match: 'STRIPE', biz: 'Photo', bizPct: 30, schedC: '24b' });
+  await req('POST', `/api/books/${b}/edits`, { txKey: 'zz:2', vendor: 'X', category: 'Y', type: 'expense' });
+  const d = (await req('GET', `/api/books/${b}/data`)).json;
+  const e1 = d.edits.find((x) => x.txKey === 'zz:1'), e2 = d.edits.find((x) => x.txKey === 'zz:2'), r = d.rules.find((x) => x.match === 'STRIPE');
+  assert.equal(e1.biz, 'Photo'); assert.equal(e1.bizPct, 100); assert.equal(e1.schedC, '18x');
+  assert.equal(e2.biz, undefined); // not touched: no business fields at all
+  assert.equal(r.biz, 'Photo'); assert.equal(r.bizPct, 30); assert.equal(r.schedC, '24b');
+});

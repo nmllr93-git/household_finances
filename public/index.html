@@ -52,6 +52,7 @@
     <button type="button" class="fd-navb" data-group="planning">Planning</button>
     <button type="button" class="fd-navb" data-group="markets">Markets</button>
     <button type="button" class="fd-navb" data-group="review">Year in review</button>
+    <button type="button" class="fd-navb" data-group="business" hidden>Business</button>
     <button type="button" class="fd-navb" data-group="import">Import</button>
     <button type="button" class="fd-navb fd-navset" data-group="settings" title="Dashboard settings">⚙ Settings</button>
   </nav>
@@ -340,6 +341,30 @@
     <div data-draw="projection" data-source="balance_totals monthly prefs"></div>
   </section>
 
+  <section id="biz-summary">
+    <h2>Business</h2>
+    <p class="fd-note">Profit and loss for your business this tax year, with expenses grouped by IRS Schedule C line. Downloads for you or your tax preparer.</p>
+    <div data-draw="bizSummary" data-source="txns prefs receipts"></div>
+  </section>
+  <section id="biz-tx">
+    <h2>Business transactions</h2>
+    <p class="fd-note">Everything marked as business this year. ⚠ marks expenses that still need a receipt photo.</p>
+    <div data-draw="bizTx" data-source="txns prefs receipts"></div>
+  </section>
+  <section id="biz-mark">
+    <h2>Mark business transactions</h2>
+    <p class="fd-note">Find transactions by text or account and mark them all at once, or make a rule so new ones are marked automatically.</p>
+    <div data-draw="bizMark" data-source="txns prefs"></div>
+  </section>
+  <section id="biz-tax">
+    <h2>Quarterly estimated taxes</h2>
+    <div data-draw="bizTax" data-source="txns prefs"></div>
+  </section>
+  <section id="biz-miles">
+    <h2>Mileage log</h2>
+    <div data-draw="bizMiles" data-source="prefs"></div>
+  </section>
+
   <section id="taxes">
     <h2>Tax summary</h2>
     <p class="fd-note">A yearly roundup of income and spending that often matters at tax time, with a CSV for you or your tax preparer.</p>
@@ -401,6 +426,11 @@
       </div>
       <label class="fd-check"><input type="checkbox" name="oneTime"> One-time (leave out of everyday spending and vendor rankings)</label>
       <label class="fd-field">Tags<input type="text" name="tags" list="fd-tags" placeholder="e.g. Colorado trip, Home projects"></label>
+      <div class="fd-row fd-bizrow" hidden>
+        <label class="fd-field">Business<select class="dash-select" name="biz"></select></label>
+        <label class="fd-field fd-narrow fd-bizonly">Business share %<input type="number" name="bizPct" min="1" max="100" step="1"></label>
+        <label class="fd-field fd-bizonly">Tax line (Schedule C)<select class="dash-select" name="schedC"></select></label>
+      </div>
       <div data-draw="txReceipt" data-source="receipts"></div>
       <label class="fd-check"><input type="checkbox" name="split"> Split across categories</label>
       <div id="fd-splits" hidden>

@@ -4,6 +4,11 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- **Business features** for freelancers and side businesses without an LLC (⚙ Settings → This dashboard → Business; hidden until you add one):
+  - mark transactions as business, one at a time, in bulk by text or account, or with a rule; a business share % for mixed costs (e.g. 30% of a phone bill); more than one business
+  - IRS Schedule C lines picked from the category, or chosen yourself; business income and net profit
+  - Business tab: profit and loss, transactions with ⚠ missing-receipt flags, quarterly estimated taxes with due dates and a Needs attention reminder, mileage log at the IRS rate, home office (simplified method)
+  - business tiles; downloads as CSV, or print / save as PDF for your tax preparer
 - Desktop app: **Check for updates** and the version number are now in ⚙ Settings, so computers that connect to another host can update without the hidden menu
 - More account types: Roth 401(k), Solo 401(k), TSP, Coverdell ESA, UTMA/UGMA, ABLE account, annuity and Treasury bonds (investments), and FSA (cash)
 

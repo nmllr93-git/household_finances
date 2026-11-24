@@ -16,6 +16,7 @@
     { t: 'Welcome to Larenest', b: 'One place for your budget, bills, accounts and investments: personal, shared with your household, or both. Here’s a one-minute look around.' },
     { t: 'Your data stays with you', b: '', map: true },
     { t: 'Find your way around', b: 'The tabs across the top group everything: Overview, Spending, Wealth and more. ⚙ Settings holds your dashboards, bank sync, backups and phone widgets. Use “Send feedback” there to tell us what to improve.' },
+    { t: 'Run a side business?', b: 'If you freelance or run a business on your own (no LLC), add it in ⚙ Settings → This dashboard → Business. A Business tab appears where you can mark business income and expenses, keep a mileage log, see quarterly tax estimates and download Schedule C totals at tax time. Nothing business-related shows until you add one.' },
     { t: 'Get your bank data in', list: [
       ['Import statements', 'Download a statement from your bank’s website (PDF, CSV, OFX or QFX) and drop it on Import (+). Several files at once is fine; each is matched to the right account. Free, and nothing leaves your device.'],
       ['Or sync automatically with SimpleFIN', 'SimpleFIN Bridge is a separate read-only service (about $15 a year, paid to them). Link your banks there, paste a setup token in ⚙ Settings → Automatic bank sync, choose which accounts to bring in, and new transactions arrive about every 6 hours.']],

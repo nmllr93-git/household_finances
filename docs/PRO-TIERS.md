@@ -33,10 +33,14 @@ This is a working draft. Before Pro launches, we'll ask current users to vote on
 | Year in review | — | ✓ |
 | Weekly email summaries | — | ✓ |
 | Phone widgets | — | ✓ |
+| Business features: mark transactions as business, Schedule C totals, business tab and tiles, mileage log, home office, quarterly tax estimates, receipt reminders | — | ✓ |
 | Phone app (connected to host) and phone-only mode | ✓ | ✓ |
 | Data encryption, HTTPS, login security | ✓ | ✓ |
 | Backups, export, restore | ✓ | ✓ |
 | Getting started, Needs attention checks | ✓ | ✓ |
+
+## Notes
+- Business features (docs/BUSINESS.md) are planned for Pro. Until Pro launches every dashboard gets them free.
 
 ## Open questions (to poll users on)
 - Bank sync: is 1 free connection right, or should it be 0, or unlimited?

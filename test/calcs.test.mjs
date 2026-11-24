@@ -279,3 +279,30 @@ test('a removed account also hides balances recorded under that name, and adding
   const again = { book: 'Personal', name: 'Example Roth IRA', match: 'Example Roth IRA', aliases: [], kind: 'investment' };
   assert.ok(balNames(engine({ imports: [OCT, b], accounts: [marker, again] })).includes('Example Roth IRA'));
 });
+
+// ---- personal business (Schedule C) ----
+const BZ = (() => { const ctx = { dash: { calc: () => {}, params: () => ({}) }, console, Date, Math, JSON, Intl, window: {} }; vm.runInNewContext(SRC, ctx); return { sum: (...a) => J(ctx.businessSummary(...a)), rate: ctx.window.FDMileRate, due: ctx.quarterDue }; })();
+test('business: income, Schedule C lines, business share, meals at 50%, mileage and home office', () => {
+  const tx = [
+    { key: 'a', date: '2026-02-03', type: 'income', amount: 1000, biz: 'Photo', bizPct: 100 },
+    { key: 'b', date: '2026-02-10', type: 'expense', amount: 200, category: 'Supplies', biz: 'Photo', bizPct: 100 },
+    { key: 'c', date: '2026-03-01', type: 'expense', amount: 100, category: 'Phone', biz: 'Photo', bizPct: 30 },
+    { key: 'd', date: '2026-03-05', type: 'expense', amount: 80, category: 'Dining', biz: 'Photo', bizPct: 100 },
+    { key: 'e', date: '2026-03-06', type: 'expense', amount: 500, category: 'Groceries' }, // personal
+    { key: 'f', date: '2025-12-30', type: 'expense', amount: 50, category: 'Supplies', biz: 'Photo' }, // other year
+    { key: 'g', date: '2026-04-02', type: 'expense', amount: 40, category: 'Whatever', biz: 'Etsy', schedC: '8' },
+  ];
+  const r = BZ.sum(tx, { biz: 'Photo', year: 2026, receipts: new Set(['b']), trips: [{ date: '2026-02-01', miles: 100, biz: 'Photo' }, { date: '2026-08-01', miles: 100, biz: 'Photo' }], homeSqft: 400, setAside: 25 });
+  assert.equal(r.income, 1000); assert.equal(r.expenses, 310); // 200 + 30 + 80
+  assert.deepEqual(r.lines.map((l) => [l.code, l.amount]), [['22', 200], ['24b', 80], ['25', 30]]);
+  assert.equal(r.mealsDeductible, 40); assert.equal(r.mileage, 148.5); // 100 × 0.725 + 100 × 0.76
+  assert.equal(r.homeOffice, 1500); // capped at 300 sq ft
+  assert.equal(r.net, Math.round((1000 - (310 - 40) - 148.5 - 1500) * 100) / 100);
+  assert.deepEqual(r.missing.map((m) => m.key), ['d']); // b has a receipt; c's business share is under $75
+  const all = BZ.sum(tx, { biz: '', year: 2026 }); assert.equal(all.expenses, 350); assert.equal(all.lines.find((l) => l.code === '8').amount, 40);
+});
+test('business: mileage rate by date and quarterly due dates move past weekends', () => {
+  assert.equal(BZ.rate('2025-06-01'), 0.70); assert.equal(BZ.rate('2026-06-30'), 0.725); assert.equal(BZ.rate('2026-07-01'), 0.76);
+  assert.equal(BZ.due(2026, 1), '2026-04-15'); assert.equal(BZ.due(2026, 4), '2027-01-15'); assert.equal(BZ.due(2027, 2), '2027-06-15');
+  assert.equal(BZ.due(2028, 1), '2028-04-17'); // Apr 15 2028 is a Saturday
+});
