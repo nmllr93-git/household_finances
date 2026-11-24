@@ -142,3 +142,45 @@ test('invites: owner makes a one-time link; the new person picks a login and get
   assert.deepEqual(me.json.books.map((b) => b.name).sort(), ['Sam – Personal', me.json.books.find((b) => b.readOnly).name].sort());
   assert.equal((await req('GET', `/api/join/${t}`, null, '')).status, 404, 'links work once');
 });
+
+// ---- restore integrity (review R1 + R2): references survive, photos too, and a failure changes nothing ----
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+async function fixture(b) {
+  const imp = await req('POST', `/api/books/${b}/imports`, { accountName: 'Checking', accountKind: 'deposit', txns: [{ date: '2026-03-01', description: 'COFFEE', amount: 4.5 }, { date: '2026-03-02', description: 'GROCER', amount: 60 }] });
+  const man = await req('POST', `/api/books/${b}/manual`, { type: 'expense', date: '2026-03-03', amount: 20, vendor: 'Cash lunch', category: 'Dining' });
+  await req('POST', `/api/books/${b}/edits`, { txKey: `i:${imp.json.id}:1`, category: 'Groceries', split: [] });
+  await req('POST', `/api/books/${b}/edits`, { txKey: `m:${man.json.id}`, category: 'Work' });
+  const f = await req('POST', `/api/books/${b}/files`, { mime: 'image/png', data: PNG });
+  await req('POST', `/api/books/${b}/receipts`, { txKey: `i:${imp.json.id}:0`, fileId: f.json.id, name: 'r.png', mime: 'image/png', size: 70 });
+}
+// every edit/receipt points at a transaction that exists, and every receipt's photo can be opened
+async function checkRefs(b) {
+  const j = (await req('GET', `/api/books/${b}/data`)).json;
+  const keys = new Set([...j.imports.flatMap((x) => (Array.isArray(x.txns) ? x.txns : JSON.parse(x.txns || '[]')).map((_, k) => `i:${x.id}:${k}`)), ...j.manual.map((m) => `m:${m.id}`)]);
+  for (const e of j.edits) assert.ok(keys.has(e.txKey), 'edit points at a real transaction: ' + e.txKey);
+  for (const r of j.receipts) { assert.ok(keys.has(r.txKey), 'receipt points at a real transaction'); assert.equal((await req('GET', `/api/books/${b}/files/${r.fileId}`)).status, 200); }
+  return j;
+}
+test('restore keeps edits, splits and receipts attached (same and another dashboard)', async () => {
+  const [b1, b2] = books();
+  await fixture(b1); await checkRefs(b1);
+  const ex = (await req('GET', `/api/books/${b1}/export`)).json;
+  const r1 = await req('POST', `/api/books/${b1}/restore`, ex); assert.equal(r1.status, 200); assert.equal(r1.json.unresolved, 0); assert.equal(r1.json.missingPhotos, 0);
+  const j1 = await checkRefs(b1); assert.equal(j1.edits.filter((e) => /^[im]:/.test(e.txKey)).length, 2); assert.equal(j1.receipts.length, 1);
+  const r2 = await req('POST', `/api/books/${b2}/restore`, ex); assert.equal(r2.status, 200);
+  await checkRefs(b2); await checkRefs(b1); // the source dashboard is untouched
+});
+test('a failure while replacing photos leaves documents and photos unchanged', async () => {
+  const b = books()[0]; const before = (await req('GET', `/api/books/${b}/export`)).json;
+  const ex = JSON.parse(JSON.stringify(before)); ex.docs.rules = [{ match: 'NEW-RULE', category: 'X' }];
+  srv._store._failAfterDocs = true;
+  try { const r = await req('POST', `/api/books/${b}/restore`, ex); assert.equal(r.status, 500); } finally { srv._store._failAfterDocs = false; }
+  const after = (await req('GET', `/api/books/${b}/export`)).json;
+  assert.deepEqual(after.docs.rules.map((x) => x.match).sort(), before.docs.rules.map((x) => x.match).sort());
+  assert.equal(after.files.length, before.files.length); await checkRefs(b);
+});
+test('an older backup without photos keeps the dashboard\'s existing photos', async () => {
+  const b = books()[0]; const ex = (await req('GET', `/api/books/${b}/export`)).json; delete ex.files;
+  const r = await req('POST', `/api/books/${b}/restore`, ex); assert.equal(r.status, 200); assert.equal(r.json.legacy, true); assert.equal(r.json.missingPhotos, 0);
+  await checkRefs(b);
+});

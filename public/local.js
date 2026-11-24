@@ -36,7 +36,12 @@
     deleteDoc: (bookId, coll, id) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const d = await req2p(s.get(id)); if (d && d.bookId === bookId && d.coll === coll) s.delete(id); }),
     replaceBookDocs: (bookId, rows) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const keys = (await req2p(s.getAll())).filter((d) => d.bookId === bookId).map((d) => d.id); keys.forEach((k) => s.delete(k)); rows.forEach((r) => s.put({ ...r, bookId })); }),
     newId,
-    backup: () => snapshot('before-restore'),
+    backup: () => snapshot('before-restore', true), // the safety copy before a restore keeps photos too
+    // restore: documents and photos in ONE IndexedDB transaction (files null = keep this book's photos)
+    replaceBook: (bookId, rows, files) => tx(files ? ['docs', 'files'] : ['docs'], 'readwrite', async (t) => {
+      const s = t.objectStore('docs'); (await req2p(s.getAll())).filter((d) => d.bookId === bookId).forEach((d) => s.delete(d.id)); rows.forEach((r) => s.put({ ...r, bookId }));
+      if (files) { const s2 = t.objectStore('files'); (await req2p(s2.getAll())).filter((f) => f.bookId === bookId).forEach((f) => s2.delete(f.id)); files.forEach((f) => s2.put({ ...f, bookId, created: new Date().toISOString() })); }
+      if (window.__fdFailRestore) t.abort(); }),
     putFile: (f) => tx(['files'], 'readwrite', (t) => { t.objectStore('files').put(f); }),
     getFile: async (bookId, id) => { const f = await tx(['files'], 'readonly', (t) => req2p(t.objectStore('files').get(id))); return f && f.bookId === bookId ? { mime: f.mime, data: f.data } : null; },
     deleteFile: (bookId, id) => tx(['files'], 'readwrite', async (t) => { const s2 = t.objectStore('files'); const f = await req2p(s2.get(id)); if (f && f.bookId === bookId) s2.delete(id); }),
@@ -48,11 +53,11 @@
   const books = async () => { let b = await all('books'); if (!b.length) { b = [{ id: 'personal', name: 'Personal', label: 'Personal', sort: 0 }]; await tx(['books'], 'readwrite', (t) => { b.forEach((x) => t.objectStore('books').put(x)); }); } return b.sort((x, y) => x.sort - y.sort); };
 
   // ---------- automatic backups: one snapshot a day, keep the last 14 (inside the app) ----------
-  async function snapshot(why) {
+  async function snapshot(why, withPhotos) {
     const core = await coreReady, api = core.createBookApi(store), list = [];
-    for (const b of await books()) { const x = await api.exportBook(b); delete x.files; list.push(x); } // photos stay out of the in-app snapshots (backup files include them)
+    for (const b of await books()) { const x = await api.exportBook(b); if (!withPhotos) delete x.files; list.push(x); } // daily snapshots leave photos out to save space (labelled below); the pre-restore one keeps them
     const id = new Date().toISOString().replace(/[:.]/g, '-') + (why ? '-' + why : '');
-    await tx(['backups'], 'readwrite', (t) => { t.objectStore('backups').put({ id, at: Date.now(), why: why || 'daily', books: list }); });
+    await tx(['backups'], 'readwrite', (t) => { t.objectStore('backups').put({ id, at: Date.now(), why: why || 'daily', photos: !!withPhotos, books: list }); });
     const old = (await all('backups')).sort((a, b) => b.at - a.at).slice(14);
     if (old.length) await tx(['backups'], 'readwrite', (t) => old.forEach((o) => t.objectStore('backups').delete(o.id)));
     return id;

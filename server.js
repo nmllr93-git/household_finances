@@ -199,8 +199,19 @@ const BOOKS_STORE = {
       for (const r of rows) ins.run(r.id, bookId, r.coll, r.json, r.created, r.createdBy); db.exec('COMMIT'); }
     catch (e) { db.exec('ROLLBACK'); throw e; }
   },
+  // restore: documents and photos replaced in ONE transaction (files null = keep this book's photos as they are)
+  replaceBook: (bookId, rows, files) => {
+    db.exec('BEGIN');
+    try { db.prepare('DELETE FROM docs WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const r of rows) ins.run(r.id, bookId, r.coll, r.json, r.created, r.createdBy);
+      if (files) { db.prepare('DELETE FROM files WHERE book_id = ?').run(bookId); const fi = db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');
+        for (const f of files) fi.run(f.id, bookId, f.mime, Buffer.from(f.data, 'base64'), new Date().toISOString(), ''); }
+      if (BOOKS_STORE._failAfterDocs) throw new Error('test: forced failure during photo replacement');
+      db.exec('COMMIT'); }
+    catch (e) { db.exec('ROLLBACK'); throw e; }
+  },
   newId: () => crypto.randomBytes(10).toString('base64url'),
-  backup: () => backup(),
+  backup: () => { const f = backup(); if (!f) throw new Error('the backup didn’t complete'); return f; },
   putFile: (f) => db.prepare('INSERT INTO files (id, book_id, mime, data, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(f.id, f.bookId, f.mime, Buffer.from(f.data, 'base64'), f.created, f.createdBy),
   getFile: (bookId, id) => { const r = db.prepare('SELECT mime, data FROM files WHERE id = ? AND book_id = ?').get(id, bookId); return r ? { mime: r.mime, data: Buffer.from(r.data).toString('base64') } : null; },
   deleteFile: (bookId, id) => db.prepare('DELETE FROM files WHERE id = ? AND book_id = ?').run(id, bookId),
@@ -755,5 +766,5 @@ if (require.main === module) {
   const quit = () => stop().then(() => { try { db.close(); } catch {} process.exit(0); });
   process.on('SIGINT', quit); process.on('SIGTERM', quit);
 } else {
-  module.exports = { start, stop, info, setMode, addUser, resetPassword, logins, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
+  module.exports = { _store: BOOKS_STORE, start, stop, info, setMode, addUser, resetPassword, logins, backup, setCloudDir, cloudInfo, dataDir: DATA_DIR, books: () => db.prepare('SELECT id, name FROM books ORDER BY sort').all() };
 }

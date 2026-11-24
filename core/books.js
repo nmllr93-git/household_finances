@@ -96,18 +96,43 @@
       if (store.listFiles) out.files = await store.listFiles(book.id); // receipt photos: [{ id, mime, data (base64) }]
       return out;
     }
+    // Restore a backup into a book, all or nothing.
+    //  1. Check and prepare everything first: new ids for every document and photo, and an old→new map.
+    //  2. Rewrite what points at those ids: edits and receipts refer to transactions by key ("i:<import id>:<row>",
+    //     "m:<manual id>") and receipts to their photo ("fileId"), so they keep working after the ids change.
+    //  3. A safety copy of the current data (photos included) must succeed first, or nothing is touched.
+    //  4. Replace documents and photos together in one transaction (store.replaceBook), so a failure changes nothing.
+    // Backups without a "files" list (older ones) keep this book's existing photos where receipts still match them.
     async function restore(book, body, user) {
       if (!body || typeof body.docs !== 'object' || !body.docs) return reply(400, { error: 'That doesn\u2019t look like a backup file from this app.' });
-      const safety = store.backup ? await store.backup() : '';
-      const rows = []; const now = new Date().toISOString();
+      const now = new Date().toISOString(), idMap = new Map(), staged = [];
       for (const [c, list] of Object.entries(body.docs)) {
         if (!COLLECTIONS.includes(c) || !Array.isArray(list)) continue;
         for (const d of list) { const { id, created, createdBy, ...rest } = d || {}; const doc = cleanDoc(c, rest, book.label); if (rest.createdAt) doc.createdAt = String(rest.createdAt).slice(0, 40);
-          rows.push({ id: store.newId(), bookId: book.id, coll: c, json: JSON.stringify(doc), created: created || now, createdBy: createdBy || user }); }
+          const nid = store.newId(); if (id) idMap.set(c + ':' + String(id), nid);
+          staged.push({ c, nid, doc, created: created || now, createdBy: createdBy || user }); }
       }
-      const files = Array.isArray(body.files) ? body.files.filter((f) => f && typeof f.id === 'string' && IMAGE_TYPES.includes(f.mime) && typeof f.data === 'string').map((f) => ({ id: f.id.slice(0, 40), mime: f.mime, data: f.data })) : null;
-      try { await store.replaceBookDocs(book.id, rows); if (files && store.replaceBookFiles) await store.replaceBookFiles(book.id, files); } catch (e) { return reply(500, { error: 'Restore failed; nothing was changed. ' + e.message }); }
-      return reply(200, { ok: true, restored: rows.length, safetyBackup: safety ? String(safety).split(/[\\/]/).pop() : '' });
+      // photos: new ids (a backup may be restored into another dashboard on the same computer, where the old ids are taken)
+      const hasFiles = Array.isArray(body.files), fileMap = new Map();
+      const files = hasFiles ? body.files.filter((f) => f && typeof f.id === 'string' && IMAGE_TYPES.includes(f.mime) && typeof f.data === 'string')
+        .map((f) => { const nid = store.newId(); fileMap.set(f.id.slice(0, 40), nid); return { id: nid, mime: f.mime, data: f.data }; }) : null;
+      const keepIds = !hasFiles && store.listFiles ? new Set((await store.listFiles(book.id)).map((f) => f.id)) : null;
+      let unresolved = 0, missingPhotos = 0;
+      const remapKey = (k) => { k = String(k || ''); let m = k.match(/^i:(.+):(\d+)$/); if (m) { const n = idMap.get('imports:' + m[1]); if (n) return `i:${n}:${m[2]}`; unresolved++; return k; }
+        m = k.match(/^m:(.+)$/); if (m) { const n = idMap.get('manual:' + m[1]); if (n) return `m:${n}`; unresolved++; return k; } return k; }; // other key kinds (sheet rows) don't change
+      for (const x of staged) {
+        if ((x.c === 'edits' || x.c === 'receipts') && x.doc.txKey) x.doc.txKey = remapKey(x.doc.txKey);
+        if (x.c === 'receipts' && x.doc.fileId) { if (hasFiles) { const n = fileMap.get(x.doc.fileId); if (n) x.doc.fileId = n; else missingPhotos++; } else if (!keepIds.has(x.doc.fileId)) missingPhotos++; }
+      }
+      const rows = staged.map((x) => ({ id: x.nid, bookId: book.id, coll: x.c, json: JSON.stringify(x.doc), created: x.created, createdBy: x.createdBy }));
+      let safety = '';
+      if (store.backup) { try { safety = await store.backup(); } catch (e) { return reply(500, { error: 'Restore stopped before changing anything: the safety copy of your current data couldn\u2019t be made. ' + e.message }); } }
+      try {
+        if (store.replaceBook) await store.replaceBook(book.id, rows, files); // documents and photos together; files null = keep the current photos
+        else { await store.replaceBookDocs(book.id, rows); if (files && store.replaceBookFiles) await store.replaceBookFiles(book.id, files); }
+      } catch (e) { return reply(500, { error: 'Restore failed; nothing was changed. ' + e.message }); }
+      return reply(200, { ok: true, restored: rows.length, photos: files ? files.length : null, unresolved, missingPhotos, legacy: !hasFiles,
+        safetyBackup: safety ? String(safety).split(/[\\/]/).pop() : '' });
     }
     async function addDoc(book, coll, body, user) {
       const json = JSON.stringify(cleanDoc(coll, body || {}, book.label));
