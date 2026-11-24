@@ -316,8 +316,9 @@
     const close = () => { if (open) { open.remove(); open = null; } };
     const navBtn = (g) => nav.querySelector(`.fd-navb[data-group="${g}"]`);
     const label = (g) => (navBtn(g) || {}).textContent || g;
+    const navLbl = (b, t) => { const c = document.createElement('span'); c.className = 'fd-caret'; c.textContent = ' ▾'; b.replaceChildren(t, c); };
     const groupBtns = MENUS.map(([name, gs]) => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-navm'; b.dataset.menu = name; b.textContent = name + ' ▾'; b.setAttribute('aria-haspopup', 'menu');
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-navm'; b.dataset.menu = name; navLbl(b, name); b.setAttribute('aria-haspopup', 'menu');
       b.addEventListener('click', (e) => {
         e.stopPropagation(); const was = open && open.__for === b; close(); if (was) return;
         const m = document.createElement('div'); m.className = 'fd-navpop'; m.setAttribute('role', 'menu'); m.__for = b;
@@ -331,7 +332,7 @@
     });
     nav.prepend(...groupBtns);
     document.addEventListener('click', close); window.addEventListener('scroll', close, { passive: true });
-    const mark = () => { const g = NP.group || 'all'; groupBtns.forEach((b, i) => { const hit = MENUS[i][1].includes(g); b.classList.toggle('is-on', hit); b.textContent = (hit ? label(g).replace(/^⚙\s*/, '') : MENUS[i][0]) + ' ▾'; }); };
+    const mark = () => { const g = NP.group || 'all'; groupBtns.forEach((b, i) => { const hit = MENUS[i][1].includes(g); b.classList.toggle('is-on', hit); navLbl(b, hit ? label(g).replace(/^⚙\s*/, '') : MENUS[i][0]); }); };
     const orig = showGroup; showGroup = (g) => { orig(g); mark(); }; mark();
   }
   // jump to a section (phone widgets and alerts use this)

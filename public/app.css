@@ -56,7 +56,7 @@ a { color: var(--series-1); }
   .fd-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: 1.85rem; margin: 6px 0 2px; font-variant-numeric: tabular-nums; line-height: 1.15; }
   .fd-sub { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
   .fd-good { color: var(--color-ok); } .fd-bad { color: var(--color-bad); }
-  .fd-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--cds-gap-lg); }
+  .fd-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--cds-gap-lg); }
   .fd-box { position: relative; min-height: 240px; }
   .fd-chart svg { display: block; overflow: visible; }
   .fd-tick { fill: var(--cds-text-secondary); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); font-variant-numeric: tabular-nums; }
@@ -89,7 +89,7 @@ a { color: var(--series-1); }
   .fd-btn[disabled] { opacity: .45; cursor: default; }
   .fd-msg { font-size: var(--cds-font-size-caption); margin: var(--cds-gap-xs) 0 0; }
   .fd-msg.ok { color: var(--color-ok); } .fd-msg.err { color: var(--color-bad); }
-  .fd-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--cds-gap-lg); }
+  .fd-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--cds-gap-lg); }
   .fd details summary { cursor: pointer; font-size: var(--cds-font-size-body); }
   .fd details ul { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); line-height: 1.55; padding-left: 18px; }
   .fd-subs-sum { font-size: var(--cds-font-size-body); margin: 0 0 var(--cds-gap-sm); }
@@ -338,7 +338,7 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 .fd-navpop { position: fixed; z-index: 40; font-family: var(--font-anthropic-sans, system-ui, sans-serif); min-width: 180px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; display: flex; flex-direction: column; }
 .fd-navpop button { font: inherit; font-size: 15px; text-align: left; padding: 11px 12px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
 .fd-navpop button:hover, .fd-navpop button.is-on { background: color-mix(in srgb, var(--color-fg, #000) 8%, transparent); font-weight: 600; }
-@media (max-width: 640px) {
+@media (max-width: 1060px) { /* phones, foldables and portrait tablets: the tabs fold into a few menus */
   .fd-nav { overflow-x: visible; }
   .fd-nav .fd-navm { display: block; }
   .fd-nav .fd-navb:not(.fd-navset):not(.fd-navarr) { display: none; }
@@ -628,3 +628,15 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-gs.is-folded .fd-gs-head { margin-bottom: 0; }
 .fd-hl-acts { display: inline-flex; gap: 6px; flex: none; }
 .fd-hl.fd-hl-done > span:first-child { color: var(--color-fg-muted); }
+/* small phones (≈360px): the section menus shrink so ✎ and ⚙ always fit */
+@media (max-width: 420px) {
+  .fd-nav .fd-navm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; padding-left: 4px; padding-right: 4px; }
+  .fd-nav .fd-navset, .fd-nav .fd-navarr { flex: none; padding-left: 6px; padding-right: 6px; }
+  .fd-nav .fd-navarr { margin-left: auto; }
+}
+@media (max-width: 400px) { .fd-nav .fd-caret { font-size: 9px; vertical-align: 1px; } .fd-nav .fd-navm { padding-left: 3px; padding-right: 3px; } }
+@media (max-width: 400px) { .fd-nav { gap: 0; } .fd-nav .fd-navm { text-overflow: clip; } }
+@media (max-width: 370px) { .fd-nav .fd-navm { font-size: 12.5px; padding-left: 2px; padding-right: 2px; } .fd-nav .fd-navset, .fd-nav .fd-navarr { padding-left: 5px; padding-right: 5px; } }
+@media (max-width: 335px) { .fd-nav .fd-navm { font-size: 12px; text-overflow: ellipsis; } }
+/* small laptop windows: tighter tabs so every tab, ✎ Arrange and ⚙ Settings fit without scrolling */
+@media (min-width: 1061px) and (max-width: 1260px) { .fd-nav .fd-navb { padding-left: 7px; padding-right: 7px; font-size: 13.5px; } }
