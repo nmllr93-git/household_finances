@@ -687,3 +687,6 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-bizopt[open] > summary { margin-bottom: 8px; color: var(--color-fg); }
 .fd-bizopt .fd-row { flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .fd-bizaccts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+
+.fd-dupbox { border-color: var(--color-warn, #c58b00); margin-bottom: 12px; } .fd-duptable { width: 100%; } .fd-duptable td, .fd-duptable th { vertical-align: top; text-align: left; padding: 6px 8px; } .fd-duptable th:first-child { text-align: right; } .fd-duptable td.fd-r { text-align: right; font-variant-numeric: tabular-nums; }
+.fd-dupbox > .fd-btn { margin: 0 6px 6px 0; }

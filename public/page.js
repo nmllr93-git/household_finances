@@ -1311,6 +1311,36 @@
     });
   });
 
+  // ---- likely duplicates: the same purchase from bank sync and from a statement (or typed in), a few days apart ----
+  const dupOrigin = () => { const src = {}; rows('imports').forEach((b) => { src[b.id] = b.source === 'sync' ? 'sync' : 'file'; });
+    return (k) => { k = String(k || ''); if (k.startsWith('m:')) return 'manual'; const m = /^i:([^:]+):/.exec(k); return m ? src[m[1]] || 'file' : null; }; };
+  const dupPairs = () => { if (!window.FDLikelyDupes || st('txns', 'imports') !== 'ok') return []; const okL = prefGet('dupOk', []) || [];
+    return window.FDLikelyDupes(rows('txns').filter((t) => t.book === book()), dupOrigin(), { ok: new Set(Array.isArray(okL) ? okL : []) }); };
+  const dupIgnore = async (t) => { const d = await db(); if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
+    else await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); };
+  let dupOpen = false;
+  dash.draw('dupReview', (el) => {
+    el.replaceChildren(); const P0 = dupPairs(); if (!P0.length) return;
+    const ro = document.body.classList.contains('fd-readonly'), box = document.createElement('div'); box.className = 'fd-rb fd-dupbox';
+    const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = `⚠ ${P0.length} possible duplicate${P0.length === 1 ? '' : 's'}`; box.append(h);
+    box.append(phMsg('The same purchase seems to be here twice: once from bank sync and once from a statement (or typed in), with the same amount a few days apart. Usually a pending charge in the file posted later in sync. Keep one copy; the other is ignored and can be restored from Ignored transactions.'));
+    const msg = phMsg(''); const busy = (b) => { box.querySelectorAll('button').forEach((x) => { x.disabled = b; }); };
+    if (!ro) { const all = rbtn(`Keep the bank sync copy of all ${P0.length}`, async () => { if (!confirm(`Ignore the statement or hand-typed copy of ${P0.length} transaction${P0.length === 1 ? '' : 's'}? You can restore them from Ignored transactions.`)) return; busy(true); msg.className = 'fd-note'; msg.textContent = 'Working…';
+        try { for (const p of P0) await dupIgnore(p.other); msg.className = 'fd-note fd-good'; msg.textContent = '✓ Done.'; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; busy(false); } }, false);
+      const tog = rbtn(dupOpen ? 'Hide the list' : 'Review them one by one', () => { dupOpen = !dupOpen; dash.draw('dupReview'); }); const bar = document.createElement('div'); bar.className = 'fd-row'; bar.style.gap = '8px'; bar.append(all, tog); box.append(bar, msg); }
+    if (dupOpen || ro) {
+      const tbl = document.createElement('table'); tbl.className = 'fd-table fd-duptable'; const hd = document.createElement('tr'); ['Amount', 'Bank sync', 'Statement / typed', ''].forEach((x) => { const th = document.createElement('th'); th.textContent = x; hd.append(th); }); tbl.append(hd);
+      const cellOf = (t, from) => { const c = document.createElement('td'); const a = document.createElement('div'); a.textContent = `${t.date} · ${t.vendor || t.description}`; a.translate = false; const b = document.createElement('div'); b.className = 'fd-zero'; b.textContent = `${t.description || ''}${from ? ' · ' + from : ''}`; b.translate = false; c.append(a, b); return c; };
+      for (const p of P0.slice(0, 50)) { const tr = document.createElement('tr'); const am = document.createElement('td'); am.className = 'fd-r'; am.textContent = money2(Math.abs(p.sync.amount)); tr.append(am, cellOf(p.sync, p.sync.source), cellOf(p.other, p.otherFrom === 'manual' ? 'typed in' : 'statement'));
+        const act = document.createElement('td'); act.className = 'fd-nowrap';
+        if (!ro) act.append(rbtn('Keep sync', async () => { busy(true); try { await dupIgnore(p.other); } catch { busy(false); } }, false), ' ', rbtn('Keep statement', async () => { busy(true); try { await dupIgnore(p.sync); } catch { busy(false); } }), ' ',
+          rbtn('Not duplicates', async () => { busy(true); const l = prefGet('dupOk', []) || []; await prefSet('dupOk', [...l, p.id].slice(-500)); }));
+        tr.append(act); tbl.append(tr); }
+      const w = document.createElement('div'); w.className = 'fd-tablewrap'; w.append(tbl); box.append(w); if (P0.length > 50) box.append(phMsg(`Showing 50 of ${P0.length}. Keep or dismiss some to see the rest.`));
+    }
+    el.append(box);
+  });
+
   // ---- ignored transactions ----
   const ignMine = () => rows('ignored_txns').filter((t) => t.book === book());
   dash.draw('ignCount', (el) => { el.textContent = st('ignored_txns') === 'ok' ? `(${ignMine().length})` : ''; });
@@ -2046,12 +2076,14 @@
     if (unc) out.push({ id: 'uncat', sig: String(unc), lvl: 'info', text: `${unc} transaction${unc === 1 ? '' : 's'} in this range need${unc === 1 ? 's' : ''} a category.`, go: 'needs' });
     for (const x of econAlerts()) out.push(x);
     for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
+    try { const dp = dupPairs(); if (dp.length) out.push({ id: 'dupes', sig: String(dp.length), lvl: 'warn', text: `${dp.length} transaction${dp.length === 1 ? ' looks' : 's look'} like ${dp.length === 1 ? 'a duplicate' : 'duplicates'}: the same purchase from bank sync and from a statement, a few days apart. Review and keep one copy.`, go: 'dupes' }); } catch {}
     try { if (hasBiz()) { const q0 = bizNextDue(), days = q0 ? Math.round((Date.parse(q0.due) - Date.now()) / 864e5) : 99;
       if (q0 && days <= 14) out.push({ id: `biztax:${q0.year}:${q0.q}`, sig: q0.due, lvl: 'warn', text: `Quarterly estimated tax (Q${q0.q} ${q0.year}) is due ${q0.due}${days <= 0 ? ' (today)' : ` (in ${days} day${days === 1 ? '' : 's'})`}. About ${money0(q0.estimate)} set aside from business profit.`, go: 'biztax' });
       const r = bizSum(new Date().getFullYear(), ''); if (r.missing.length) out.push({ id: 'bizrcpt', sig: String(r.missing.length), lvl: 'info', text: `${r.missing.length} business expense${r.missing.length === 1 ? '' : 's'} of ${money0(BIZ().receiptMin)} or more ${r.missing.length === 1 ? 'needs' : 'need'} a receipt photo.`, go: 'biztx' }); } } catch {}
     return out;
   };
   const goTo = (where) => {
+    if (where === 'dupes') { showGroup('tx'); dupOpen = true; dash.draw('dupReview'); setTimeout(() => document.querySelector('#fd-dupes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150); return; }
     if (where === 'biztax' || where === 'biztx') { showGroup('business'); setTimeout(() => document.querySelector(where === 'biztax' ? '#biz-tax' : '#biz-tx')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
     if (where === 'needs') { showGroup('tx'); q('fd-tneeds').forEach((c) => { c.checked = true; c.dispatchEvent(new Event('change')); }); setTimeout(() => document.querySelector('#transactions')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
     const g = { import: 'import', accounts: 'accounts', subscriptions: 'expenses' }[where] || 'all';

@@ -807,3 +807,34 @@ function businessSummary(txns, opts) {
   };
 }
 if (typeof window !== 'undefined') { window.FDBusiness = businessSummary; window.FDSchedC = SCHED_C; window.FDSchedLine = schedLine; window.FDMileRate = mileRate; }
+
+// ---- Likely duplicates between bank sync and statements (or manual entries) ----
+// The exact-match rule above can't catch these: banks word descriptions differently in their files and in sync, and a
+// pending purchase often posts a day or two later. A pair: same dashboard and account, same kind and amount (to the cent),
+// dates at most `days` apart, one copy from bank sync and the other from a statement or typed in by hand.
+// origin(key) → 'sync' | 'file' | 'manual'; ok: Set of "keyA|keyB" pairs the user said aren't duplicates. Each transaction is used once.
+function likelyDupes(txns, origin, opts) {
+  const o = opts || {}, days = o.days == null ? 3 : o.days, ok = o.ok || new Set(), c = (x) => Math.round(Math.abs(Number(x)) * 100);
+  const ms = (d) => Date.parse(String(d) + 'T00:00:00Z');
+  const groups = new Map();
+  for (const t of txns || []) {
+    if (!t || !t.date || t.splitOf || t.ignored || t.type === 'transfer') continue;
+    const src = origin(t.key); if (!src) continue;
+    const g = `${t.book}|${String(t.source || '').toLowerCase()}|${t.type}|${c(t.amount)}`;
+    if (!groups.has(g)) groups.set(g, []); groups.get(g).push({ t, src, at: ms(t.date) });
+  }
+  const pairs = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sync = list.filter((x) => x.src === 'sync').sort((a, b) => a.at - b.at), other = list.filter((x) => x.src !== 'sync').sort((a, b) => a.at - b.at), used = new Set();
+    for (const s of sync) {
+      let best = null;
+      for (const f of other) { if (used.has(f.t.key)) continue; const gap = Math.abs(s.at - f.at) / 864e5; if (gap > days) continue;
+        const k1 = `${s.t.key}|${f.t.key}`, k2 = `${f.t.key}|${s.t.key}`; if (ok.has(k1) || ok.has(k2)) continue;
+        if (!best || gap < best.gap) best = { f, gap }; }
+      if (best) { used.add(best.f.t.key); pairs.push({ sync: s.t, other: best.f.t, otherFrom: best.f.src, gap: Math.round(best.gap), id: `${s.t.key}|${best.f.t.key}` }); }
+    }
+  }
+  return pairs.sort((a, b) => String(b.sync.date).localeCompare(String(a.sync.date)));
+}
+if (typeof window !== 'undefined') window.FDLikelyDupes = likelyDupes;

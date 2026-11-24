@@ -324,3 +324,20 @@ test('business: default accounts, cost of goods sold, car method, payments and s
   assert.equal(p.safeHarbor, 2200); assert.equal(p.paid, 500);
   const q1 = p.quarters[0]; assert.equal(q1.need, Math.min(q1.estimate, 550)); assert.equal(q1.paid, Math.min(500, q1.need));
 });
+test('likely duplicates: bank sync vs statement, a day apart, different wording; repeats and other accounts stay', () => {
+  const ctx = { dash: { calc: () => {}, params: () => ({}) }, console, Date, Math, JSON, Intl, window: {} }; vm.runInNewContext(SRC, ctx);
+  const ld = (...a) => J(ctx.window.FDLikelyDupes(...a));
+  const T = (key, date, amount, extra = {}) => ({ key, book: 'Personal', source: 'Capital One', type: 'expense', date, amount, description: key, ...extra });
+  const tx = [
+    T('i:csv:1', '2026-11-03', 42.1), T('i:syn:1', '2026-11-04', 42.1),           // pending in the file, posted a day later in sync
+    T('i:csv:2', '2026-11-05', 5.25), T('i:syn:2', '2026-11-05', 5.25), T('i:syn:3', '2026-11-06', 5.25), // two coffees synced, one in the file
+    T('i:csv:4', '2026-11-01', 99), T('i:syn:4', '2026-11-09', 99),                 // 8 days apart: not a pair
+    T('i:csv:5', '2026-11-02', 20, { source: 'Checking' }), T('i:syn:5', '2026-11-02', 20), // different accounts
+    T('i:syn:6', '2026-11-07', 12), T('i:syn:7', '2026-11-07', 12),                 // both synced: real repeats
+    T('m:1', '2026-11-08', 30), T('i:syn:8', '2026-11-09', 30),                     // typed by hand, then synced
+  ];
+  const origin = (k) => (k.startsWith('m:') ? 'manual' : k.startsWith('i:syn') ? 'sync' : 'file');
+  const p = ld(tx, origin, {});
+  assert.deepEqual(p.map((x) => x.id).sort(), ['i:syn:1|i:csv:1', 'i:syn:2|i:csv:2', 'i:syn:8|m:1'].sort());
+  assert.equal(ld(tx, origin, { ok: new Set(['i:csv:1|i:syn:1']) }).length, 2); // marked "not duplicates"
+});
