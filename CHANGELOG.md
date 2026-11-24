@@ -3,6 +3,19 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Desktop 1.0.26
+- Vehicle values follow an age curve (steep early, a few % a year after about 7) instead of a flat %; choose Typical, Holds value well or Loses value fast, or keep a fixed %
+- Odometer readings: your own miles per month worked out from them, estimated mileage between readings (≈), and a small capped mileage adjustment to the value
+- Free value checks: links to Kelley Blue Book, Edmunds and VinAudit; the estimate continues from the value you enter; reminder every 3 months
+- Budget tile: the today/pace key shows under the ring whenever the tile is narrow, so nothing spills out
+- Tour mentions PDF statements
+- Teller removed (its service closed to new sign-ups); bank sync is SimpleFIN or your own Plaid keys
+
+## Android 1.6.6
+- Market movers widget hides penny stocks and leveraged/inverse ETFs by default; change it in Settings → Market movers widget
+- Stock prices stay visible on the Markets and Market movers widgets with "hide amounts" (your own figures stay hidden)
+- Plus the vehicle, budget tile, tour and bank sync changes from Desktop 1.0.26
+
 ## Desktop 1.0.25
 - Encrypted connections on your home network: your PC makes its own HTTPS certificate (free), and the Larenest apps trust exactly that one via the QR code
 - Warns you if a computer's certificate ever changes; the certificate is kept in backups, so restores keep phones paired
