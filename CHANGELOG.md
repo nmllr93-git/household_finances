@@ -3,6 +3,10 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- Spanish (beta): the summary line, custom reports, debt and retirement notes, backups, email and Plaid setup, bank download steps and "How the numbers are worked out" are now translated
+- Phones: the "Warn me below" box on the cash forecast no longer stretches tall
+
 ## Desktop 1.0.34
 - **Delete my login:** people who joined a server with an invite can delete their own login from the ☰ account menu (it asks for the password). Budgets stay for the others who use them; the login that set up the server can't be deleted this way
 - iPhone: the camera permission message now mentions scanning the server's QR code as well as receipt photos
