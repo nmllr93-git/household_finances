@@ -1,10 +1,12 @@
 // Bridge between the app's own screens (setup, connect) and the main process.
-// The dashboard pages loaded from the server only get openHost/setupAgain; nothing here reaches files or Node.
+// The dashboard pages loaded from the server only get openHost/setupAgain/checkUpdates/version; nothing here reaches files or Node.
 const { contextBridge, ipcRenderer } = require('electron');
 const local = location.protocol === 'file:';
 const api = {
   openHost: (url) => ipcRenderer.invoke('fd:openHost', url),
   setupAgain: () => ipcRenderer.invoke('fd:setupAgain'),
+  checkUpdates: () => ipcRenderer.invoke('fd:checkUpdates'), // shows the app's own update dialogs
+  version: () => ipcRenderer.invoke('fd:version'),
   desktop: true,
 };
 if (local) Object.assign(api, {

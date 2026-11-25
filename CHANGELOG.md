@@ -3,10 +3,62 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.32
+- **Possible duplicates:** when bank sync brings in a purchase that's already there from a statement or typed in by hand (same account and amount, a few days apart, often a pending charge that posted later), Needs attention points to a list where you keep one copy, keep all the bank-sync copies at once, or mark a pair as not duplicates
+- **Notes on transactions:** add a note in the transaction editor (up to 500 characters). Notes show under the vendor, are searchable, and are included in the business and tax packet downloads
+- Home, vehicles and other assets shared from another dashboard now show in that list too, marked ⇄
+- Fixed: the Net worth tile (and the Cash & investments card) now match the Accounts list: they include your home, vehicles and other assets, and accounts shared into the dashboard
+- Account tiles include accounts shared into the dashboard ("incl. $X shared ⇄"), following each share's counted-here checkboxes; new **Home, vehicles & other** tile, on the Accounts tab by default
+
+## Android 1.6.12
+- **Possible duplicates:** when bank sync brings in a purchase that's already there from a statement or typed in by hand (same account and amount, a few days apart, often a pending charge that posted later), Needs attention points to a list where you keep one copy, keep all the bank-sync copies at once, or mark a pair as not duplicates
+- **Notes on transactions:** add a note in the transaction editor (up to 500 characters). Notes show under the vendor, are searchable, and are included in the business and tax packet downloads
+- Home, vehicles and other assets shared from another dashboard now show in that list too, marked ⇄
+- Fixed: the Net worth tile (and the Cash & investments card) now match the Accounts list: they include your home, vehicles and other assets, and accounts shared into the dashboard
+- Account tiles include accounts shared into the dashboard ("incl. $X shared ⇄"), following each share's counted-here checkboxes; new **Home, vehicles & other** tile, on the Accounts tab by default
+
+## Desktop 1.0.31
+- **Business features** for freelancers and side businesses without an LLC (⚙ Settings → This dashboard → Business; hidden until you add one):
+  - mark transactions as business, one at a time, in bulk by text or account, or with a rule; a business share % for mixed costs (e.g. 30% of a phone bill); more than one business
+  - IRS Schedule C lines picked from the category, or chosen yourself; business income and net profit
+  - Business tab: profit and loss, transactions with ⚠ missing-receipt flags, quarterly estimated taxes with due dates and a Needs attention reminder, mileage log at the IRS rate, home office (simplified method)
+  - business tiles; downloads as CSV, or print / save as PDF
+  - **Download tax packet (ZIP)**: one file for your tax preparer, with the Schedule C summary, business transactions, every transaction for the year (business and personal), mileage log, estimated payments, a printable summary and the receipt photos
+  - optional extras, folded away until you open them: business-only accounts, inventory and cost of goods sold for product sellers, vehicle details (Part IV) and standard-rate vs actual car costs, last year's tax for the safe harbor, and estimated payments already made
+- Desktop app: **Check for updates** and the version number are now in ⚙ Settings, so computers that connect to another host can update without the hidden menu
+- More account types: Roth 401(k), Solo 401(k), TSP, Coverdell ESA, UTMA/UGMA, ABLE account, annuity and Treasury bonds (investments), and FSA (cash)
+- Mac app: signed and notarized by Apple, so it opens without the "unidentified developer" warning
+
+## Android 1.6.11
+- **Business features** for freelancers and side businesses without an LLC (⚙ Settings → This dashboard → Business; hidden until you add one):
+  - mark transactions as business, one at a time, in bulk by text or account, or with a rule; a business share % for mixed costs (e.g. 30% of a phone bill); more than one business
+  - IRS Schedule C lines picked from the category, or chosen yourself; business income and net profit
+  - Business tab: profit and loss, transactions with ⚠ missing-receipt flags, quarterly estimated taxes with due dates and a Needs attention reminder, mileage log at the IRS rate, home office (simplified method)
+  - business tiles; downloads as CSV, or print / save as PDF
+  - **Download tax packet (ZIP)**: one file for your tax preparer, with the Schedule C summary, business transactions, every transaction for the year (business and personal), mileage log, estimated payments, a printable summary and the receipt photos
+  - optional extras, folded away until you open them: business-only accounts, inventory and cost of goods sold for product sellers, vehicle details (Part IV) and standard-rate vs actual car costs, last year's tax for the safe harbor, and estimated payments already made
+- Desktop app: **Check for updates** and the version number are now in ⚙ Settings, so computers that connect to another host can update without the hidden menu
+- More account types: Roth 401(k), Solo 401(k), TSP, Coverdell ESA, UTMA/UGMA, ABLE account, annuity and Treasury bonds (investments), and FSA (cash)
+
+## Desktop 1.0.30
+- Encrypt the data folder (optional, Settings → Backup & privacy): a password protects transactions, budgets, receipts, Google Sheets history and the activity log. You get a one-time recovery key; change the password any time; turn it off again
+- Unlock automatically when this computer starts (host setting). Without it, after a restart the app shows an unlock page and bank sync, email summaries and backups wait until someone unlocks. Docker/Linux can unlock at startup with HF_ENC_PASSWORD. Backups made before encryption can be deleted from the same place
+- Tiles now show charts: trend lines for account balances and net worth, month bars for spending, income and savings rate, a meter for budget used, and short lists (top categories, unusual spending, budgets closest to their limit, subscriptions, upcoming paydays and bills, vendors without a category). Your own report tiles show bars or their top items
+- Choosing a tab now opens at the top of that tab, with its tiles
 - Getting started: "Connect your phone" only shows on a computer, and ticks itself off once a phone opens the dashboard. **Dismiss** removes the list from that dashboard on every device (⚙ Settings can bring it back); Hide folds it to one line on this device
 - Needs attention: **Dismiss** any alert, on every device. It comes back only if what it's about changes (for example, a newer statement that also goes stale). "Show them again" restores them
 - After dismissing an account's alert, **Don't check this account** stops statement and balance warnings for it for good (**Check again** under the alerts turns them back on)
+- Small phones and foldables: the menu bar fits from 344px wide; tabs become drop-down menus below 1060px so ⚙ and ✎ always fit; grids shrink inside narrow sections
+
+## Android 1.6.10
+- Encrypt the data folder (optional, Settings → Backup & privacy): a password protects transactions, budgets, receipts, Google Sheets history and the activity log. You get a one-time recovery key; change the password any time; turn it off again
+- Unlock automatically when this computer starts (host setting). Without it, after a restart the app shows an unlock page and bank sync, email summaries and backups wait until someone unlocks. Docker/Linux can unlock at startup with HF_ENC_PASSWORD. Backups made before encryption can be deleted from the same place
+- Tiles now show charts: trend lines for account balances and net worth, month bars for spending, income and savings rate, a meter for budget used, and short lists (top categories, unusual spending, budgets closest to their limit, subscriptions, upcoming paydays and bills, vendors without a category). Your own report tiles show bars or their top items
+- Choosing a tab now opens at the top of that tab, with its tiles
+- Getting started: "Connect your phone" only shows on a computer, and ticks itself off once a phone opens the dashboard. **Dismiss** removes the list from that dashboard on every device (⚙ Settings can bring it back); Hide folds it to one line on this device
+- Needs attention: **Dismiss** any alert, on every device. It comes back only if what it's about changes (for example, a newer statement that also goes stale). "Show them again" restores them
+- After dismissing an account's alert, **Don't check this account** stops statement and balance warnings for it for good (**Check again** under the alerts turns them back on)
+- Small phones and foldables: the menu bar fits from 344px wide; tabs become drop-down menus below 1060px so ⚙ and ✎ always fit; grids shrink inside narrow sections
 
 ## Desktop 1.0.29
 - Tiles for each tab: Accounts, Expenses, Budget, Planning and Transactions each get their own row of tiles at the top; click one to jump to the section behind it

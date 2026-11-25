@@ -282,7 +282,7 @@
 
   // ---- navigation groups and collapsible sections ----
   const GROUPS = { overview: ['health', 'split', 'unusual', 'top-vendors', 'cashflow', 'big', 'bills'], accounts: ['networth', 'accounts', 'sharedin', 'assets', 'goals', 'holdings', 'deposits', 'investments', 'mortgage'],
-    expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], import: ['import'], review: ['review'], planning: ['forecast', 'planner', 'projection', 'taxes'], markets: ['markets', 'economy'], settings: ['settings'] };
+    expenses: ['unusual', 'categories', 'big', 'subscriptions', 'vendors', 'tags', 'dow', 'top-vendors', 'cashflow'], budget: ['budget', 'split'], tx: ['transactions'], business: ['biz-summary', 'biz-tx', 'biz-mark', 'biz-tax', 'biz-miles'], import: ['import'], review: ['review'], planning: ['forecast', 'planner', 'projection', 'taxes'], markets: ['markets', 'economy'], settings: ['settings'] };
   const ALL = [...new Set(Object.values(GROUPS).flat())];
   let HIDESEC = new Set(), HIDEPART = new Set(); const PART = (k) => HIDEPART.has(k);
   // Simple view (per device): hides the advanced sections and their menu buttons; Full shows everything
@@ -297,13 +297,14 @@
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
     if (SIMPLE && SIMPLE_GROUPS.has(g)) return showGroup('all');
     ALL.forEach((id) => q(id).forEach((s) => { s.hidden = !on.has(id) || HIDESEC.has(id) || (SIMPLE && SIMPLE_HIDE.has(id)); }));
-    { let shared = true; try { shared = SET().type === 'shared'; } catch {} if (!shared) q('split').forEach((x) => { x.hidden = true; }); } // "Who paid what" is for shared dashboards only
+    { let shared = true; try { shared = SET().type === 'shared'; } catch {} if (!shared) q('split').forEach((x) => { x.hidden = true; }); }
+    { let on = false; try { on = hasBiz(); } catch {} if (!on) ['biz-summary', 'biz-tx', 'biz-mark', 'biz-tax', 'biz-miles'].forEach((id) => q(id).forEach((x) => { x.hidden = true; })); } // business: only once one is added // "Who paid what" is for shared dashboards only
     simpleNav(); ['kpis', 'fd-start', 'lede', 'range'].forEach((id) => { const x = document.getElementById(id); if (x) x.classList.toggle('fd-hide-set', g === 'settings'); }); // Settings: just the dashboard picker on top (no tiles, summary, date range or getting-started)
     document.querySelectorAll('.fd-navb').forEach((b) => { b.classList.toggle('is-on', b.dataset.group === g); b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false'); }); { const nav = document.getElementById('fd-nav'), on = nav && nav.querySelector('.fd-navb.is-on'); if (on && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2; }
   };
   // Phone section menus: defaults below; each phone can rename, add, remove and regroup them (⚙ Settings → Phone menus). Saved on this device.
-  const NAV_DEFAULT = [['Overview', ['all', 'overview']], ['Spending', ['expenses', 'budget', 'tx']], ['Wealth', ['accounts', 'planning', 'markets']], ['More', ['review', 'import']]];
-  const NAV_ALL = ['all', 'overview', 'accounts', 'expenses', 'budget', 'tx', 'planning', 'markets', 'review', 'import'];
+  const NAV_DEFAULT = [['Overview', ['all', 'overview']], ['Spending', ['expenses', 'budget', 'tx']], ['Wealth', ['accounts', 'planning', 'markets']], ['More', ['business', 'review', 'import']]];
+  const NAV_ALL = ['all', 'overview', 'accounts', 'expenses', 'budget', 'tx', 'business', 'planning', 'markets', 'review', 'import'];
   const navMenus = () => { try { const m = JSON.parse(localStorage.getItem('fd-navmenus') || 'null'); if (Array.isArray(m) && m.length) {
     const used = new Set(m.flatMap((x) => x[1])), out = m.map(([n, gs]) => [String(n).slice(0, 14), gs.filter((g) => NAV_ALL.includes(g))]).filter((x) => x[1].length);
     const miss = NAV_ALL.filter((g) => !used.has(g)); if (miss.length) { if (out.length) out[out.length - 1][1].push(...miss); else out.push(['More', miss]); } return out; } } catch {} return NAV_DEFAULT.map(([n, g]) => [n, [...g]]); };
@@ -436,6 +437,17 @@
   const prevMonths = (n) => { const out = []; const d = new Date(); d.setUTCDate(15); for (let i = 1; i <= n; i++) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 15)); out.push(x.toISOString().slice(0, 7)); } return out; };
   let FCSUM = null; // filled in by the cash forecast each time it draws
   const T = (title, go, fn) => ({ title, go, fn });
+  // balance tiles: this dashboard's accounts plus accounts shared into it (each share's ⇄ checkboxes decide what counts here)
+  const withShared = (r, sh, kinds, debt) => { if (!r && !sh) return null; const own = r ? r.total : 0, tot = debt ? Math.abs(own) + Math.abs(sh) : own + sh;
+    const sub = sh ? `incl. ${money0(Math.abs(sh))} shared ⇄` : r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`;
+    const sr = balSeries(kinds, debt ? -1 : 1); return [money0(tot), sub, !debt && r && r.change < 0 && !sh ? 'bad' : debt ? '' : 'good', sr && { spark: sr.v, l: sr.l, down: !!debt }]; };
+  // net worth the same way the Accounts list adds it up: your open accounts' latest balances, accounts and assets shared
+  // into this dashboard (when counted in net worth here), and home, vehicles & other assets
+  const nwNow = () => { const L = acctList().filter((x) => x.active !== false && x.bal), sh = (k) => sharedSum([k], 'nw');
+    if (!L.length && !sharedIn().length && !assetsAll().length) return null;
+    const sum = (k) => L.filter((x) => x.kind === k).reduce((t, x) => t + (Number(x.bal.balance) || 0), 0) + sh(k);
+    const own = sum('deposit') + sum('investment') + assetsAll().reduce((t, a) => t + assetNow(a), 0) + sh('asset'), owe = sum('credit') + sum('mortgage') + sum('loan');
+    return { own, owe, net: own - owe }; };
   // series for the tile charts
   const monthsBack = (n) => [...prevMonths(n - 1).reverse(), nowM()];
   const MS = (m) => new Date(m + '-15T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
@@ -444,13 +456,15 @@
   const monRows = () => rows('monthly').filter((r) => r.book === book()).sort((a, b) => a.month.localeCompare(b.month));
   const catsOf = (m) => { const by = {}; for (const t of expM(m)) { const c = t.category || 'Uncategorized'; if (/^transfer$/i.test(c)) continue; by[c] = (by[c] || 0) + (Number(t.amount) || 0); } return by; };
   const GT = {
-    nw: T('Net worth', 'networth', () => { const a = ['deposit', 'investment'].map(bal1).filter(Boolean), d = ['credit', 'loan', 'mortgage'].map(bal1).filter(Boolean); if (!a.length && !d.length) return null;
-      const own = a.reduce((s, r) => s + r.total, 0), owe = d.reduce((s, r) => s + Math.abs(r.total), 0); const sr = balSeries(['deposit', 'investment', 'credit', 'loan', 'mortgage']);
+    nw: T('Net worth', 'networth', () => { const n = nwNow(); if (!n) return null; const own = n.own, owe = n.owe; const sr = balSeries(['deposit', 'investment', 'credit', 'loan', 'mortgage']);
       return [money0(own - owe), `own ${money0(own)} · owe ${money0(owe)}`, '', sr ? { spark: sr.v, l: sr.l } : { meter: owe ? own / (own + owe) : 1, ml: ['owned', 'owed'] }]; }),
-    cash: T('Checking & savings', 'deposits', () => { const r = bal1('deposit'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['deposit']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
-    invest: T('Investments', 'investments', () => { const r = bal1('investment'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['investment']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
-    cards: T('Credit cards owed', 'accounts', () => { const r = bal1('credit'); const sr = balSeries(['credit'], -1); return r && [money0(Math.abs(r.total)), `as of ${r.label}`, '', sr && { spark: sr.v, l: sr.l, down: true }]; }),
-    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean); return r.length ? [money0(r.reduce((s, x) => s + Math.abs(x.total), 0)), r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()] : null; }),
+    cash: T('Checking & savings', 'deposits', () => withShared(bal1('deposit'), sharedSum(['deposit'], 'cash'), ['deposit'])),
+    invest: T('Investments', 'investments', () => withShared(bal1('investment'), sharedSum(['investment'], 'inv'), ['investment'])),
+    cards: T('Credit cards owed', 'accounts', () => withShared(bal1('credit'), sharedSum(['credit'], 'nw'), ['credit'], true)),
+    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean), sh = sharedSum(['loan', 'mortgage'], 'nw'); if (!r.length && !sh) return null; const tot = r.reduce((t, x) => t + Math.abs(x.total), 0) + Math.abs(sh);
+      return [money0(tot), sh ? `incl. ${money0(Math.abs(sh))} shared ⇄` : r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()]; }),
+    homeAssets: T('Home, vehicles & other', 'assets', () => { const own = assetsAll().map((a) => [a.name, assetNow(a)]), sh = sharedIn().filter((d) => d.kind === 'asset' && shIncl(d).nw).map((d) => [`${d.name} ⇄`, Number(d.balance) || 0]); const all = [...own, ...sh]; if (!all.length) return null;
+      const tot = all.reduce((t, x) => t + x[1], 0); return [money0(tot), sh.length ? `${own.length} yours · ${sh.length} shared ⇄` : `${all.length} item${all.length === 1 ? '' : 's'}`, '', { list: all.sort((a, b) => b[1] - a[1]).slice(0, 4) }]; }),
     spentMonth: T('Spent this month', 'categories', () => { if (st('txns') !== 'ok') return null; const s = sumA(expM(nowM())), pm = prevMonths(3).map((m) => sumA(expM(m))).filter((x) => x > 0), avg = pm.length ? pm.reduce((a, b) => a + b, 0) / pm.length : 0;
       const ms = monthsBack(6); return [money0(s), avg ? `usual month ≈ ${money0(avg)}` : 'so far this month', '', { bars: ms.map((m) => sumA(expM(m))), l: ms.map(MS), ref: avg || null }]; }),
     avgSpend: T('Average spending', 'cashflow', () => { const r = sumRow(); const m = monRows(); return r && [money0(r.avgSpend), `a month · ${rangeLabel()}`, '', m.length > 1 && { bars: m.map((x) => x.spend), l: m.map((x) => MS(x.month)), ref: r.avgSpend }]; }),
@@ -480,10 +494,19 @@
     nextPay: T('Next payday', 'forecast', () => FCSUM && (FCSUM.pay ? [money0(FCSUM.pay.amt), `${FCSUM.pay.when} · ${FCSUM.pay.label}`, '', FCSUM.pays.length > 1 && { list: FCSUM.pays.slice(1).map(([lb, a, w]) => [`${w} · ${lb}`, a, money0(a)]), head: 'After that', good: true }] : ['—', 'no regular income found'])),
     nextBill: T('Next bill', 'forecast', () => FCSUM && (FCSUM.bill ? [money0(Math.abs(FCSUM.bill.amt)), `${FCSUM.bill.when} · ${FCSUM.bill.label}`, '', FCSUM.bills.length > 1 && { list: FCSUM.bills.slice(1).map(([lb, a, w]) => [`${w} · ${lb}`, Math.abs(a), money0(Math.abs(a))]), head: 'Then' }] : ['—', 'no recurring bills found'])),
   };
+  Object.assign(GT, {
+    bizProfit: T('Business profit', 'biz-summary', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(), m = r.months; return [money0(r.net), `${BZSEL.biz || 'all businesses'} · ${BZSEL.year}`, r.net < 0 ? 'bad' : 'good', m.length > 1 && { bars: m.map((x) => x.net), l: m.map((x) => MS(x.month)), signed: true }]; }),
+    bizIncome: T('Business income', 'biz-summary', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(), m = r.months; return [money0(r.income), `${BZSEL.year} so far`, '', m.length > 1 && { bars: m.map((x) => x.income), l: m.map((x) => MS(x.month)), good: true }]; }),
+    bizExpenses: T('Business expenses', 'biz-summary', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(); return [money0(r.expenses), `${BZSEL.year} · ${r.lines.length} tax line${r.lines.length === 1 ? '' : 's'}`, '', r.lines.length ? { list: r.lines.slice().sort((a, b) => b.amount - a.amount).slice(0, 4).map((l) => [l.label, l.amount]) } : null]; }),
+    bizTax: T('Next estimated tax', 'biz-tax', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const q0 = bizNextDue(); if (!q0) return ['—', 'nothing due']; const rest = bizSum(q0.year, '').quarters.filter((x) => x.q > q0.q);
+      return [money0(q0.estimate), `Q${q0.q} due ${new Date(q0.due + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`, Date.parse(q0.due) - Date.now() < 14 * 864e5 ? 'bad' : '', rest.length ? { head: 'Later this year', list: rest.map((x) => [`Q${x.q} · ${x.due.slice(5)}`, x.estimate]) } : null]; }),
+    bizReceipts: T('Receipts needed', 'biz-tx', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(); return [String(r.missing.length), `business expenses of ${money0(BIZ().receiptMin)}+ without a photo`, r.missing.length ? 'bad' : 'good', r.missing.length ? { list: r.missing.slice(0, 4).map((x) => [`${x.date} · ${x.vendor}`, x.amount]), bad: true } : null]; }),
+    bizMiles: T('Business miles', 'biz-miles', () => { if (!hasBiz()) return null; const r = bizSum(); return [`${Math.round(r.miles).toLocaleString('en-US')} mi`, `${money0(r.mileage)} deduction · ${BZSEL.year}`, '', null]; }),
+  });
   const TILE_NAME = (id) => (CARD[id] ? CARD[id][1] : GT[id] ? GT[id].title : id);
   const ALL_TILES = [...Object.keys(CARD), ...Object.keys(GT)];
-  const DEF_TILES = { all: ['flow', 'budget', 'where', 'assets', 'debt'], overview: ['flow', 'budget', 'where', 'assets', 'debt'], accounts: ['nw', 'cash', 'invest', 'cards', 'loans'],
-    expenses: ['spentMonth', 'avgSpend', 'topCat', 'subs', 'unusual'], budget: ['budget', 'budLeft', 'budOver', 'spentMonth'], tx: ['needsCat', 'spentMonth', 'income'],
+  const DEF_TILES = { all: ['flow', 'budget', 'where', 'assets', 'debt'], overview: ['flow', 'budget', 'where', 'assets', 'debt'], accounts: ['nw', 'cash', 'invest', 'homeAssets', 'cards', 'loans'],
+    expenses: ['spentMonth', 'avgSpend', 'topCat', 'subs', 'unusual'], budget: ['budget', 'budLeft', 'budOver', 'spentMonth'], tx: ['needsCat', 'spentMonth', 'income'], business: ['bizProfit', 'bizIncome', 'bizExpenses', 'bizTax', 'bizReceipts'],
     planning: ['fcLow', 'fcEnd', 'nextPay', 'nextBill', 'saveRate'], markets: ['invest', 'nw'], review: ['income', 'avgSpend', 'saveRate', 'nw'], import: [], settings: [] };
   const tilesFor = (g) => { const own = peekLay(g).tiles; if (Array.isArray(own)) return own.filter((x) => ALL_TILES.includes(x));
     if (isRepTab(g)) return DEF_TILES.overview.slice(); const hid = new Set(SET().hideTiles || []); return (DEF_TILES[g] || DEF_TILES.all).filter((x) => !CARD[x] || !hid.has(CARD[x][0])); };
@@ -552,7 +575,7 @@
         c.ondrop = (e) => { e.preventDefault(); c.classList.remove('is-drop'); if (dragTile == null || dragTile === i) return; const l = tilesFor(g); l.splice(i, 0, l.splice(dragTile, 1)[0]); dragTile = null; tabLay(g).tiles = l; saveTab(g); drawTiles(); };
       } else { c.ondragstart = c.ondragover = c.ondrop = c.ondragleave = null; } });
     if (ARR) { const add = document.createElement('div'); add.className = 'fd-card fd-tileadd'; const sel = document.createElement('select'); sel.className = 'dash-select'; sel.setAttribute('aria-label', 'Add a tile');
-      sel.append(new Option(list.length >= 8 ? 'Up to 8 tiles' : '+ Add a tile…', '')); if (list.length < 8) ALL_TILES.filter((x) => !list.includes(x)).forEach((x) => sel.append(new Option(TILE_NAME(x), x)));
+      sel.append(new Option(list.length >= 8 ? 'Up to 8 tiles' : '+ Add a tile…', '')); if (list.length < 8) ALL_TILES.filter((x) => !list.includes(x) && (!/^biz/.test(x) || hasBiz())).forEach((x) => sel.append(new Option(TILE_NAME(x), x)));
       sel.disabled = list.length >= 8; sel.addEventListener('change', () => { if (!sel.value) return; const l = tilesFor(g); l.push(sel.value); tabLay(g).tiles = l; saveTab(g); drawTiles(); });
       add.append(sel); kpis.append(add); }
     kpis.classList.toggle('fd-notiles', !els.length && !ARR); kpis.classList.toggle('is-arr', ARR);
@@ -1097,7 +1120,7 @@
     keepY = window.scrollY;
     if (btn) btn.disabled = true;
     try { const d = await db(); if (!d) throw new Error('no db');
-      await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, ...extra, createdAt: new Date().toISOString() }); }
+      await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, ...(t.biz != null ? { biz: t.biz, bizPct: t.bizPct || 100, schedC: t.schedC || '' } : {}), ...(t.note ? { note: t.note } : {}), ...extra, createdAt: new Date().toISOString() }); }
     catch { if (btn) { btn.disabled = false; btn.textContent = 'Not saved'; } }
   };
   const txMatches = () => {
@@ -1106,7 +1129,7 @@
     const needs = !!(document.querySelector('#fd-tneeds') || {}).checked;
     return rows('txns').filter((t) => t.book === book() && inPer.has(t.month) && (!cat || t.category === cat) && (!type || t.type === type)
       && (!needs || t.category === 'Uncategorized')
-      && (!tq || `${t.vendor} ${t.description} ${t.category} ${t.source} ${(t.tags || []).join(' ')}`.toLowerCase().includes(tq)))
+      && (!tq || `${t.vendor} ${t.description} ${t.category} ${t.source} ${(t.tags || []).join(' ')} ${t.note || ''}`.toLowerCase().includes(tq)))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)) || b.amount - a.amount);
   };
   dash.draw('txNeeds', (el) => {
@@ -1167,6 +1190,7 @@
         tr.append(...cols().map((k) => (k === 'vendor' ? cell(vi, 'fd-l') : k === 'category' ? cc : k === 'type' ? cell(ti, 'fd-l') : k === 'tags' ? cell(tgi, 'fd-l') : base[k]())));
       } else tr.append(...cols().map((k) => base[k]()));
       [...tr.children].forEach((c, i) => { const k = cols()[i]; if (k) c.classList.add('c-' + k); });
+      if (t.note) { const host = tr.querySelector('.c-vendor') || tr.firstChild; const n = document.createElement('div'); n.className = 'fd-txnote'; n.textContent = '📝 ' + t.note; n.title = t.note; n.translate = false; host && host.append(n); }
       const c = document.createElement('td'); c.className = 'fd-nowrap c-actions'; const b = document.createElement('button');
       b.type = 'button'; b.className = 'fd-btn fd-quiet fd-sm'; b.textContent = 'Edit';
       b.addEventListener('click', () => openEditor(t));
@@ -1192,6 +1216,11 @@
     f.elements.vendor.value = t.vendor; f.elements.category.value = base.length > 1 ? '' : t.category;
     f.elements.type.value = t.type; f.elements.oneTime.checked = !!t.oneTime;
     if (f.elements.tags) f.elements.tags.value = (t.tags || []).join(', ');
+    if (f.elements.note) f.elements.note.value = t.note || '';
+    if (f.elements.biz) { const bs = f.elements.biz, L = BIZ().list; bs.replaceChildren(new Option('Personal (not business)', ''), ...L.map((x) => new Option(x.name, x.name)));
+      if (t.biz && !L.some((x) => x.name === t.biz)) bs.append(new Option(t.biz, t.biz)); bs.value = t.biz != null ? t.biz : acctMap()[t.source] || ''; f.elements.bizPct.value = t.biz ? t.bizPct || 100 : 100; if (!L.some((x) => x.name === bs.value) && bs.value) bs.append(new Option(bs.value, bs.value));
+      const ls = f.elements.schedC; ls.replaceChildren(new Option('Automatic (from the category)', '')); (window.FDSchedC || []).filter(([k]) => k !== 'cogs' || sells()).forEach(([k, l]) => ls.append(new Option(k === 'cogs' ? l : `${k} · ${l}`, k))); ls.value = t.schedC || '';
+      const sync = () => { f.querySelectorAll('.fd-bizonly').forEach((x) => { x.hidden = !bs.value; }); }; bs.onchange = sync; sync(); }
     f.elements.split.checked = base.length > 1;
     for (let i = 1; i <= 4; i++) { const s = base.length > 1 ? base[i - 1] : null; f.elements['sc' + i].value = s ? s.category : ''; f.elements['sa' + i].value = s ? s.amount : ''; }
     f.elements.makeRule.checked = false;
@@ -1284,6 +1313,8 @@
         if (splits.length < 2 || Math.abs(splitTotal() - editing.total) > 0.009) { show(ids, 'fd-tx-miss'); return; }
       }
       const change = { vendor: E.vendor.value.trim().slice(0, 40), category: E.split.checked ? '' : E.category.value.trim().slice(0, 40), type: E.type.value, oneTime: E.oneTime.checked, tags: E.tags ? parseTags(E.tags.value) : editing.t.tags || [] };
+      if (E.note) change.note = E.note.value.trim().slice(0, 500);
+      if (E.biz && hasBiz()) Object.assign(change, { biz: E.biz.value, bizPct: Math.min(100, Math.max(1, Math.round(Number(E.bizPct.value) || 100))), schedC: E.biz.value ? E.schedC.value : '' });
       try {
         const d = await db(); if (!d) throw new Error('no db');
         if (E.makeRule.checked && E.match.value.trim() && !E.split.checked) {
@@ -1294,6 +1325,36 @@
         show(ids, 'fd-tx-ok'); setTimeout(() => { f.hidden = true; editing = null; }, 900);
       } catch { show(ids, 'fd-tx-err'); }
     });
+  });
+
+  // ---- likely duplicates: the same purchase from bank sync and from a statement (or typed in), a few days apart ----
+  const dupOrigin = () => { const src = {}; rows('imports').forEach((b) => { src[b.id] = b.source === 'sync' ? 'sync' : 'file'; });
+    return (k) => { k = String(k || ''); if (k.startsWith('m:')) return 'manual'; const m = /^i:([^:]+):/.exec(k); return m ? src[m[1]] || 'file' : null; }; };
+  const dupPairs = () => { if (!window.FDLikelyDupes || st('txns', 'imports') !== 'ok') return []; const okL = prefGet('dupOk', []) || [];
+    return window.FDLikelyDupes(rows('txns').filter((t) => t.book === book()), dupOrigin(), { ok: new Set(Array.isArray(okL) ? okL : []) }); };
+  const dupIgnore = async (t) => { const d = await db(); if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
+    else await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); };
+  let dupOpen = false;
+  dash.draw('dupReview', (el) => {
+    el.replaceChildren(); const P0 = dupPairs(); if (!P0.length) return;
+    const ro = document.body.classList.contains('fd-readonly'), box = document.createElement('div'); box.className = 'fd-rb fd-dupbox';
+    const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = `⚠ ${P0.length} possible duplicate${P0.length === 1 ? '' : 's'}`; box.append(h);
+    box.append(phMsg('The same purchase seems to be here twice: once from bank sync and once from a statement (or typed in), with the same amount a few days apart. Usually a pending charge in the file posted later in sync. Keep one copy; the other is ignored and can be restored from Ignored transactions.'));
+    const msg = phMsg(''); const busy = (b) => { box.querySelectorAll('button').forEach((x) => { x.disabled = b; }); };
+    if (!ro) { const all = rbtn(`Keep the bank sync copy of all ${P0.length}`, async () => { if (!confirm(`Ignore the statement or hand-typed copy of ${P0.length} transaction${P0.length === 1 ? '' : 's'}? You can restore them from Ignored transactions.`)) return; busy(true); msg.className = 'fd-note'; msg.textContent = 'Working…';
+        try { for (const p of P0) await dupIgnore(p.other); msg.className = 'fd-note fd-good'; msg.textContent = '✓ Done.'; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; busy(false); } }, false);
+      const tog = rbtn(dupOpen ? 'Hide the list' : 'Review them one by one', () => { dupOpen = !dupOpen; dash.draw('dupReview'); }); const bar = document.createElement('div'); bar.className = 'fd-row'; bar.style.gap = '8px'; bar.append(all, tog); box.append(bar, msg); }
+    if (dupOpen || ro) {
+      const tbl = document.createElement('table'); tbl.className = 'fd-table fd-duptable'; const hd = document.createElement('tr'); ['Amount', 'Bank sync', 'Statement / typed', ''].forEach((x) => { const th = document.createElement('th'); th.textContent = x; hd.append(th); }); tbl.append(hd);
+      const cellOf = (t, from) => { const c = document.createElement('td'); const a = document.createElement('div'); a.textContent = `${t.date} · ${t.vendor || t.description}`; a.translate = false; const b = document.createElement('div'); b.className = 'fd-zero'; b.textContent = `${t.description || ''}${from ? ' · ' + from : ''}`; b.translate = false; c.append(a, b); return c; };
+      for (const p of P0.slice(0, 50)) { const tr = document.createElement('tr'); const am = document.createElement('td'); am.className = 'fd-r'; am.textContent = money2(Math.abs(p.sync.amount)); tr.append(am, cellOf(p.sync, p.sync.source), cellOf(p.other, p.otherFrom === 'manual' ? 'typed in' : 'statement'));
+        const act = document.createElement('td'); act.className = 'fd-nowrap';
+        if (!ro) act.append(rbtn('Keep sync', async () => { busy(true); try { await dupIgnore(p.other); } catch { busy(false); } }, false), ' ', rbtn('Keep statement', async () => { busy(true); try { await dupIgnore(p.sync); } catch { busy(false); } }), ' ',
+          rbtn('Not duplicates', async () => { busy(true); const l = prefGet('dupOk', []) || []; await prefSet('dupOk', [...l, p.id].slice(-500)); }));
+        tr.append(act); tbl.append(tr); }
+      const w = document.createElement('div'); w.className = 'fd-tablewrap'; w.append(tbl); box.append(w); if (P0.length > 50) box.append(phMsg(`Showing 50 of ${P0.length}. Keep or dismiss some to see the rest.`));
+    }
+    el.append(box);
   });
 
   // ---- ignored transactions ----
@@ -1346,7 +1407,7 @@
           try {
             const d = await db();
             await d.collection('data/household/rules').add({ book: x.book || book(), match: m.value.trim().slice(0, 60), ifVendor: iv.value.trim().slice(0, 40), vendor: v.value.trim().slice(0, 40), category: cg.value.trim().slice(0, 40),
-              type: ty.value === 'ignore' ? '' : ty.value, oneTime: !!x.oneTime, ignore: ty.value === 'ignore', createdAt: new Date().toISOString() });
+              type: ty.value === 'ignore' ? '' : ty.value, oneTime: !!x.oneTime, ignore: ty.value === 'ignore', ...(x.biz != null ? { biz: x.biz, bizPct: x.bizPct, schedC: x.schedC } : {}), createdAt: new Date().toISOString() });
             await d.doc('data/household/rules/' + x.id).delete();
             editRule = null;
           } catch { sv.disabled = false; sv.textContent = 'Not saved'; }
@@ -1425,7 +1486,7 @@
       try {
         const d = await db(); const dc = conds.find((c) => c.field === 'description');
         await d.collection('data/household/rules').add({ book: book(), logic: groups.length > 1 ? 'or' : 'and', conds, groups, match: dc ? dc.value : '', vendor: sets.vendor || '', category: sets.category || '',
-          type: sets.type || '', tag: sets.tag || '', ignore: !!sets.ignore, oneTime: false, order: rb.order ?? Date.now(), createdAt: new Date().toISOString() });
+          type: sets.type || '', tag: sets.tag || '', ignore: !!sets.ignore, oneTime: false, order: rb.order ?? Date.now(), ...(rb.biz != null ? { biz: rb.biz, bizPct: rb.bizPct, schedC: rb.schedC } : {}), createdAt: new Date().toISOString() });
         if (rb.id) await d.doc('data/household/rules/' + rb.id).delete();
         rb = null; dash.draw('ruleBuilder');
       } catch { save.disabled = false; msg.textContent = 'Couldn’t save the rule. Try again.'; }
@@ -1458,11 +1519,11 @@
       const row = document.createElement('div'); row.className = 'fd-rule';
       const t = document.createElement('div'); t.className = 'fd-rule-t';
       const a = document.createElement('div'); a.textContent = 'IF ' + groupText(groupsOf(x));
-      const b2 = document.createElement('div'); b2.className = 'fd-zero'; b2.textContent = 'SET ' + (setsOf(x).map(setText).join(', ') || '(nothing)');
+      const b2 = document.createElement('div'); b2.className = 'fd-zero'; b2.textContent = 'SET ' + ([...setsOf(x).map(setText), ...(x.biz ? [`business “${x.biz}”${(x.bizPct || 100) < 100 ? ` (${x.bizPct}%)` : ''}`] : x.biz === '' ? ['personal (not business)'] : [])].join(', ') || '(nothing)');
       t.append(a, b2);
       const rm = rbtn('Remove', async () => { rm.disabled = true; try { const d = await db(); await d.doc('data/household/rules/' + x.id).delete(); } catch { rm.disabled = false; rm.textContent = 'Not removed'; } });
       const act = document.createElement('div'); act.className = 'fd-nowrap';
-      act.append(rbtn('Edit', () => { rb = { id: x.id, order: ord(x), groups: groupsOf(x).map((g) => g.map((c) => ({ ...c }))), sets: setsOf(x).map((s) => [...s]) }; if (!rb.sets.length) rb.sets = [['category', '']]; dash.draw('ruleBuilder'); document.querySelector('#rules')?.scrollIntoView({ behavior: 'smooth' }); }), ' ', rm, ' ', mv(x, -1), mv(x, 1));
+      act.append(rbtn('Edit', () => { rb = { id: x.id, order: ord(x), biz: x.biz, bizPct: x.bizPct, schedC: x.schedC, groups: groupsOf(x).map((g) => g.map((c) => ({ ...c }))), sets: setsOf(x).map((s) => [...s]) }; if (!rb.sets.length) rb.sets = [['category', '']]; dash.draw('ruleBuilder'); document.querySelector('#rules')?.scrollIntoView({ behavior: 'smooth' }); }), ' ', rm, ' ', mv(x, -1), mv(x, 1));
       row.append(t, act); el.append(row);
     }
   });
@@ -2031,9 +2092,15 @@
     if (unc) out.push({ id: 'uncat', sig: String(unc), lvl: 'info', text: `${unc} transaction${unc === 1 ? '' : 's'} in this range need${unc === 1 ? 's' : ''} a category.`, go: 'needs' });
     for (const x of econAlerts()) out.push(x);
     for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
+    try { const dp = dupPairs(); if (dp.length) out.push({ id: 'dupes', sig: String(dp.length), lvl: 'warn', text: `${dp.length} transaction${dp.length === 1 ? ' looks' : 's look'} like ${dp.length === 1 ? 'a duplicate' : 'duplicates'}: the same purchase from bank sync and from a statement, a few days apart. Review and keep one copy.`, go: 'dupes' }); } catch {}
+    try { if (hasBiz()) { const q0 = bizNextDue(), days = q0 ? Math.round((Date.parse(q0.due) - Date.now()) / 864e5) : 99;
+      if (q0 && days <= 14) out.push({ id: `biztax:${q0.year}:${q0.q}`, sig: q0.due, lvl: 'warn', text: `Quarterly estimated tax (Q${q0.q} ${q0.year}) is due ${q0.due}${days <= 0 ? ' (today)' : ` (in ${days} day${days === 1 ? '' : 's'})`}. About ${money0(q0.estimate)} set aside from business profit.`, go: 'biztax' });
+      const r = bizSum(new Date().getFullYear(), ''); if (r.missing.length) out.push({ id: 'bizrcpt', sig: String(r.missing.length), lvl: 'info', text: `${r.missing.length} business expense${r.missing.length === 1 ? '' : 's'} of ${money0(BIZ().receiptMin)} or more ${r.missing.length === 1 ? 'needs' : 'need'} a receipt photo.`, go: 'biztx' }); } } catch {}
     return out;
   };
   const goTo = (where) => {
+    if (where === 'dupes') { showGroup('tx'); dupOpen = true; dash.draw('dupReview'); setTimeout(() => document.querySelector('#fd-dupes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150); return; }
+    if (where === 'biztax' || where === 'biztx') { showGroup('business'); setTimeout(() => document.querySelector(where === 'biztax' ? '#biz-tax' : '#biz-tx')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
     if (where === 'needs') { showGroup('tx'); q('fd-tneeds').forEach((c) => { c.checked = true; c.dispatchEvent(new Event('change')); }); setTimeout(() => document.querySelector('#transactions')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
     const g = { import: 'import', accounts: 'accounts', subscriptions: 'expenses' }[where] || 'all';
     showGroup(g); setTimeout(() => document.querySelector('#' + (where === 'subscriptions' ? 'subscriptions' : where === 'accounts' ? 'accounts' : 'import'))?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -2250,7 +2317,7 @@
     const h3 = card?.querySelector('h3'); if (h3) h3.textContent = av ? 'What you own' : 'Cash & investments';
     const mode = vGet('assetCard', 'ring'); card?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
     const tog = vToggle('assetCard', 'ring', [['num', 'Numbers'], ['ring', 'Ring']], ['kAssetViz']);
-    const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); nb.textContent = money0(cv + iv + av - debtTot() - shD); const dv = debtTot() + shD; nw.append('Net worth ', nb, ` = ${money0(cv + iv + av)} owned − ${money0(dv)} owed`);
+    const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); const N = nwNow() || { own: cv + iv + av, owe: debtTot() + shD }; nb.textContent = money0(N.own - N.owe); nw.append('Net worth ', nb, ` = ${money0(N.own)} owned − ${money0(N.owe)} owed`);
     const hasHome = assetsAll().some((x) => /home|house|real|property/i.test(String(x.type || '') + ' ' + String(x.name || ''))) || sharedIn().some((d) => d.kind === 'asset' && /home|house|real|property/i.test(String(d.type || '') + ' ' + String(d.name || '')));
     const hasMort = (latestTotal(['mortgage'])[0]?.total || 0) + sharedSum(['mortgage'], 'nw') > 0;
     if (hasHome && !hasMort) { const w = document.createElement('p'); w.className = 'fd-note fd-bad'; w.textContent = 'Your home’s full value is counted, but no mortgage balance is on this dashboard, so net worth is too high. Import a mortgage statement here, or share the mortgage from the dashboard that has it.'; el.append(w); } if (shC + shI + shA) { const sn = document.createElement('span'); sn.className = 'fd-zero'; sn.textContent = ` · incl. ${money0(shC + shI + shA)} shared`; nw.append(sn); }
@@ -3036,7 +3103,7 @@
   const KIND_NAMES = { 'deposit:checking': 'Checking', 'deposit:savings': 'Savings', 'deposit:hysa': 'High-yield savings', 'deposit:money_market': 'Money market', 'deposit:cd': 'CD', 'deposit:cash_mgmt': 'Cash management',
     'credit:card': 'Credit card', 'credit:loc': 'Line of credit', 'mortgage:mortgage': 'Mortgage', 'loan:heloc': 'Home equity (HELOC)', 'loan:auto': 'Auto loan', 'loan:student': 'Student loan', 'loan:personal': 'Personal loan', 'loan:other': 'Other loan',
     'investment:brokerage': 'Brokerage', 'investment:401k': '401(k)', 'investment:403b': '403(b)', 'investment:457b': '457(b)', 'investment:roth_ira': 'Roth IRA', 'investment:trad_ira': 'Traditional IRA', 'investment:rollover_ira': 'Rollover IRA',
-    'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment' };
+    'investment:sep_ira': 'SEP IRA', 'investment:hsa': 'HSA', 'investment:529': '529 plan', 'investment:pension': 'Pension', 'investment:crypto': 'Crypto', 'investment:other': 'Other investment', 'investment:roth_401k': 'Roth 401(k)', 'investment:solo_401k': 'Solo 401(k)', 'investment:tsp': 'TSP (Thrift Savings Plan)', 'investment:esa': 'Coverdell ESA', 'investment:utma': 'UTMA / UGMA (custodial)', 'investment:able': 'ABLE account', 'investment:annuity': 'Annuity', 'investment:treasury': 'Treasury bonds (TreasuryDirect)', 'deposit:fsa': 'FSA' };
   const SYNC_P = { simplefin: { id: 'simplefin', label: 'SimpleFIN' }, plaid: { id: 'plaid', label: 'Plaid', multi: true } };
   const syncBox = async (host, P = SYNC_P.simplefin) => {
     const tk = '__sync_' + P.id, tok = {}; host[tk] = tok; const bid = myBookId(); if (!bid) return;
@@ -3680,6 +3747,275 @@
     if (el.__setObs) el.__setObs.disconnect();
     el.__setObs = new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.parentNode === el) place(n); }))); el.__setObs.observe(el, { childList: true });
   };
+  // ================= Personal business (sole proprietor, Schedule C) =================
+  // Everything here stays hidden until a business is added in ⚙ Settings → This dashboard → Business.
+  // Saved per dashboard: prefs "business" = { list: [{ name, sqft }], setAside, receiptMin }; prefs "mileage-YYYY" = trips.
+  // quick edits in a row must build on each other, so these settings keep a local copy until the server's newer one arrives
+  const PCACHE = {};
+  const prefGetC = (key, def) => { const c = PCACHE[key], r = prefRows(key).pop(); if (c && (!r || String(r.createdAt) < c.at)) return JSON.parse(JSON.stringify(c.v)); return prefGet(key, def); };
+  const prefSetC = (key, v) => { PCACHE[key] = { v: JSON.parse(JSON.stringify(v)), at: new Date(Date.now() - 2000).toISOString() }; return prefSet(key, v); };
+  const BIZ = () => { const b = prefGetC('business', null); return { list: [], setAside: 25, receiptMin: 75, ...(b && typeof b === 'object' ? b : {}), list: (b && Array.isArray(b.list) ? b.list : []).filter((x) => x && x.name) }; };
+  const hasBiz = () => { try { return BIZ().list.length > 0; } catch { return false; } };
+  const BIZ_IDS = ['biz-summary', 'biz-tx', 'biz-mark', 'biz-tax', 'biz-miles'];
+  let BZSEL = { biz: '', year: new Date().getFullYear() };
+  const tripsFor = (y) => { const v = prefGetC('mileage-' + y, []); return Array.isArray(v) ? v : []; };
+  const yearData = (y) => { const v = prefGetC('bizyear-' + y, {}); return { biz: {}, payments: [], priorTax: null, highIncome: false, ...(v && typeof v === 'object' ? v : {}) }; };
+  const setYearData = (y, fn) => { const d = yearData(y); fn(d); return prefSetC('bizyear-' + y, d); };
+  const acctMap = () => { const m = {}; BIZ().list.forEach((x) => (x.accounts || []).forEach((a) => { m[a] = x.name; })); return m; };
+  const sells = (biz) => BIZ().list.some((x) => x.sells && (!biz || x.name === biz));
+  const bizSum = (year = BZSEL.year, biz = BZSEL.biz) => { const B = BIZ(), Y = yearData(year), per = (n) => Y.biz[n] || {}, names = biz ? [biz] : B.list.map((x) => x.name);
+    const methods = [...new Set(names.map((n) => per(n).carMethod || ''))];
+    return window.FDBusiness(rows('txns').filter((t) => t.book === book()), { biz, year, receipts: rcptKeys(), trips: tripsFor(year),
+      homeSqft: biz ? Number((B.list.find((x) => x.name === biz) || {}).sqft) || 0 : B.list.reduce((s, x) => s + (Number(x.sqft) || 0), 0), setAside: B.setAside, receiptMin: B.receiptMin,
+      accounts: acctMap(), inventory: { begin: names.reduce((s, n) => s + (Number(per(n).invBegin) || 0), 0), end: names.reduce((s, n) => s + (Number(per(n).invEnd) || 0), 0) }, carMethod: methods.length === 1 ? methods[0] : '',
+      priorTax: Number(Y.priorTax) || null, highIncome: !!Y.highIncome, payments: Y.payments || [] }); };
+  const bizYears = () => { const ys = new Set([new Date().getFullYear()]); rows('txns').forEach((t) => { if (t.book === book() && t.biz) ys.add(Number(String(t.date || t.month).slice(0, 4))); }); return [...ys].filter(Boolean).sort((a, b) => b - a); };
+  const lineName = (code) => (code === 'income' ? 'Income' : ((window.FDSchedC || []).find((x) => x[0] === code) || [code, code])[1]);
+  const csvEsc = (v) => { const s2 = String(v ?? ''); return /[",\r\n]/.test(s2) ? '"' + s2.replace(/"/g, '""') + '"' : s2; };
+  const bizPickers = (redraw) => { const w = document.createElement('div'); w.className = 'fd-row fd-bizpick';
+    const bs = document.createElement('select'); bs.className = 'dash-select'; bs.setAttribute('aria-label', 'Business'); const L = BIZ().list;
+    if (L.length > 1) bs.append(new Option('All businesses', '')); L.forEach((x) => bs.append(new Option(x.name, x.name))); if (L.length === 1) BZSEL.biz = L[0].name; bs.value = BZSEL.biz;
+    bs.addEventListener('change', () => { BZSEL.biz = bs.value; BIZ_DRAWS.forEach((d) => dash.draw(d)); drawTiles(); });
+    const ys = document.createElement('select'); ys.className = 'dash-select'; ys.setAttribute('aria-label', 'Tax year'); bizYears().forEach((y) => ys.append(new Option(String(y), String(y)))); ys.value = String(BZSEL.year);
+    ys.addEventListener('change', () => { BZSEL.year = Number(ys.value); BIZ_DRAWS.forEach((d) => dash.draw(d)); drawTiles(); });
+    w.append(bs, ys); return w; };
+  const BIZ_DRAWS = ['bizSummary', 'bizTx', 'bizTax', 'bizMiles'];
+  // optional extras fold away; each remembers whether it was open (per device)
+  const optBox = (key, title, fill) => { const d = document.createElement('details'); d.className = 'fd-bizopt'; let o = false; try { o = localStorage.getItem('fd-bizopt-' + key) === '1'; } catch {} d.open = o;
+    d.addEventListener('toggle', () => { try { localStorage.setItem('fd-bizopt-' + key, d.open ? '1' : '0'); } catch {} });
+    const sm = document.createElement('summary'); sm.textContent = title; d.append(sm); fill(d); return d; };
+  const bzNum = (val, ph, on, w = '8em') => { const i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.step = '0.01'; i.className = 'fd-in'; i.style.maxWidth = w; i.placeholder = ph; if (val != null && val !== '') i.value = val; i.addEventListener('change', () => on(i.value === '' ? null : Number(i.value))); return i; };
+  const lbl = (t, ...n) => { const l = document.createElement('label'); l.className = 'fd-field'; l.append(t, ...n); return l; };
+  const oneBiz = () => BZSEL.biz || (BIZ().list.length === 1 ? BIZ().list[0].name : '');
+  const stat = (label, val, cls) => { const d = document.createElement('div'); d.className = 'fd-bizstat'; const a = document.createElement('span'); a.textContent = label; const b = document.createElement('b'); b.textContent = val; if (cls) b.className = cls; d.append(a, b); return d; };
+
+  // Summary: profit and loss, Schedule C lines, downloads
+  dash.draw('bizSummary', (el) => {
+    el.replaceChildren(); if (!hasBiz() || st('txns') !== 'ok') return;
+    const r = bizSum(); el.append(bizPickers());
+    const g = document.createElement('div'); g.className = 'fd-bizstats';
+    g.append(stat('Income', money2(r.income)), stat('Expenses', money2(r.expenses)), stat('Mileage deduction', `${money2(r.mileage)} · ${Math.round(r.miles).toLocaleString('en-US')} mi`),
+      stat('Home office', money2(r.homeOffice)), ...(sells(BZSEL.biz) ? [stat('Cost of goods sold', money2(r.cogs)), stat('Gross profit', money2(r.grossProfit))] : []), stat('Net profit', money2(r.net), r.net < 0 ? 'fd-bad' : 'fd-good'), stat(`Set aside for taxes (${BIZ().setAside}%)`, money2(r.setAside)));
+    el.append(g);
+    if (!r.lines.length && !r.income) { el.append(phMsg(`Nothing marked as business in ${BZSEL.year} yet. Mark transactions below, or open any transaction and choose its business.`)); }
+    else {
+      const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Schedule C line', 'Expense', 'Amount', 'Items'].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 1) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
+      for (const l of r.lines) { const tr = document.createElement('tr'); [l.code, l.label, money2(l.amount) + (l.code === '24b' ? ` (${money2(r.mealsDeductible)} deductible)` : ''), String(l.count)].forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i > 1) td.className = 'fd-r'; tr.append(td); }); t.append(tr); }
+      const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
+    }
+    if (sells(BZSEL.biz)) { const nb = oneBiz(); el.append(optBox('inv', `Inventory for ${BZSEL.year} (optional, product sellers)`, (d) => {
+      if (!nb) { d.append(phMsg('Pick one business at the top to enter its inventory.')); return; } const cur = yearData(BZSEL.year).biz[nb] || {};
+      const set = (k) => (v) => setYearData(BZSEL.year, (y) => { y.biz[nb] = { ...(y.biz[nb] || {}), [k]: v }; });
+      const row = document.createElement('div'); row.className = 'fd-row'; row.append(lbl('Inventory value on Jan 1', bzNum(cur.invBegin, '$', set('invBegin'))), lbl('Inventory value on Dec 31', bzNum(cur.invEnd, '$', set('invEnd'))));
+      d.append(row, phMsg(`Cost of goods sold = inventory on Jan 1 + purchases marked “Inventory and materials for resale” (${money2(r.cogsPurchases)} this year) − inventory on Dec 31. Count what you have on hand at cost. Schedule C Part III.`, 'fd-zero')); })); }
+    if (r.carNotCounted) el.append(phMsg(`Car costs on line 9 (${money2(r.carNotCounted)}) aren’t counted because you chose the standard mileage rate. Parking and tolls still count: mark them as line 27a.`, 'fd-zero'));
+    el.append(phMsg('Meals are usually 50% deductible. Use the mileage log or actual car costs (line 9), not both; choose which under Mileage log → Vehicle details. Home office uses the simplified method ($5 a square foot, up to 300). These totals are a starting point for you or your tax preparer, not tax advice.', 'fd-zero'));
+    const who = BZSEL.biz ? BZSEL.biz.replace(/[^\w-]+/g, '-').toLowerCase() : 'business';
+    el.append(rbtn('Download transactions (CSV)', () => {
+      const lines = [['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt'].join(',')]
+        .concat(r.list.map((t) => [t.date || t.month, t.biz, t.line === 'income' ? 'Income' : `${t.line} ${lineName(t.line)}`, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.bizPct || 100, t.share.toFixed(2), t.source, rcptKeys().has(t.splitOf || t.key) ? 'yes' : ''].map(csvEsc).join(',')));
+      saveFile(`${who}-${BZSEL.year}-transactions.csv`, lines.join('\r\n'), 'text/csv'); }, false), ' ',
+    rbtn('Download summary (CSV)', () => {
+      const L = [['Line', 'Item', 'Amount'].join(','), ['1', 'Gross receipts (income)', r.income.toFixed(2)].join(','), ...r.lines.map((l) => [l.code, l.label, l.amount.toFixed(2)].map(csvEsc).join(',')),
+        ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)].join(','), ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)].map(csvEsc).join(','), ...(r.cogs ? [['4', 'Cost of goods sold (Part III)', r.cogs.toFixed(2)].join(',')] : []), ['30', 'Home office (simplified)', r.homeOffice.toFixed(2)].map(csvEsc).join(','), ['31', 'Net profit', r.net.toFixed(2)].map(csvEsc).join(',')];
+      saveFile(`${who}-${BZSEL.year}-schedule-c-summary.csv`, L.join('\r\n'), 'text/csv'); }), ' ',
+    rbtn('Print or save as PDF', () => bizPrint(r)));
+    { const pk = rbtn('Download tax packet (ZIP)', async () => { pk.disabled = true; const t0 = pk.textContent; pk.textContent = 'Building…'; try { await bizPacket(r); } catch (e) { alert('Couldn’t build the tax packet: ' + e.message); } pk.disabled = false; pk.textContent = t0; }, false);
+      el.append(document.createElement('br'), pk, phMsg('One file for your tax preparer: the Schedule C summary, business transactions, every transaction for the year (business and personal), mileage log, estimated payments, a printable summary and the receipt photos.', 'fd-zero')); }
+  });
+  // printable summary as an HTML page (also put inside the tax packet)
+  const bizHtml = (r, auto) => {
+    const e = (x) => String(x ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+    const rowsH = r.lines.map((l) => `<tr><td>${e(l.code === 'cogs' ? '' : l.code)}</td><td>${e(l.label)}</td><td class="r">${e(money2(l.amount))}</td></tr>`).join('');
+    const txH = r.list.map((t) => `<tr><td>${e(t.date || t.month)}</td><td>${e(t.vendor)}</td><td>${e(lineName(t.line))}</td><td class="r">${e(money2(t.share))}</td><td>${rcptKeys().has(t.splitOf || t.key) ? '✓' : ''}</td></tr>`).join('');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${e(BZSEL.biz || 'Business')} ${BZSEL.year}</title><style>body{font:12px system-ui,sans-serif;margin:24px;color:#111}h1{font-size:18px}h2{font-size:14px;margin-top:20px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}.r{text-align:right}p{color:#555}</style></head><body>
+      <h1>${e(BZSEL.biz || 'All businesses')} · ${BZSEL.year}</h1><p>From Larenest (${e(book())} dashboard), ${e(new Date().toLocaleDateString('en-US'))}. A starting point for your tax return, not tax advice.</p>
+      <table><tr><td>Income (gross receipts)</td><td class="r">${e(money2(r.income))}</td></tr>${r.cogs ? `<tr><td>Cost of goods sold (Part III)</td><td class="r">${e(money2(r.cogs))}</td></tr>` : ''}<tr><td>Expenses</td><td class="r">${e(money2(r.expenses))}</td></tr><tr><td>Meals deductible (50%)</td><td class="r">${e(money2(r.mealsDeductible))}</td></tr><tr><td>Standard mileage (${Math.round(r.miles)} mi)</td><td class="r">${e(money2(r.mileageCounted))}</td></tr><tr><td>Home office (simplified)</td><td class="r">${e(money2(r.homeOffice))}</td></tr><tr><th>Net profit</th><th class="r">${e(money2(r.net))}</th></tr></table>
+      <h2>Expenses by Schedule C line</h2><table><tr><th>Line</th><th>Expense</th><th class="r">Amount</th></tr>${rowsH}</table>
+      <h2>Transactions</h2><table><tr><th>Date</th><th>Vendor</th><th>Line</th><th class="r">Business amount</th><th>Receipt</th></tr>${txH}</table>
+      ${auto ? '<script>setTimeout(()=>print(),300)<\/script>' : ''}</body></html>`;
+  };
+  // the tax packet: one ZIP with every file a tax preparer usually asks for
+  const bizPacket = async (r) => {
+    const Y = BZSEL.year, who = (BZSEL.biz || 'business').replace(/[^\w-]+/g, '-').toLowerCase(), B = BIZ(), YD = yearData(Y), csv = (rows0) => rows0.map((x) => x.map(csvEsc).join(',')).join('\r\n');
+    const files = [];
+    files.push({ name: 'README.txt', data: [`Tax packet for ${BZSEL.biz || 'all businesses'} — ${Y}`, `Made by Larenest on ${new Date().toLocaleDateString('en-US')} from the ${book()} dashboard.`, '',
+      'summary.html                 Printable summary (open it and print, or save as PDF)', 'schedule-c-summary.csv       Totals by Schedule C line, mileage, home office, net profit', 'business-transactions.csv    Every business transaction, with its line, business share and receipt',
+      `all-transactions-${Y}.csv    Every transaction in the year, business and personal`, 'mileage-log.csv              Business trips at the IRS standard rate', 'estimated-payments.csv       Quarterly estimates, payments made', 'receipts/                    Receipt photos, named date_vendor_amount',
+      '', 'These totals are a starting point for you or your tax preparer, not tax advice.'].join('\r\n') });
+    files.push({ name: 'summary.html', data: bizHtml(r, false) });
+    files.push({ name: 'schedule-c-summary.csv', data: csv([['Line', 'Item', 'Amount'], ['1', 'Gross receipts (income)', r.income.toFixed(2)], ...(r.cogs ? [['4', 'Cost of goods sold (Part III)', r.cogs.toFixed(2)]] : []),
+      ...r.lines.filter((l) => l.code !== 'cogs').map((l) => [l.code, l.label, l.amount.toFixed(2)]), ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)], ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)],
+      ['30', `Home office, simplified (${B.list.reduce((s0, x) => s0 + (!BZSEL.biz || x.name === BZSEL.biz ? Number(x.sqft) || 0 : 0), 0)} sq ft)`, r.homeOffice.toFixed(2)], ['31', 'Net profit', r.net.toFixed(2)]]) });
+    const rk = rcptKeys();
+    files.push({ name: 'business-transactions.csv', data: csv([['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt', 'Notes'],
+      ...r.list.map((t) => [t.date || t.month, t.biz, t.line === 'income' ? 'Income' : `${t.line} ${lineName(t.line)}`, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.bizPct || 100, t.share.toFixed(2), t.source, rk.has(t.splitOf || t.key) ? 'yes' : '', t.note || ''])]) });
+    const am = acctMap(), all = rows('txns').filter((t) => t.book === book() && String(t.date || t.month).startsWith(String(Y))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    files.push({ name: `all-transactions-${Y}.csv`, data: csv([['Date', 'Type', 'Vendor', 'Category', 'Description', 'Amount', 'Account', 'Tags', 'Business', 'Business %', 'Notes'],
+      ...all.map((t) => { const bz = t.biz != null ? t.biz : am[t.source] || ''; return [t.date || t.month, t.type, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.source, (t.tags || []).join('; '), bz, bz ? t.bizPct || 100 : '', t.note || '']; })]) });
+    const trips = tripsFor(Y).filter((x) => !BZSEL.biz || x.biz === BZSEL.biz);
+    files.push({ name: 'mileage-log.csv', data: csv([['Date', 'Miles', 'Purpose', 'Business', 'Rate', 'Deduction'], ...trips.map((x) => [x.date, x.miles, x.purpose, x.biz, window.FDMileRate(x.date), ((Number(x.miles) || 0) * window.FDMileRate(x.date)).toFixed(2)])]) });
+    const rq = bizSum(Y, '');
+    files.push({ name: 'estimated-payments.csv', data: csv([['Quarter', 'Due', 'Profit', 'Set aside / needed', 'Paid', 'Still to pay'], ...rq.quarters.map((q) => [`Q${q.q}`, q.due, q.profit.toFixed(2), (q.need ?? q.estimate).toFixed(2), (q.paid || 0).toFixed(2), (q.owed ?? q.estimate).toFixed(2)]),
+      [], ['Payment date', 'Amount'], ...(YD.payments || []).map((x) => [x.date, Number(x.amount).toFixed(2)]), ...(YD.priorTax ? [[], ['Last year total tax', Number(YD.priorTax).toFixed(2)], ['Safe harbor', rq.safeHarbor != null ? rq.safeHarbor.toFixed(2) : '']] : [])]) });
+    const keys = new Set(r.list.map((t) => t.splitOf || t.key)), recs = rows('receipts').filter((x) => keys.has(x.txKey)), byKey = Object.fromEntries(r.list.map((t) => [t.splitOf || t.key, t])), used = new Set();
+    for (const x of recs) { try { const res = await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files/${encodeURIComponent(x.fileId)}`, {}); if (!res.ok) continue;
+      const t = byKey[x.txKey] || {}, ext = /png/.test(x.mime) ? 'png' : /webp/.test(x.mime) ? 'webp' : 'jpg'; let base = `${t.date || 'receipt'}_${String(t.vendor || 'vendor').replace(/[^\w-]+/g, '-').slice(0, 30)}_${Number(t.share || t.amount || 0).toFixed(2)}`, n = base, k = 2; while (used.has(n)) n = `${base}_${k++}`; used.add(n);
+      files.push({ name: `receipts/${n}.${ext}`, data: new Uint8Array(await res.arrayBuffer()) }); } catch {} }
+    const zip = window.FDZip(files), name = `tax-packet-${who}-${Y}.zip`;
+    if (window.FD_LOCAL && window.FDLocal && window.FDLocal.saveBytes) return window.FDLocal.saveBytes(name, zip, 'application/zip', 'Save or send');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  };
+  // a plain printable page (the browser's Print → Save as PDF)
+  const bizPrint = (r) => { const w = window.open('', '_blank'); if (!w) return alert('Allow pop-ups to print.'); w.document.write(bizHtml(r, true)); w.document.close(); };
+
+  // Business transactions, with missing-receipt flags
+  let bizTxMore = 25;
+  dash.draw('bizTx', (el) => {
+    el.replaceChildren(); if (!hasBiz() || st('txns') !== 'ok') return;
+    const r = bizSum(), B = BIZ();
+    if (r.missing.length) { const w = document.createElement('p'); w.className = 'fd-note fd-bad'; w.textContent = `⚠ ${r.missing.length} business expense${r.missing.length > 1 ? 's' : ''} of ${money0(B.receiptMin)} or more without a receipt photo. The IRS generally expects receipts at that size; open one to add a photo.`; el.append(w); }
+    if (!r.list.length) { el.append(phMsg('No business transactions in this year yet.')); return; }
+    const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Date', 'Vendor', 'Business', 'Tax line', 'Amount', ''].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i === 4) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
+    const miss = new Set(r.missing.map((m) => m.key));
+    for (const x of r.list.slice(0, bizTxMore)) {
+      const tr = document.createElement('tr'); const cells = [x.date || x.month, x.vendor, x.biz + ((x.bizPct || 100) < 100 ? ` · ${x.bizPct}%` : '') + (x.byAccount ? ' · by account' : ''), x.line === 'income' ? 'Income' : `${x.line} · ${lineName(x.line)}`, (x.line === 'income' ? '+' : '') + money2(x.share)];
+      cells.forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i === 1 || i === 2) td.translate = false; if (i === 4) td.className = 'fd-r' + (x.line === 'income' ? ' fd-good' : ''); tr.append(td); });
+      const act = document.createElement('td'); act.className = 'fd-nowrap'; if (miss.has(x.splitOf || x.key)) { const w = document.createElement('span'); w.className = 'fd-bad'; w.textContent = '⚠ receipt '; w.title = 'No receipt photo yet'; act.append(w); } else if (rcptKeys().has(x.splitOf || x.key)) { const w = document.createElement('span'); w.textContent = '📎 '; w.title = 'Receipt photo saved'; act.append(w); }
+      act.append(rbtn('Edit', () => { const full = rows('txns').find((y) => y.key === x.key) || x; showGroup('tx'); setTimeout(() => openEditor(full), 200); })); tr.append(act); t.append(tr);
+    }
+    const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
+    if (r.list.length > bizTxMore) el.append(rbtn(`Show more (${r.list.length - bizTxMore} left)`, () => { bizTxMore += 100; dash.draw('bizTx'); }));
+  });
+
+  // Find and mark: by text and/or account; mark the matches, or make a rule for future ones
+  const BM = { text: '', account: '', type: 'expense', biz: '', pct: 100, line: '' };
+  const bizLineSel = (val, on, auto = true) => { const s = document.createElement('select'); s.className = 'dash-select'; s.setAttribute('aria-label', 'Schedule C line'); if (auto) s.append(new Option('Pick automatically from the category', ''));
+    (window.FDSchedC || []).filter(([k]) => k !== 'cogs' || sells()).forEach(([k, l]) => s.append(new Option(k === 'cogs' ? l : `${k} · ${l}`, k))); s.value = val || ''; s.addEventListener('change', () => on(s.value)); return s; };
+  dash.draw('bizMark', (el) => {
+    el.replaceChildren(); if (!hasBiz() || st('txns') !== 'ok') return;
+    const L = BIZ().list; if (!BM.biz || !L.some((x) => x.name === BM.biz)) BM.biz = L[0].name;
+    const field = (lab, node) => { const l = document.createElement('label'); l.className = 'fd-field'; l.append(lab, node); return l; };
+    const ti = document.createElement('input'); ti.className = 'fd-in'; ti.placeholder = 'e.g. ADOBE, STRIPE, SHELL'; ti.value = BM.text;
+    const ac = document.createElement('select'); ac.className = 'dash-select'; ac.append(new Option('Any account', '')); [...new Set(rows('txns').filter((t) => t.book === book()).map((t) => t.source).filter(Boolean))].sort().forEach((a) => ac.append(new Option(a, a))); ac.value = BM.account;
+    const ty = document.createElement('select'); ty.className = 'dash-select'; [['expense', 'Expenses'], ['income', 'Income']].forEach(([v, l]) => ty.append(new Option(l, v))); ty.value = BM.type;
+    const bs = document.createElement('select'); bs.className = 'dash-select'; L.forEach((x) => bs.append(new Option(x.name, x.name))); bs.value = BM.biz;
+    const pc = document.createElement('input'); pc.type = 'number'; pc.min = '1'; pc.max = '100'; pc.className = 'fd-in'; pc.value = BM.pct; pc.style.maxWidth = '6em';
+    const ls = bizLineSel(BM.line, (v) => { BM.line = v; });
+    const yr = String(BZSEL.year), match = () => { const q0 = BM.text.trim().toLowerCase(); return rows('txns').filter((t) => t.book === book() && t.type === BM.type && String(t.date || t.month).startsWith(yr) && (!BM.account || t.source === BM.account) && (q0 ? `${t.description} ${t.vendor}`.toLowerCase().includes(q0) : !!BM.account)); };
+    const info = phMsg(''), go = () => { BM.text = ti.value; BM.account = ac.value; BM.type = ty.value; BM.biz = bs.value; BM.pct = Math.min(100, Math.max(1, Math.round(Number(pc.value) || 100)));
+      const m = match(), todo = m.filter((t) => t.biz !== BM.biz || (t.bizPct || 100) !== BM.pct); info.className = 'fd-note'; info.textContent = !BM.text.trim() && !BM.account ? 'Type some text or pick an account.' : `${m.length} ${BM.type === 'income' ? 'payment' : 'transaction'}${m.length === 1 ? '' : 's'} in ${yr} match${m.length === 1 ? 'es' : ''}${m.length ? `, ${money2(m.reduce((s, t) => s + Math.abs(t.amount), 0))}` : ''}${todo.length < m.length ? ` (${m.length - todo.length} already marked)` : ''}.`; return todo; };
+    [ti, ac, ty, bs, pc].forEach((x) => x.addEventListener(x === ti ? 'input' : 'change', go));
+    const row1 = document.createElement('div'); row1.className = 'fd-row'; row1.append(field('Description contains', ti), field('Account', ac), field('Kind', ty));
+    const row2 = document.createElement('div'); row2.className = 'fd-row'; row2.append(field('Business', bs), field('Business share %', pc), field('Schedule C line', ls));
+    const msg = phMsg('');
+    const markAll = rbtn('Mark these', async (e) => { const todo = go(); if (!todo.length) return; e.target.disabled = true; msg.className = 'fd-note'; msg.textContent = `Marking ${todo.length}…`;
+      try { const d = await db(); for (const t of todo) await d.collection('data/household/edits').add({ book: book(), txKey: t.splitOf || t.key, vendor: t.vendor, category: t.category, type: t.type, oneTime: !!t.oneTime, tags: t.tags || [], splits: null, biz: BM.biz, bizPct: BM.pct, schedC: BM.line || t.schedC || '', ...(t.note ? { note: t.note } : {}), createdAt: new Date().toISOString() });
+        msg.className = 'fd-note fd-good'; msg.textContent = `✓ Marked ${todo.length} as ${BM.biz}.`; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } e.target.disabled = false; }, false);
+    const rule = rbtn('Also mark future ones (make a rule)', async (e) => { if (!BM.text.trim()) { msg.className = 'fd-note fd-bad'; msg.textContent = 'Rules match description text: type some text first.'; return; } e.target.disabled = true;
+      try { const d = await db(); await d.collection('data/household/rules').add({ book: book(), match: BM.text.trim().slice(0, 60), vendor: '', category: '', type: '', oneTime: false, biz: BM.biz, bizPct: BM.pct, schedC: BM.line, createdAt: new Date().toISOString() });
+        msg.className = 'fd-note fd-good'; msg.textContent = `✓ Rule saved: anything containing “${BM.text.trim()}” is marked ${BM.biz} from now on (and past ones too).`; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } e.target.disabled = false; });
+    const btns = document.createElement('div'); btns.className = 'fd-row'; btns.append(markAll, rule);
+    el.append(row1, row2, info, btns, msg, phMsg(`Searches ${yr}; change the year at the top of the Business tab. To mark one transaction, open it and pick its business. A business share under 100% (e.g. 30% of a phone bill) counts only that part.`, 'fd-zero')); go();
+  });
+
+  // Mileage log (per year)
+  dash.draw('bizMiles', (el) => {
+    el.replaceChildren(); if (!hasBiz()) return;
+    const y = BZSEL.year, trips = tripsFor(y).slice().sort((a, b) => String(b.date).localeCompare(String(a.date))), L = BIZ().list;
+    const tot = trips.filter((x) => !BZSEL.biz || x.biz === BZSEL.biz), mi = tot.reduce((s, x) => s + (Number(x.miles) || 0), 0), ded = tot.reduce((s, x) => s + (Number(x.miles) || 0) * window.FDMileRate(x.date), 0);
+    el.append(phMsg(`${y}: ${Math.round(mi).toLocaleString('en-US')} business miles · ${money2(ded)} at the IRS standard rate (${y >= 2026 ? '72.5¢ a mile through June 2026, 76¢ from July' : (window.FDMileRate(y + '-06-01') * 100).toFixed(1) + '¢ a mile'}). Log the date, miles and purpose of each trip as you go.`));
+    const f = document.createElement('div'); f.className = 'fd-row fd-milesform';
+    const di = document.createElement('input'); di.type = 'date'; di.className = 'fd-in'; di.value = new Date().toISOString().slice(0, 10); di.setAttribute('aria-label', 'Date');
+    const mi2 = document.createElement('input'); mi2.type = 'number'; mi2.step = '0.1'; mi2.min = '0'; mi2.className = 'fd-in'; mi2.placeholder = 'Miles'; mi2.style.maxWidth = '7em';
+    const pu = document.createElement('input'); pu.className = 'fd-in'; pu.placeholder = 'Purpose (e.g. client shoot, supply run)';
+    const bs = document.createElement('select'); bs.className = 'dash-select'; L.forEach((x) => bs.append(new Option(x.name, x.name))); if (BZSEL.biz) bs.value = BZSEL.biz;
+    const msg = phMsg('');
+    f.append(di, mi2, pu, ...(L.length > 1 ? [bs] : []), rbtn('Add trip', async () => { const m = Number(mi2.value); if (!(m > 0) || !di.value) { msg.className = 'fd-note fd-bad'; msg.textContent = 'Enter a date and the miles.'; return; }
+      const yy = di.value.slice(0, 4), list = tripsFor(yy); list.push({ id: Math.random().toString(36).slice(2, 10), date: di.value, miles: Math.round(m * 10) / 10, purpose: pu.value.trim().slice(0, 80), biz: bs.value || L[0].name });
+      try { await prefSetC('mileage-' + yy, list); mi2.value = ''; pu.value = ''; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } }, false));
+    el.append(f, msg);
+    { const nb = oneBiz(); el.append(optBox('car', 'Vehicle details for Schedule C Part IV (optional)', (d) => {
+      if (!nb) { d.append(phMsg('Pick one business at the top to enter its vehicle details.')); return; } const cur = yearData(y).biz[nb] || {};
+      const set = (k) => (v) => setYearData(y, (yy) => { yy.biz[nb] = { ...(yy.biz[nb] || {}), [k]: v }; });
+      const ms = document.createElement('select'); ms.className = 'dash-select'; [['', 'Not chosen (count both)'], ['standard', 'Standard mileage rate'], ['actual', 'Actual car costs (line 9)']].forEach(([v, l]) => ms.append(new Option(l, v))); ms.value = cur.carMethod || ''; ms.addEventListener('change', () => set('carMethod')(ms.value));
+      const di2 = document.createElement('input'); di2.type = 'date'; di2.className = 'fd-in'; di2.value = cur.inService || ''; di2.addEventListener('change', () => set('inService')(di2.value));
+      const row = document.createElement('div'); row.className = 'fd-row'; row.append(lbl('How you deduct the car', ms), lbl('Placed in service for the business', di2), lbl('Total miles this year (all driving)', bzNum(cur.totalMiles, 'miles', set('totalMiles'), '9em')), lbl('Commuting miles', bzNum(cur.commuteMiles, 'miles', set('commuteMiles'), '9em')));
+      const biz = tot.filter((x) => x.biz === nb).reduce((s0, x) => s0 + (Number(x.miles) || 0), 0), other = cur.totalMiles ? Math.max(0, cur.totalMiles - biz - (cur.commuteMiles || 0)) : null;
+      d.append(row, phMsg(`Part IV asks for business miles (${Math.round(biz).toLocaleString('en-US')} from your log), commuting miles and other miles${other != null ? ` (${Math.round(other).toLocaleString('en-US')})` : ''}. The standard rate must be chosen in a car’s first business year; after that you can switch to actual costs.`, 'fd-zero')); })); }
+    if (trips.length) { const t = document.createElement('table'); t.className = 'fd-table fd-biztable';
+      trips.forEach((x) => { const tr = document.createElement('tr'); [x.date, `${x.miles} mi`, x.purpose || '', L.length > 1 ? x.biz : '', money2((Number(x.miles) || 0) * window.FDMileRate(x.date))].forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i === 4) td.className = 'fd-r'; if (i === 2 || i === 3) td.translate = false; tr.append(td); });
+        const a = document.createElement('td'); a.append(rbtn('×', async () => { if (!confirm('Remove this trip?')) return; await prefSetC('mileage-' + y, tripsFor(y).filter((z) => z.id !== x.id)); })); tr.append(a); t.append(tr); });
+      const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
+      el.append(rbtn('Download mileage log (CSV)', () => saveFile(`mileage-${y}.csv`, [['Date', 'Miles', 'Purpose', 'Business', 'Rate', 'Deduction'].join(','), ...trips.map((x) => [x.date, x.miles, x.purpose, x.biz, window.FDMileRate(x.date), ((Number(x.miles) || 0) * window.FDMileRate(x.date)).toFixed(2)].map(csvEsc).join(','))].join('\r\n'), 'text/csv'))); }
+  });
+
+  // Quarterly estimated taxes
+  const bizNextDue = () => { const today = new Date().toISOString().slice(0, 10), Y = new Date().getFullYear(); const all = [Y - 1, Y].flatMap((y) => bizSum(y, '').quarters.map((q) => ({ ...q, year: y }))).filter((q) => q.due >= today).sort((a, b) => a.due.localeCompare(b.due)); return all[0] || null; };
+  dash.draw('bizTax', (el) => {
+    el.replaceChildren(); if (!hasBiz() || st('txns') !== 'ok') return;
+    const r = bizSum(BZSEL.year, ''), today = new Date().toISOString().slice(0, 10), B = BIZ();
+    el.append(phMsg(`Self-employed people usually pay tax four times a year (IRS Form 1040-ES). This sets aside ${B.setAside}% of each period’s profit, after the home office share, as a rough guide; change the % in ⚙ Settings → Business. Your real amount depends on your whole tax situation.`));
+    const Y = yearData(BZSEL.year), extra = r.paid > 0 || r.safeHarbor != null;
+    const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Payment', 'Covers', 'Due', 'Profit', extra ? 'Needed' : 'Set aside', ...(extra ? ['Paid', 'Still to pay'] : [])].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 2) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
+    const cov = ['Jan – Mar', 'Apr – May', 'Jun – Aug', 'Sep – Dec'], nd = r.quarters.find((q) => q.due >= today);
+    r.quarters.forEach((q, i) => { const tr = document.createElement('tr'); if (nd === q) tr.className = 'is-next';
+      [`Q${q.q}${q.due < today ? ' ✓' : nd === q ? ' · next' : ''}`, cov[i], new Date(q.due + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }), money2(q.profit), money2(extra ? q.need : q.estimate), ...(extra ? [money2(q.paid), money2(q.owed)] : [])].forEach((v, k) => { const td = document.createElement('td'); td.textContent = v; if (k > 2) td.className = 'fd-r'; tr.append(td); }); t.append(tr); });
+    const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
+    el.append(optBox('est', 'Make the estimates more accurate (optional)', (d) => {
+      const row = document.createElement('div'); row.className = 'fd-row';
+      const hi = document.createElement('label'); hi.className = 'fd-check'; const hc = document.createElement('input'); hc.type = 'checkbox'; hc.checked = !!Y.highIncome; hc.addEventListener('change', () => setYearData(BZSEL.year, (y) => { y.highIncome = hc.checked; })); hi.append(hc, ' Last year’s adjusted gross income was over $150,000 ($75,000 if married filing separately)');
+      row.append(lbl(`Total tax on your ${BZSEL.year - 1} return`, bzNum(Y.priorTax, '$', (v) => setYearData(BZSEL.year, (y) => { y.priorTax = v; }), '10em')), hi);
+      d.append(row, phMsg(r.safeHarbor != null ? `Safe harbor: paying ${money2(r.safeHarbor)} in total (${Y.highIncome ? '110' : '100'}% of last year’s tax), on time in four parts, generally avoids an underpayment penalty even if you owe more in April. Each quarter asks for the smaller of that share and the set-aside amount.` : 'With last year’s total tax, each quarter can show the “safe harbor” amount: paying 100% of last year’s tax (110% at higher incomes) on time generally avoids an underpayment penalty.', 'fd-zero'));
+      const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = `Payments made for ${BZSEL.year}`; d.append(h);
+      (Y.payments || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((x) => { const pr = document.createElement('div'); pr.className = 'fd-rb-row'; pr.append(`${x.date} · ${money2(x.amount)}`, rbtn('×', () => setYearData(BZSEL.year, (y) => { y.payments = (y.payments || []).filter((z) => z.id !== x.id); }))); d.append(pr); });
+      const pd = document.createElement('input'); pd.type = 'date'; pd.className = 'fd-in'; pd.value = new Date().toISOString().slice(0, 10); let amt = null; const pa = bzNum('', 'Amount', (v) => { amt = v; });
+      const pr = document.createElement('div'); pr.className = 'fd-row'; pr.append(pd, pa, rbtn('Record payment', () => { amt = Number(pa.value) || amt; if (!(amt > 0) || !pd.value) return; setYearData(BZSEL.year, (y) => { y.payments = [...(y.payments || []), { id: Math.random().toString(36).slice(2, 10), date: pd.value, amount: Math.round(amt * 100) / 100 }]; }); }, false));
+      d.append(pr, phMsg(`Record the federal estimated payments you’ve made for ${BZSEL.year} (including the one in January ${BZSEL.year + 1}). They count toward the quarters in order.`, 'fd-zero')); }));
+    el.append(phMsg('Pay at irs.gov/payments (Direct Pay or EFTPS); many states have their own estimated payments too. You’ll see a reminder under Needs attention two weeks before each due date.', 'fd-zero'));
+  });
+
+  // ⚙ Settings → This dashboard → Business
+  const bizBox = (host) => {
+    if (host.querySelector('.fd-bizbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-bizbox'; host.append(box);
+    const ro = document.body.classList.contains('fd-readonly');
+    const draw = () => { const B = BIZ(); box.replaceChildren(rhead('Business'));
+      box.append(phMsg(B.list.length ? 'Mark business income and expenses, keep a mileage log and get Schedule C totals at tax time. For self-employed people and side businesses without a separate company.' : 'Run a side business or freelance on your own (no LLC)? Add it here to mark business transactions, track mileage, see profit and get Schedule C totals at tax time. The Business tab and tiles appear once a business is added.'));
+      const msg = phMsg('');
+      const save = async (next) => { try { await prefSetC('business', next); msg.className = 'fd-note fd-good'; msg.textContent = 'Saved.'; setTimeout(() => { msg.textContent = ''; }, 2000); } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; } };
+      B.list.forEach((x, i) => { const r = document.createElement('div'); r.className = 'fd-rb-row fd-bizrow2'; const n = document.createElement('strong'); n.textContent = x.name; n.translate = false;
+        const sq = document.createElement('input'); sq.type = 'number'; sq.min = '0'; sq.max = '300'; sq.className = 'fd-in'; sq.style.maxWidth = '7em'; sq.value = x.sqft || ''; sq.placeholder = 'sq ft'; sq.disabled = ro;
+        sq.addEventListener('change', () => { const L = BIZ().list, k = L.findIndex((y) => y.name === x.name); if (k < 0) return; L[k] = { ...L[k], sqft: Math.min(300, Math.max(0, Math.round(Number(sq.value) || 0))) }; save({ ...BIZ(), list: L }); });
+        const lab = document.createElement('label'); lab.className = 'fd-zero'; lab.append('Home office ', sq, ' sq ft');
+        const more = optBox('set-' + x.name, 'More details (optional)', (d) => {
+          const upd = (patch) => { const L = BIZ().list, k = L.findIndex((y) => y.name === x.name); if (k < 0) return; L[k] = { ...L[k], ...patch }; save({ ...BIZ(), list: L }); };
+          const sl = document.createElement('label'); sl.className = 'fd-check'; const sc = document.createElement('input'); sc.type = 'checkbox'; sc.checked = !!x.sells; sc.disabled = ro; sc.addEventListener('change', () => upd({ sells: sc.checked }));
+          sl.append(sc, ' Sells physical products (adds inventory and cost of goods sold)'); d.append(sl);
+          const accts = [...new Set(rows('txns').filter((t) => t.book === book()).map((t) => t.source).filter(Boolean))].sort();
+          if (accts.length) { const h = document.createElement('p'); h.className = 'fd-zero'; h.textContent = 'Business-only accounts: everything in them counts as this business (unless you mark a transaction personal).'; d.append(h);
+            const w = document.createElement('div'); w.className = 'fd-bizaccts'; accts.forEach((a) => { const l = document.createElement('label'); l.className = 'fd-check'; const c0 = document.createElement('input'); c0.type = 'checkbox'; c0.checked = (x.accounts || []).includes(a); c0.disabled = ro;
+              c0.addEventListener('change', () => { const cur = new Set(x.accounts || []); c0.checked ? cur.add(a) : cur.delete(a); upd({ accounts: [...cur] }); }); const sp = document.createElement('span'); sp.textContent = a; sp.translate = false; l.append(c0, ' ', sp); w.append(l); }); d.append(w); } });
+        r.append(n, lab); if (!ro) r.append(rbtn('Remove', () => { if (!confirm(`Remove “${x.name}”? Transactions already marked keep their mark; add a business with the same name to see them again.`)) return; save({ ...BIZ(), list: BIZ().list.filter((y) => y.name !== x.name) }); }));
+        box.append(r, more); });
+      if (!ro) {
+        const r = document.createElement('div'); r.className = 'fd-rb-row'; const ni = document.createElement('input'); ni.className = 'fd-in'; ni.placeholder = B.list.length ? 'Another business name' : 'Business name (e.g. Miller Photography)'; ni.maxLength = 40;
+        r.append(ni, rbtn(B.list.length ? '+ Add another business' : '+ Add a business', () => { const v = ni.value.trim().slice(0, 40); if (!v) return; if (BIZ().list.some((x) => x.name.toLowerCase() === v.toLowerCase())) { msg.className = 'fd-note fd-bad'; msg.textContent = 'That business is already added.'; return; } save({ ...BIZ(), list: [...BIZ().list, { name: v, sqft: 0 }] }); }, false)); box.append(r);
+        if (B.list.length) { const r2 = document.createElement('div'); r2.className = 'fd-rb-row';
+          const sa = document.createElement('input'); sa.type = 'number'; sa.min = '0'; sa.max = '60'; sa.className = 'fd-in'; sa.style.maxWidth = '6em'; sa.value = B.setAside; sa.addEventListener('change', () => save({ ...BIZ(), setAside: Math.min(60, Math.max(0, Math.round(Number(sa.value) || 0))) }));
+          const rm = document.createElement('input'); rm.type = 'number'; rm.min = '0'; rm.className = 'fd-in'; rm.style.maxWidth = '6em'; rm.value = B.receiptMin; rm.addEventListener('change', () => save({ ...BIZ(), receiptMin: Math.max(0, Math.round(Number(rm.value) || 0)) }));
+          const a = document.createElement('label'); a.className = 'fd-zero'; a.append('Set aside ', sa, ' % of profit for taxes'); const b = document.createElement('label'); b.className = 'fd-zero'; b.append('Ask for a receipt from $', rm); r2.append(a, b); box.append(r2); }
+      }
+      box.append(msg);
+    };
+    draw(); box.__draw = draw;
+  };
+  // show or hide everything business-related
+  const bizVisible = () => { if (st('prefs') !== 'ok') return; const on = hasBiz(); const nb = document.querySelector('.fd-navb[data-group="business"]'); if (nb) nb.hidden = !on;
+    document.querySelectorAll('.fd-bizrow').forEach((r) => { r.hidden = !on; });
+    if (!on) { BIZ_IDS.forEach((id) => q(id).forEach((s) => { s.hidden = true; })); if (NP.group === 'business') showGroup('all'); } };
+  dash.onData(() => { document.querySelectorAll('.fd-bizbox').forEach((b) => b.__draw && b.__draw()); bizVisible(); });
+
   dash.draw('settingsView', (el) => {
     if (st('prefs') !== 'ok') return;
     el.replaceChildren(); setGroups(el); if (sDraft && sDraft._book !== book()) sDraft = null; const s = sDraft || (sDraft = { ...SET(), _book: book() });
@@ -3688,6 +4024,9 @@
     const sel = (opts, val, on) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([v, t]) => x.append(new Option(t, v))); x.value = val; x.addEventListener('change', () => on(x.value)); return x; };
     box.append(rhead(`Settings for the ${book()} dashboard`));
     if (prefGet('gsDismissed', false)) row('Getting started list', rbtn('Show it again', () => { prefSet('gsDismissed', false).then(() => { try { localStorage.removeItem('fd-gs-hide-' + book()); } catch (e) {} dash.draw('gettingStarted'); dash.draw('settingsView'); }); }));
+    if (window.FDApp && FDApp.checkUpdates) { const w = document.createElement('span'); w.className = 'fd-updrow'; const v = document.createElement('span'); v.className = 'fd-zero';
+      FDApp.version?.().then((x) => { v.textContent = 'Version ' + x; }).catch(() => {});
+      w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), ' ', v); row('Desktop app', w, 'Checks automatically once a day. This only updates the app on this computer.'); }
     if (window.FDI18n) row('Language', sel(Object.entries(FDI18n.langs), FDI18n.lang, (v) => FDI18n.set(v)), 'For this device. Amounts and dates stay in US format.');
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
     if (s.type === 'shared') {
@@ -3772,6 +4111,7 @@
     syncBox(el).catch(() => {});
     bankKeysBox(el).catch(() => {});
     encBox(el).catch(() => {});
+    bizBox(el);
     connectBox(el).catch(() => {});
     inviteBox(el).catch(() => {});
     if (!el.querySelector('.fd-helpbox')) { const h = document.createElement('div'); h.className = 'fd-rb fd-helpbox'; h.append(rhead('Help & feedback'));
@@ -3998,7 +4338,8 @@
       el.append(box); return;
     }
     el.append(rbtn('+ Add home, vehicle or other asset', () => { asEd = { i: null, type: 'home', name: '', value: '', asOf: new Date().toLocaleDateString('en-CA'), depr: 0, _autoDepr: true, vin: '', loan: '' }; dash.draw('assetView'); }, false));
-    if (!list.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Add your home, vehicles or other valuables to include them in your net worth.'; el.append(p); return; }
+    const shA = (() => { try { return sharedIn().filter((d) => d.kind === 'asset'); } catch { return []; } })();
+    if (!list.length && !shA.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'Add your home, vehicles or other valuables to include them in your net worth.'; el.append(p); return; }
     const t = document.createElement('table'); t.className = 'fd-table'; const tb = document.createElement('tbody');
     const hr = document.createElement('tr'); ['Asset', 'Value now', 'Owed', 'Equity', 'Last updated'].forEach((c, i) => { const th = document.createElement('th'); th.textContent = c; if (!i) th.className = 'fd-l'; hr.append(th); }); tb.append(hr);
     list.forEach((a, i) => {
@@ -4012,6 +4353,14 @@
       tr.addEventListener('click', () => { asEd = { i, ...a, _autoDepr: false }; dash.draw('assetView'); });
       tb.append(tr);
     });
+    // assets shared into this dashboard from another one: shown with ⇄, edited on their own dashboard
+    for (const d of shA) {
+      const from = (meBooks().find((b) => b.id === d.src) || {}).name || 'another dashboard', inc = shIncl(d).nw, val = Number(d.balance) || 0;
+      const tr = document.createElement('tr'); tr.className = 'fd-sharedrow'; const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = d.name; nm.append(b);
+      const ic = document.createElement('span'); ic.className = 'fd-shared'; ic.textContent = '⇄'; ic.title = `Shared from ${from}${inc ? '' : ' (not counted in net worth here)'}`; ic.setAttribute('aria-label', ic.title); nm.append(' ', ic);
+      const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = `${(ASSET_T[d.type] || ASSET_T.other)[0]} · from ${from}. Edit it there.`; nm.append(sub);
+      tr.append(nm, td(money0(val), inc ? '' : 'fd-zero'), td('–'), td(money0(val), (inc ? 'fd-good' : 'fd-zero')), td(d.asOf ? new Date(d.asOf + '-15T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '–', 'fd-zero')); tb.append(tr);
+    }
     t.append(tb); el.append(t);
   });
 

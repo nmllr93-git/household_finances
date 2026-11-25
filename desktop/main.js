@@ -237,6 +237,7 @@ function checkUpdates(manual) {
   autoUpdater.checkForUpdates().catch(() => { updBusy = false; });
 }
 ipcMain.handle('fd:checkUpdates', () => checkUpdates(true));
+ipcMain.handle('fd:version', () => app.getVersion());
 
 // ---------- the computer's own sleep setting (shown in Host options, with a button to its settings page) ----------
 let SLEEP = { known: false };

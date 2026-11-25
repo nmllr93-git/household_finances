@@ -31,6 +31,7 @@ Both A and B use the same data format, so you can switch between them later (see
 - [First steps after installing](#first-steps-after-installing)
 - [Basic configuration](#basic-configuration)
 - [Feature guide](#feature-guide)
+- [Business features (self-employed)](docs/BUSINESS.md)
 - [Optional data sources (API keys)](#optional-data-sources-api-keys)
 - [Maintenance: backups, passwords, updates](#maintenance)
 - [Moving between setups](#moving-between-the-desktop-app-and-the-self-hosted-server)
@@ -318,6 +319,8 @@ In **Transactions → Rules**, click **+ New rule**.
 - A live preview shows what a rule will match before you save. Rules run top to bottom; use ↑/↓ to reorder. If two rules set the same field, the lower one wins.
 
 ### Transactions table
+- **Notes:** Edit → Notes, for anything to remember later. Notes are searchable and show under the vendor.
+- **Possible duplicates:** when bank sync and a statement (or a typed entry) both have the same purchase a few days apart, a box at the top of Transactions lets you keep one copy.
 - **⚙ Columns** shows, hides and reorders columns. Drag a header edge to resize it.
 - **Allow editing** lets you edit vendor, category and type right in the rows.
 - **Export CSV** downloads what's currently listed.
@@ -353,6 +356,9 @@ Build a section from the data already in Larenest. In **✎ Arrange**, choose **
 
 ### Report tabs
 Click **+ Report** in the top bar to make your own tab. Use **✎ Arrange** (or **Edit**) on it, then **Add a view** to add any section or custom report. Size each one S, M, L or F and reorder them. Report tabs sync across devices.
+
+### Business (self-employed, no LLC)
+Add a business in ⚙ Settings → This dashboard → **Business**. A Business tab appears where you can mark business income and expenses (also partly, like 30% of a phone bill), keep a mileage log, see profit by Schedule C line, quarterly estimated tax amounts and missing receipts, and download CSV or PDF summaries, or one tax packet (ZIP with every file and the receipt photos) for your tax preparer. Hidden until you add a business. Full guide: [docs/BUSINESS.md](docs/BUSINESS.md).
 
 ---
 

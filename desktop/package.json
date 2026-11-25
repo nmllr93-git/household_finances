@@ -1,7 +1,7 @@
 {
   "name": "household-finances-desktop",
   "productName": "Larenest",
-  "version": "1.0.29",
+  "version": "1.0.32",
   "description": "Larenest for Windows, Mac and Linux: runs your finance server and dashboard in one app.",
   "main": "main.js",
   "private": true,
@@ -77,8 +77,12 @@
       ],
       "icon": "icons/icon-512.png",
       "category": "public.app-category.finance",
-      "identity": null,
-      "artifactName": "Larenest-${version}-mac-${arch}.${ext}"
+      "artifactName": "Larenest-${version}-mac-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
     },
     "dmg": {
       "artifactName": "Larenest-${version}-mac-${arch}.${ext}"

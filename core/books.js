@@ -32,18 +32,25 @@
     if (!r || typeof r !== 'object' || num(r.opening) === null || num(r.closing) === null) return null;
     return { opening: num(r.opening), closing: num(r.closing), expected: num(r.expected), diff: num(r.diff), from: DAY.test(r.from || '') ? r.from : null, to: DAY.test(r.to || '') ? r.to : null, checkedAt: str(r.checkedAt, 30) };
   }
+  // Business marking on an edit or rule: biz = business name ('' = explicitly personal, absent = leave as is),
+  // bizPct = business share of the amount (1–100), schedC = IRS Schedule C line code (see SCHED_C in calcs.js).
+  function bizOf(d) {
+    if (d.biz === undefined || d.biz === null) return {};
+    const pct = num(d.bizPct);
+    return { biz: str(d.biz, 40), bizPct: pct === null ? 100 : Math.min(100, Math.max(1, Math.round(pct))), schedC: str(d.schedC, 8).replace(/[^0-9a-z]/gi, '') };
+  }
   function cleanDoc(coll, d, label) {
     const now = new Date().toISOString();
     if (coll === 'edits') {
       const splits = Array.isArray(d.splits) ? d.splits.slice(0, 6).map((s) => ({ category: str(s.category, 40), amount: num(s.amount) })).filter((s) => s.category && s.amount !== null) : null;
       return { book: label, txKey: str(d.txKey, 80), vendor: str(d.vendor, 40), category: str(d.category, 40), type: TYPES_OK.includes(d.type) ? d.type : '',
-        oneTime: !!d.oneTime, splits: splits && splits.length >= 2 ? splits : null, ignored: !!d.ignored, tags: Array.isArray(d.tags) ? d.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) : null, createdAt: now };
+        oneTime: !!d.oneTime, splits: splits && splits.length >= 2 ? splits : null, ignored: !!d.ignored, tags: Array.isArray(d.tags) ? d.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) : null, ...bizOf(d), ...(d.note != null ? { note: str(d.note, 500) } : {}), createdAt: now };
     }
     if (coll === 'rules') {
       const cc = (arr) => (Array.isArray(arr) ? arr.slice(0, 8).map((c) => ({ field: ['description', 'vendor', 'category', 'type', 'amount'].includes(c && c.field) ? c.field : 'description', op: ['is', 'lt', 'gt', 'gte', 'eq'].includes(c && c.op) ? c.op : 'contains', value: str(c && c.value, 60) })).filter((c) => c.value) : []);
       const groups = Array.isArray(d.groups) ? d.groups.slice(0, 6).map(cc).filter((g) => g.length) : [];
       return { book: label, match: str(d.match, 60), ifVendor: str(d.ifVendor, 40), logic: groups.length > 1 ? 'or' : 'and', conds: cc(d.conds), groups, vendor: str(d.vendor, 40), category: str(d.category, 40), type: TYPES_OK.includes(d.type) ? d.type : '',
-        oneTime: !!d.oneTime, ignore: !!d.ignore, tag: str(d.tag, 30), order: num(d.order), createdAt: now };
+        oneTime: !!d.oneTime, ignore: !!d.ignore, tag: str(d.tag, 30), order: num(d.order), ...bizOf(d), createdAt: now };
     }
     if (coll === 'accounts') {
       const KINDS = ['deposit', 'credit', 'investment', 'mortgage', 'loan'];

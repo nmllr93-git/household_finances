@@ -75,9 +75,12 @@ SQLite (`finance.db` in the data folder):
 - `docs`: all user records as JSON, by collection.
 - `files`: receipts.
 - `activity`: who changed what.
+- `enc_meta`: optional encryption at rest — the data key wrapped by the password and by the recovery key (`core/crypt.js`). When on, `docs.json`, `files.data`, `seed.json` and `activity.summary` are stored AES-256-GCM encrypted (`enc1:` text, `LNE1` bytes); reads decrypt in a `db.prepare` wrapper and writes encrypt at their call sites. Locked → every data API answers 423 and background jobs pause.
 - `tls_self`: this PC's HTTPS certificate and key, kept in the database so backups keep phones paired.
 
 Collections (`core/books.js`): `imports` (statement batches, with `source`, `fileRows`, `skipped` and an optional `reconcile` record), `manual`, `edits`, `rules`, `budgets`, `accounts`, `goals`, `holdings`, `prefs` (per-book settings as JSON, including assets/vehicles, the watchlist, `settlements` and forecast `schedules`), `shares` (values shared from a personal book into a shared one), `receipts`.
+
+Business features (docs/BUSINESS.md) add `biz`, `bizPct` and `schedC` to edits and rules, and keep their settings in prefs (`business`, `mileage-YYYY`, `bizyear-YYYY`); the totals come from `businessSummary` in `calcs.js`.
 
 Everything the dashboard shows is calculated in the browser by `public/calcs.js` from these raw collections. The digest and widget summaries run the same `calcs.js` on the server (via `vm`), so numbers match everywhere.
 
@@ -100,7 +103,8 @@ Server environment variables:
   - Sessions are random 32-byte tokens in an `HttpOnly; SameSite=Strict` cookie, marked `Secure` on HTTPS.
   - Login and invite attempts are rate-limited per IP.
   - Each API call checks book membership and role; view-only members can't write.
-- **Server owner:** the first user created. Only the owner can change Plaid keys.
+- **Server owner:** the first user created. Only the owner can change Plaid keys and encryption settings.
+- **Encryption at rest (optional):** scrypt-derived keys wrap a random data key; the recovery key is shown once. "Unlock automatically" keeps a key file in `~/.larenest-keys` (or `HF_KEY_DIR`), outside the data folder, so copies and backups still need the password. Servers can unlock with `HF_ENC_PASSWORD`.
 - **Forgotten passwords:** the owner can reset any login's password from the PC app (Host options), on the basis that they have the computer. For self-hosting, `node server.js passwd <name>` does the same; it's `larenest passwd <name>` after the Linux installer and `docker exec -it larenest node server.js passwd <name>` in Docker. A reset signs that login out everywhere.
 - **First login on headless servers:** created from the command line, or once from `LARENEST_ADMIN_USER` / `LARENEST_ADMIN_PASSWORD`. Those are ignored once any login exists.
 - **Transport:**

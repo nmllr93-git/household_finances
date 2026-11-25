@@ -53,6 +53,13 @@
     replaceBookFiles: (bookId, files) => tx(['files'], 'readwrite', async (t) => { const s2 = t.objectStore('files'); (await req2p(s2.getAll())).filter((f) => f.bookId === bookId).forEach((f) => s2.delete(f.id)); files.forEach((f) => s2.put({ ...f, bookId, created: new Date().toISOString() })); }),
   };
 
+  // binary files (e.g. the tax packet ZIP): same as saveText, written as base64 on the phone
+  async function saveBytes(name, bytes, mime, title) {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    if (P && P.Filesystem && P.Share) { let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const w = await P.Filesystem.writeFile({ path: name, data: btoa(bin), directory: 'CACHE' }); await P.Share.share({ title: name, url: w.uri, dialogTitle: title || 'Save or send' }); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' })); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
   // ---------- dashboards on this phone ----------
   const books = async () => { let b = await all('books'); if (!b.length) { b = [{ id: 'personal', name: 'Personal', label: 'Personal', sort: 0 }]; await tx(['books'], 'readwrite', (t) => { b.forEach((x) => t.objectStore('books').put(x)); }); } return b.sort((x, y) => x.sort - y.sort); };
 
@@ -227,7 +234,7 @@
   }
   const markExported = () => kvSet('lastExport', Date.now()).catch(() => {});
   window.FDLocal = { exportFile: async (id) => { await exportFile(id); await markExported(); }, snapshot, backups: async () => (await all('backups')).sort((a, b) => b.at - a.at).map(({ id, at, why }) => ({ id, at, why })),
-    saveText, books, saveBook, deleteBook, getKV: kvGet, setKV: kvSet, scheduleBills, notifyPermission, notificationsSupported: () => !!NOTIF() };
+    saveText, saveBytes, books, saveBook, deleteBook, getKV: kvGet, setKV: kvSet, scheduleBills, notifyPermission, notificationsSupported: () => !!NOTIF() };
   // "Download backup" links point at /api/.../export, which a phone can't open directly: handle them here.
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('a[href*="/api/books/"][href$="/export"]'); if (!a) return;
