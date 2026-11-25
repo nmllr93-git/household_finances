@@ -8,6 +8,10 @@ name: iOS release
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version for TestFlight (leave empty to use mobile/package.json). Reuse an approved version so testers get it without another beta review.'
+        type: string
+        default: ''
       native:
         description: 'Include the Face ID lock, receipt scanning and the home-screen widget (needs the app group set up)'
         type: boolean
@@ -33,7 +37,7 @@ jobs:
       - name: Create the iOS project
         if: steps.ok.outputs.go == 'true'
         working-directory: mobile
-        env: { IOS_BUILD: "${{ github.run_number }}" }
+        env: { IOS_BUILD: "${{ github.run_number }}", IOS_VERSION: "${{ inputs.version }}" }
         run: npm install && npm run ios:add
       - name: Add the app's Swift code and the widget
         if: steps.ok.outputs.go == 'true' && inputs.native

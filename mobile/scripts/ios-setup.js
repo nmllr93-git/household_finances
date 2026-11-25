@@ -21,7 +21,7 @@ add('ITSAppUsesNonExemptEncryption', '<false/>'); // only standard HTTPS: no exp
 add('NSAppTransportSecurity', '<dict>\n\t\t<key>NSAllowsArbitraryLoadsInWebContent</key>\n\t\t<true/>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>');
 fs.writeFileSync(plistFile, p);
 // 3. version and build number
-const ver = require(path.join(M, 'package.json')).version, build = process.env.IOS_BUILD || '1';
+const ver = (/^\d+\.\d+(\.\d+)?$/.test(process.env.IOS_VERSION || '') ? process.env.IOS_VERSION : '') || require(path.join(M, 'package.json')).version, build = process.env.IOS_BUILD || '1';
 const pbx = path.join(APP, 'App.xcodeproj', 'project.pbxproj');
 fs.writeFileSync(pbx, fs.readFileSync(pbx, 'utf8').replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${ver};`).replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${build};`));
 console.log(`iOS project configured (version ${ver}, build ${build})`);
