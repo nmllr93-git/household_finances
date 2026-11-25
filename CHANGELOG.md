@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- The category suggestions list shows each category once: no more "Health/medical" next to your "Health/Medical", and merged names aren't offered
 - Merge categories is easier to find: a Merge categories button in Transactions, and links on Spending by category and Budget, open it in Settings
 - New setting: hide pending charges from bank sync (Settings for this dashboard → Pending charges). They're never counted either way
 - **Pending transactions from bank sync:** charges your bank hasn't posted yet show in a Pending list at the top of Transactions, and as "Pending: $X" under each account. They aren't counted in budgets or totals, and each one leaves the list when it posts, so nothing shows twice

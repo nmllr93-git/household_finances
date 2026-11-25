@@ -1061,7 +1061,13 @@
   });
   dash.draw('catList', (dl) => {
     const base = ['Groceries', 'Dining', 'Travel', 'Hobbies', 'Gifts', 'Health/medical', 'Rent / Mortgage', 'Subscriptions', 'Utilities', 'Phone', 'Insurance', 'Home Improvement', 'Debt', 'Other', 'Paycheck', 'Bonus', 'Interest', 'Reimbursement'];
-    const all = [...new Set([...base, ...rows('txns').map((t) => t.category).filter((c) => c && c !== 'Uncategorized' && c !== 'Transfer')])].sort();
+    // one entry per category: names you use win over the built-in suggestions, merged names point to what they were merged into,
+    // and spellings that differ only in capitals or spacing show once (Health/Medical, not also Health/medical)
+    const merged = prefGet('catMerge', {}) || {}, used = rows('txns').filter((t) => t.book === book()).map((t) => t.category).filter((c) => c && c !== 'Uncategorized' && c !== 'Transfer');
+    const k = (c) => String(c).toLowerCase().replace(/[^a-z0-9]+/g, ''), pick = new Map();
+    for (const c of used) if (!pick.has(k(c))) pick.set(k(c), c);
+    for (const c0 of base) { const c = merged[c0.trim().toLowerCase()] || c0; if (!pick.has(k(c))) pick.set(k(c), c); }
+    const all = [...pick.values()].sort((a, b) => a.localeCompare(b));
     dl.replaceChildren(...all.map((c) => { const o = document.createElement('option'); o.value = c; return o; }));
   });
 
