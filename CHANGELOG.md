@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Accessibility: every form field now has a name screen readers can read out (33 settings and editor fields didn't), messages like "Saved" are announced, and the page language follows the app language. Checked at large text sizes on a phone-sized screen with no sideways scrolling
 - A gentle "How's Larenest going?" note in Needs attention after a week of use (and once more after six weeks), with a Send feedback button. Dismiss it and it stays gone
 - CSV import reads more bank files: semicolon- and tab-separated files, comma decimals (4,50), title lines above the table, and day-first dates (31/10/2026). Two new choices in the column picker, "Column names are in" and "Dates are", for files it can't work out on its own; they're remembered per account with the other column choices
 - The category suggestions list shows each category once: no more "Health/medical" next to your "Health/Medical", and merged names aren't offered
