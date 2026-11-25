@@ -76,7 +76,7 @@ jobs:
     needs: windows
     # by hand only: pushes to the release branch build Windows alone
     if: inputs.mac_publish || inputs.mac_test
-    runs-on: macos-latest
+    runs-on: xcode-27
     env:
       HAS_CERT: ${{ secrets.MAC_CERT_P12 != '' }}
     steps:

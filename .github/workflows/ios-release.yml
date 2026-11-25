@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   ios:
-    runs-on: macos-latest
+    runs-on: xcode-27
     steps:
       - name: Are the Apple secrets set?
         id: ok

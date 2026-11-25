@@ -1,6 +1,6 @@
 {
   "name": "household-finances",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "private": true,
   "description": "Self-hosted household budget dashboard (personal + shared budgets, statement import, subscriptions).",
   "main": "server.js",

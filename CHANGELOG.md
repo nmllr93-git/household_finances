@@ -3,9 +3,15 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.34
 - **Delete my login:** people who joined a server with an invite can delete their own login from the ☰ account menu (it asks for the password). Budgets stay for the others who use them; the login that set up the server can't be deleted this way
 - iPhone: the camera permission message now mentions scanning the server's QR code as well as receipt photos
+- Mac and iPhone apps are now built with Xcode 27 and the iOS 27 / macOS 27 SDKs
+
+## Android 1.6.14
+- **Delete my login:** people who joined a server with an invite can delete their own login from the ☰ account menu (it asks for the password). Budgets stay for the others who use them; the login that set up the server can't be deleted this way
+- iPhone: the camera permission message now mentions scanning the server's QR code as well as receipt photos
+- Mac and iPhone apps are now built with Xcode 27 and the iOS 27 / macOS 27 SDKs
 
 ## Desktop 1.0.33
 - **Español (beta):** choose it under ⚙ Settings → Language. Most screens are translated, including the built-in example categories; categories and budget items you create stay as you typed them. Some longer help text is still in English
