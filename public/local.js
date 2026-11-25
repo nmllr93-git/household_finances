@@ -99,7 +99,7 @@
     const s = document.createElement('script'); s.src = 'core-market.js'; s.onload = () => res(window.FDMarket); s.onerror = () => rej(new Error('core-market.js is missing')); document.head.append(s);
   }).then(async (M) => { await keysReady; return M.createMarketData({
     getJson: (u) => http('GET', u), getText: (u) => http('GET', u, null, true), postJson: (u, b) => http('POST', u, b),
-    keys: () => ({ finnhub: KEYMEM.finnhub || '', fmp: KEYMEM.fmp || '', fred: KEYMEM.fred || '', bls: KEYMEM.bls || '', eia: KEYMEM.eia || '' }),
+    keys: () => ({ finnhub: KEYMEM.finnhub || '', fmp: KEYMEM.fmp || '', fred: KEYMEM.fred || '', bls: KEYMEM.bls || '', eia: KEYMEM.eia || '', state: KEYMEM.state || '' }),
     keyNote: () => 'Add keys under \u2699 Settings \u2192 Data sources.',
     load: (name) => kvGet('mc-' + name), save: (name, o) => kvSet('mc-' + name, o) }); });
   // ---------- SimpleFIN bank sync: same shared code as the PC server; the connection stays on this phone (not in backups) ----------
@@ -133,8 +133,9 @@
       case 'keys': {
         if (parts[2] === 'test' && method === 'POST') { const b = await body(); return json(200, await (await marketReady).testKey(String(b.id || ''), String(b.key || ''))); }
         const cur = (await kvGet('apikeys')) || {};
-        if (method === 'GET') return json(200, { canEdit: true, owner: 'you', set: Object.fromEntries(KEYS.map((k) => [k, mask(cur[k])])), fromEnv: {} });
-        const b = await body(); for (const k of KEYS) if (typeof b[k] === 'string') { const v = b[k].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[k] = v; else delete cur[k]; }
+        if (method === 'GET') return json(200, { canEdit: true, owner: 'you', state: cur.state || '', set: Object.fromEntries(KEYS.map((k) => [k, mask(cur[k])])), fromEnv: {} });
+        const b = await body(); if (typeof b.state === 'string') { const v = b.state.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2); if (v) cur.state = v; else delete cur.state; }
+        for (const k of KEYS) if (typeof b[k] === 'string') { const v = b[k].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[k] = v; else delete cur[k]; }
         await kvSet('apikeys', cur); KEYMEM = cur; (await marketReady).resetKeys(); return json(200, { ok: true });
       }
       case 'backup-health': { // phone-only: snapshots kept inside the app, and the last backup file saved elsewhere

@@ -129,16 +129,32 @@
 
     // ---- economy & household data: FRED, BLS, EIA (keys) and a few keyless sources; refreshed once a day, saved to a file ----
     let ECON = null;
+    // Local prices follow the state chosen in ⚙ Settings → Data sources (nothing local until one is chosen).
+    // state: [name, BLS census region, EIA gasoline area (PADD)]
+    const ST = { AL: ['Alabama', 'S', 'R30'], AK: ['Alaska', 'W', 'R50'], AZ: ['Arizona', 'W', 'R50'], AR: ['Arkansas', 'S', 'R30'], CA: ['California', 'W', 'R50'], CO: ['Colorado', 'W', 'R40'], CT: ['Connecticut', 'NE', 'R10'],
+      DE: ['Delaware', 'S', 'R10'], DC: ['Washington, D.C.', 'S', 'R10'], FL: ['Florida', 'S', 'R10'], GA: ['Georgia', 'S', 'R10'], HI: ['Hawaii', 'W', 'R50'], ID: ['Idaho', 'W', 'R40'], IL: ['Illinois', 'MW', 'R20'], IN: ['Indiana', 'MW', 'R20'],
+      IA: ['Iowa', 'MW', 'R20'], KS: ['Kansas', 'MW', 'R20'], KY: ['Kentucky', 'S', 'R20'], LA: ['Louisiana', 'S', 'R30'], ME: ['Maine', 'NE', 'R10'], MD: ['Maryland', 'S', 'R10'], MA: ['Massachusetts', 'NE', 'R10'], MI: ['Michigan', 'MW', 'R20'],
+      MN: ['Minnesota', 'MW', 'R20'], MS: ['Mississippi', 'S', 'R30'], MO: ['Missouri', 'MW', 'R20'], MT: ['Montana', 'W', 'R40'], NE: ['Nebraska', 'MW', 'R20'], NV: ['Nevada', 'W', 'R50'], NH: ['New Hampshire', 'NE', 'R10'], NJ: ['New Jersey', 'NE', 'R10'],
+      NM: ['New Mexico', 'W', 'R30'], NY: ['New York', 'NE', 'R10'], NC: ['North Carolina', 'S', 'R10'], ND: ['North Dakota', 'MW', 'R20'], OH: ['Ohio', 'MW', 'R20'], OK: ['Oklahoma', 'S', 'R20'], OR: ['Oregon', 'W', 'R50'], PA: ['Pennsylvania', 'NE', 'R10'],
+      RI: ['Rhode Island', 'NE', 'R10'], SC: ['South Carolina', 'S', 'R10'], SD: ['South Dakota', 'MW', 'R20'], TN: ['Tennessee', 'S', 'R20'], TX: ['Texas', 'S', 'R30'], UT: ['Utah', 'W', 'R40'], VT: ['Vermont', 'NE', 'R10'], VA: ['Virginia', 'S', 'R10'],
+      WA: ['Washington', 'W', 'R50'], WV: ['West Virginia', 'S', 'R10'], WI: ['Wisconsin', 'MW', 'R20'], WY: ['Wyoming', 'W', 'R40'] };
+    const REGION = { NE: ['0100', 'Northeast'], MW: ['0200', 'Midwest'], S: ['0300', 'South'], W: ['0400', 'West'] };
+    const PADD = { R10: 'East Coast', R20: 'Midwest', R30: 'Gulf Coast', R40: 'Rocky Mountain', R50: 'West Coast' };
+    const place = () => { const s = String((apiKeys().state || '')).toUpperCase(); const st = ST[s]; return st ? { state: s, name: st[0], region: REGION[st[1]], padd: st[2] } : null; };
     const FRED_SERIES = {
       mort30: ['MORTGAGE30US', '30-year mortgage rate', '%'], mort15: ['MORTGAGE15US', '15-year mortgage rate', '%'],
       tbill3: ['DTB3', '3-month Treasury bill', '%'], t10: ['DGS10', '10-year Treasury', '%'], fedfunds: ['FEDFUNDS', 'Fed funds rate', '%'],
-      cpi: ['CPIAUCSL', 'Consumer prices (CPI, US)', 'index'], hpiIC: ['ATNHPIUS26980Q', 'Iowa City home price index (FHFA)', 'index'], hpiUS: ['USSTHPI', 'US home price index (FHFA)', 'index'],
+      cpi: ['CPIAUCSL', 'Consumer prices (CPI, US)', 'index'], hpiUS: ['USSTHPI', 'US home price index (FHFA)', 'index'],
     };
-    const BLS_SERIES = { cpiMW: ['CUUR0200SA0', 'Midwest: all items'], foodHomeMW: ['CUUR0200SAF11', 'Midwest: groceries'], energyMW: ['CUUR0200SA0E', 'Midwest: energy'], gasMW: ['CUUR0200SETB01', 'Midwest: gasoline'], shelterMW: ['CUUR0200SAH1', 'Midwest: shelter'], diningMW: ['CUUR0200SEFV', 'Midwest: restaurants'] };
+    const BLS_BASE = { cpiMW: ['CUUR0200SA0', 'Midwest: all items'], foodHomeMW: ['CUUR0200SAF11', 'Midwest: groceries'], energyMW: ['CUUR0200SA0E', 'Midwest: energy'], gasMW: ['CUUR0200SETB01', 'Midwest: gasoline'], shelterMW: ['CUUR0200SAH1', 'Midwest: shelter'], diningMW: ['CUUR0200SEFV', 'Midwest: restaurants'] };
     async function buildEcon() {
-      const k = apiKeys(), out = { at: Date.now(), fred: {}, bls: {}, eia: {}, holidays: [], errors: [] };
+      const k = apiKeys(), P = place(), out = { at: Date.now(), fred: {}, bls: {}, eia: {}, holidays: [], errors: [], place: P ? { state: P.state, name: P.name, region: P.region[1], gasArea: PADD[P.padd] } : null };
+      // regional series: the chosen state's census region, or the US city average when no state is chosen
+      const area = P ? P.region[0] : '0000', areaName = P ? P.region[1] : 'US';
+      const BLS_SERIES = Object.fromEntries(Object.entries(BLS_BASE).map(([id, [sid, label]]) => [id, [sid.replace(/^CUUR0200/, 'CUUR' + area), label.replace(/^Midwest/, areaName)]]));
+      const FRED_ALL = { ...FRED_SERIES, ...(P ? { hpiIC: [`${P.state}STHPI`, `${P.name} home price index (FHFA)`, 'index'] } : {}) };
       const err = (w, e) => out.errors.push(`${w}: ${e && e.message ? e.message : e}`);
-      if (k.fred) for (const [id, [sid, label, unit]] of Object.entries(FRED_SERIES)) {
+      if (k.fred) for (const [id, [sid, label, unit]] of Object.entries(FRED_ALL)) {
         try { const j = await getJson(`https://api.stlouisfed.org/fred/series/observations?series_id=${sid}&api_key=${k.fred}&file_type=json&sort_order=desc&limit=60&observation_start=2015-01-01`);
           const obs = (j.observations || []).filter((o) => o.value !== '.' && isFinite(Number(o.value))).map((o) => [o.date, Number(o.value)]).sort((a, b) => a[0].localeCompare(b[0]));
           out.fred[id] = { label, unit, sid, obs }; } catch (e) { err('FRED ' + sid, e); }
@@ -157,12 +173,12 @@
             out.bls[id] = { label: BLS_SERIES[id][1], obs: (sr.data || []).filter((d) => /^M\d\d$/.test(d.period) && d.period !== 'M13').map((d) => [`${d.year}-${d.period.slice(1)}`, Number(d.value)]).sort((a, b) => a[0].localeCompare(b[0])) }; }
           if (j.status && j.status !== 'REQUEST_SUCCEEDED') err('BLS', (j.message || []).join(' ') || j.status);
         } catch (e) { err('BLS', e); }
-      } else out.errors.push('No BLS key: Midwest category inflation is off.');
+      } else out.errors.push('No BLS key: regional inflation by category is off.');
       if (k.eia) {
-        try { const j = await getJson(`https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${k.eia}&frequency=weekly&data[0]=value&facets[duoarea][]=R20&facets[product][]=EPMR&sort[0][column]=period&sort[0][direction]=desc&length=60`);
-          out.eia.gas = { label: 'Midwest regular gasoline ($/gal)', obs: ((j.response && j.response.data) || []).map((d) => [d.period, Number(d.value)]).sort((a, b) => a[0].localeCompare(b[0])) }; } catch (e) { err('EIA gas', e); }
-        try { const j = await getJson(`https://api.eia.gov/v2/electricity/retail-sales/data/?api_key=${k.eia}&frequency=monthly&data[0]=price&facets[stateid][]=IA&facets[sectorid][]=RES&sort[0][column]=period&sort[0][direction]=desc&length=36`);
-          out.eia.elec = { label: 'Iowa home electricity (¢/kWh)', obs: ((j.response && j.response.data) || []).map((d) => [d.period, Number(d.price)]).sort((a, b) => a[0].localeCompare(b[0])) }; } catch (e) { err('EIA electricity', e); }
+        try { const j = await getJson(`https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=${k.eia}&frequency=weekly&data[0]=value&facets[duoarea][]=${P ? P.padd : 'NUS'}&facets[product][]=EPMR&sort[0][column]=period&sort[0][direction]=desc&length=60`);
+          out.eia.gas = { label: `${P ? PADD[P.padd] : 'US'} regular gasoline ($/gal)`, obs: ((j.response && j.response.data) || []).map((d) => [d.period, Number(d.value)]).sort((a, b) => a[0].localeCompare(b[0])) }; } catch (e) { err('EIA gas', e); }
+        try { const j = await getJson(`https://api.eia.gov/v2/electricity/retail-sales/data/?api_key=${k.eia}&frequency=monthly&data[0]=price&facets[stateid][]=${P ? P.state : 'US'}&facets[sectorid][]=RES&sort[0][column]=period&sort[0][direction]=desc&length=36`);
+          out.eia.elec = { label: `${P ? P.name : 'US'} home electricity (¢/kWh)`, obs: ((j.response && j.response.data) || []).map((d) => [d.period, Number(d.price)]).sort((a, b) => a[0].localeCompare(b[0])) }; } catch (e) { err('EIA electricity', e); }
       } else out.errors.push('No EIA key: gas and electricity prices are off.');
       // exchange rates (Frankfurter / European Central Bank, no key): 1 USD = x of each currency
       try { const j = await getJson('https://api.frankfurter.dev/v1/latest?base=USD'); if (j && j.rates) out.fx = { date: j.date, rates: j.rates }; } catch (e) { err('Exchange rates', e); }
@@ -294,7 +310,7 @@
         if (id === 'fred') { const j = await getJson(`https://api.stlouisfed.org/fred/series?series_id=MORTGAGE30US&file_type=json&api_key=${k}`); return j && Array.isArray(j.seriess) ? { ok: true, message: 'Works: rates and inflation are on.' } : bad; }
         if (id === 'eia') { const j = await getJson(`https://api.eia.gov/v2/?api_key=${k}`); return j && j.response ? { ok: true, message: 'Works: gas and electricity prices are on.' } : bad; }
         if (id === 'bls') { const j = await postJson('https://api.bls.gov/publicAPI/v2/timeseries/data/', { seriesid: ['CUUR0200SA0'], registrationkey: decodeURIComponent(k), startyear: String(new Date().getFullYear()), endyear: String(new Date().getFullYear()) });
-          return j && j.status === 'REQUEST_SUCCEEDED' && !(j.message || []).some((m) => /key|invalid/i.test(m)) ? { ok: true, message: 'Works: Midwest category inflation is on.' } : bad; }
+          return j && j.status === 'REQUEST_SUCCEEDED' && !(j.message || []).some((m) => /key|invalid/i.test(m)) ? { ok: true, message: 'Works: inflation by category is on.' } : bad; }
         return { ok: false, message: 'Unknown service.' };
       } catch (e) { return /40[0-3]/.test(String(e.message)) ? bad : { ok: false, message: 'Couldn\u2019t reach that service right now. Check the internet connection and try again.' }; }
     }

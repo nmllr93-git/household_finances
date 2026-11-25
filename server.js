@@ -321,7 +321,7 @@ function apiKeys() {
   } else if (fs.existsSync(file + '.txt')) KEYNOTE = `Found ${file}.txt. Windows added a hidden .txt ending; rename it to api-keys.json.`;
   else KEYNOTE = `No key file at ${file}.`;
   const pick = (o, ...names) => { for (const n of names) { const k = Object.keys(o).find((x) => x.toLowerCase() === n); if (k && String(o[k]).trim()) return String(o[k]).trim(); } return ''; };
-  return { finnhub: process.env.FINNHUB_KEY || pick(f, 'finnhub', 'finnhub_key', 'finnhubkey'), fmp: process.env.FMP_KEY || pick(f, 'fmp', 'fmp_key', 'fmpkey', 'financialmodelingprep'), fred: process.env.FRED_KEY || pick(f, 'fred', 'fred_key'), bls: process.env.BLS_KEY || pick(f, 'bls', 'bls_key'), eia: process.env.EIA_KEY || pick(f, 'eia', 'eia_key') };
+  return { finnhub: process.env.FINNHUB_KEY || pick(f, 'finnhub', 'finnhub_key', 'finnhubkey'), fmp: process.env.FMP_KEY || pick(f, 'fmp', 'fmp_key', 'fmpkey', 'financialmodelingprep'), fred: process.env.FRED_KEY || pick(f, 'fred', 'fred_key'), bls: process.env.BLS_KEY || pick(f, 'bls', 'bls_key'), eia: process.env.EIA_KEY || pick(f, 'eia', 'eia_key'), state: (process.env.LARENEST_STATE || pick(f, 'state')).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) };
 }
 // Market, economy, price and vehicle data (and their pacing/caching) live in core/market.js, shared with the phone app.
 const CACHE_FILES = { market: 'market-cache.json', econ: 'econ-cache.json', sectors: 'sector-cache.json' };
@@ -557,10 +557,11 @@ async function api(req, res, url) {
     // API keys page: which keys are set (never the keys themselves). Only the first account created (the server owner) can change them.
     const owner = (db.prepare('SELECT username FROM users ORDER BY rowid LIMIT 1').get() || {}).username;
     const file = path.join(DATA_DIR, 'api-keys.json'); let cur = {}; try { cur = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')) || {}; } catch {}
-    if (req.method === 'GET') { const k = apiKeys(); return send(res, 200, { canEdit: user === owner, owner, set: Object.fromEntries(Object.entries(k).map(([n, v]) => [n, v ? '••••' + String(v).slice(-4) : ''])), fromEnv: Object.fromEntries(Object.keys(k).map((n) => [n, !!process.env[n.toUpperCase() + '_KEY']])) }); }
+    if (req.method === 'GET') { const k = apiKeys(); return send(res, 200, { canEdit: user === owner, owner, state: k.state || '', set: Object.fromEntries(Object.entries(k).filter(([n]) => n !== 'state').map(([n, v]) => [n, v ? '••••' + String(v).slice(-4) : ''])), fromEnv: Object.fromEntries(Object.keys(k).map((n) => [n, !!process.env[n.toUpperCase() + '_KEY']])) }); }
     if (req.method === 'POST') {
       if (user !== owner) return send(res, 403, { error: `Only ${owner} (who set up this server) can change API keys.` });
       const body = await readJson(req); const allowed = ['finnhub', 'fmp', 'fred', 'bls', 'eia'];
+      if (typeof body.state === 'string') { const v = body.state.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2); if (v) cur.state = v; else delete cur.state; }
       for (const n of allowed) if (typeof body[n] === 'string') { const v = body[n].trim().replace(/[^\w\-.]/g, '').slice(0, 120); if (v) cur[n] = v; else delete cur[n]; }
       fs.writeFileSync(file, JSON.stringify(cur, null, 2)); await MARKET.resetKeys();
       return send(res, 200, { ok: true });

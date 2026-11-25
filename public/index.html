@@ -380,7 +380,7 @@
 
   <section id="economy">
     <h2>Rates &amp; economy</h2>
-    <p class="fd-note">Interest rates, inflation, energy prices and Iowa City home prices from FRED, the Bureau of Labor Statistics and the EIA. Updated daily.</p>
+    <p class="fd-note">Interest rates, inflation, energy prices and home prices for your state from FRED, the Bureau of Labor Statistics and the EIA (choose your state under ⚙ Settings → Data sources). Updated daily.</p>
     <div data-draw="econView" data-source="prefs"></div>
   </section>
 
@@ -569,8 +569,8 @@
         </div>
         <style>.fd-field[hidden] { display: none !important; } .fd-pickrow { align-items: flex-end; }</style>
         <div class="fd-row">
-          <label class="fd-field">Account name<input type="text" name="account" list="fd-accts" placeholder="e.g. Empower (CSI) Roth IRA"></label>
-          <label class="fd-field">Owner<input type="text" name="owner" placeholder="e.g. Nate"></label>
+          <label class="fd-field">Account name<input type="text" name="account" list="fd-accts" placeholder="e.g. Vanguard Roth IRA"></label>
+          <label class="fd-field">Owner<input type="text" name="owner" placeholder="e.g. Alex"></label>
         </div>
         <div class="fd-row">
           <label class="fd-field">Account type<select class="dash-select" name="kind"><optgroup label="Cash"><option value="deposit:checking">Checking</option><option value="deposit:savings">Savings</option><option value="deposit:hysa">High-yield savings</option><option value="deposit:money_market">Money market</option><option value="deposit:cd">CD (certificate of deposit)</option><option value="deposit:cash_mgmt">Cash management</option><option value="deposit:fsa">FSA (flexible spending)</option></optgroup><optgroup label="Credit"><option value="credit:card">Credit card</option><option value="credit:loc">Line of credit</option></optgroup><optgroup label="Loans"><option value="mortgage:mortgage">Mortgage</option><option value="loan:heloc">Home equity (HELOC)</option><option value="loan:auto">Auto loan</option><option value="loan:student">Student loan</option><option value="loan:personal">Personal loan</option><option value="loan:other">Other loan</option></optgroup><optgroup label="Investments"><option value="investment:brokerage" selected>Brokerage</option><option value="investment:401k">401(k)</option><option value="investment:roth_401k">Roth 401(k)</option><option value="investment:solo_401k">Solo 401(k)</option><option value="investment:tsp">TSP (Thrift Savings Plan)</option><option value="investment:403b">403(b)</option><option value="investment:457b">457(b)</option><option value="investment:roth_ira">Roth IRA</option><option value="investment:trad_ira">Traditional IRA</option><option value="investment:rollover_ira">Rollover IRA</option><option value="investment:sep_ira">SEP / SIMPLE IRA</option><option value="investment:hsa">HSA</option><option value="investment:529">529 college savings</option><option value="investment:esa">Coverdell ESA</option><option value="investment:utma">UTMA / UGMA (custodial)</option><option value="investment:able">ABLE account</option><option value="investment:annuity">Annuity</option><option value="investment:treasury">Treasury bonds (TreasuryDirect)</option><option value="investment:pension">Pension</option><option value="investment:crypto">Crypto</option><option value="investment:other">Other investment</option></optgroup></select></label>
@@ -595,7 +595,7 @@
           <label class="fd-field">Amount<input type="number" step="0.01" min="0" name="amount" placeholder="0.00"></label>
         </div>
         <div class="fd-row">
-          <label class="fd-field">Vendor or source<input type="text" name="vendor" placeholder="e.g. David (phone bill)"></label>
+          <label class="fd-field">Vendor or source<input type="text" name="vendor" placeholder="e.g. Jordan (phone bill)"></label>
           <label class="fd-field">Category<input type="text" name="category" list="fd-cats" placeholder="e.g. Other"></label>
         </div>
         <div class="fd-row">
@@ -648,7 +648,7 @@
   <details id="method">
     <summary>How the numbers are worked out</summary>
     <ul>
-      <li>June–November 2026 history for Nate’s and the shared budget comes from the monthly Google Sheets. Rows keep the month of the sheet they were entered in, even where the date typed was another month. November investment and mortgage figures from the sheets are left out (those sheets still held an earlier month’s numbers); McKenna’s accounts appear once (August), as marked estimates.</li>
+      <li>History imported from Google Sheets keeps the month of the sheet each row was entered in, even where the date typed was another month.</li>
       <li>The range picker counts back from the latest month that has any transaction. “Compare with the previous period” uses the same number of months right before the range.</li>
       <li>Vendor names are cleaned from the raw descriptions: store numbers, city and state, and card-processor prefixes (SQ *, TST*, PAYPAL *) are dropped, and common merchants are matched by name (all Hy-Vee stores become “Hy-Vee”, AMZN/Amazon Marketplace become “Amazon”).</li>
       <li>Your rules apply to every transaction whose description contains the text, including history; a later rule wins over an earlier one. An edit to a single transaction wins over any rule.</li>
