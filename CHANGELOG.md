@@ -3,7 +3,14 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.32
+- **Possible duplicates:** when bank sync brings in a purchase that's already there from a statement or typed in by hand (same account and amount, a few days apart, often a pending charge that posted later), Needs attention points to a list where you keep one copy, keep all the bank-sync copies at once, or mark a pair as not duplicates
+- **Notes on transactions:** add a note in the transaction editor (up to 500 characters). Notes show under the vendor, are searchable, and are included in the business and tax packet downloads
+- Home, vehicles and other assets shared from another dashboard now show in that list too, marked ⇄
+- Fixed: the Net worth tile (and the Cash & investments card) now match the Accounts list: they include your home, vehicles and other assets, and accounts shared into the dashboard
+- Account tiles include accounts shared into the dashboard ("incl. $X shared ⇄"), following each share's counted-here checkboxes; new **Home, vehicles & other** tile, on the Accounts tab by default
+
+## Android 1.6.12
 - **Possible duplicates:** when bank sync brings in a purchase that's already there from a statement or typed in by hand (same account and amount, a few days apart, often a pending charge that posted later), Needs attention points to a list where you keep one copy, keep all the bank-sync copies at once, or mark a pair as not duplicates
 - **Notes on transactions:** add a note in the transaction editor (up to 500 characters). Notes show under the vendor, are searchable, and are included in the business and tax packet downloads
 - Home, vehicles and other assets shared from another dashboard now show in that list too, marked ⇄
