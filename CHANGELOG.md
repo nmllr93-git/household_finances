@@ -3,10 +3,15 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
-- Removed local business names from the built-in vendor cleanup; city names are now stripped by state code instead of a fixed list.
-- **Local prices follow your state:** choose it under ⚙ Settings → Data sources. Home prices, home electricity, gas prices and inflation by category then use your state and region, and without one they show US figures. Previously these were fixed to one area
-- Removed example names and setup notes left over from the developer's own data in hints and help text
+## Desktop 1.0.33
+- **Español (beta):** choose it under ⚙ Settings → Language. Most screens are translated, including the built-in example categories; categories and budget items you create stay as you typed them. Some longer help text is still in English
+- **Local prices follow your state:** choose it under ⚙ Settings → Data sources. Home prices, home electricity, gas prices and inflation by category then use your state and region; without one they show US figures. Previously these were fixed to one area
+- Privacy: removed example names, local business names and setup notes left over from the developer's own data. Vendor cleanup now strips city names using the state code instead of a fixed list of cities
+
+## Android 1.6.13
+- **Español (beta):** choose it under ⚙ Settings → Language. Most screens are translated, including the built-in example categories; categories and budget items you create stay as you typed them. Some longer help text is still in English
+- **Local prices follow your state:** choose it under ⚙ Settings → Data sources. Home prices, home electricity, gas prices and inflation by category then use your state and region; without one they show US figures. Previously these were fixed to one area
+- Privacy: removed example names, local business names and setup notes left over from the developer's own data. Vendor cleanup now strips city names using the state code instead of a fixed list of cities
 
 ## Desktop 1.0.32
 - **Possible duplicates:** when bank sync brings in a purchase that's already there from a statement or typed in by hand (same account and amount, a few days apart, often a pending charge that posted later), Needs attention points to a list where you keep one copy, keep all the bank-sync copies at once, or mark a pair as not duplicates
