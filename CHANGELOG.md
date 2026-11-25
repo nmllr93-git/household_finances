@@ -3,7 +3,19 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.39
+- **Spending pace alerts:** a heads-up in Needs attention when a category is running well ahead of its usual month (compared with the same point in your last 3 months), at most once a week per category. Set how far ahead counts (default 50%), or turn it off, in Settings for this dashboard
+- Accessibility: every form field now has a name screen readers can read out (33 settings and editor fields didn't), messages like "Saved" are announced, and the page language follows the app language. Checked at large text sizes on a phone-sized screen with no sideways scrolling
+- A gentle "How's Larenest going?" note in Needs attention after a week of use (and once more after six weeks), with a Send feedback button. Dismiss it and it stays gone
+- CSV import reads more bank files: semicolon- and tab-separated files, comma decimals (4,50), title lines above the table, and day-first dates (31/10/2026). Two new choices in the column picker, "Column names are in" and "Dates are", for files it can't work out on its own; they're remembered per account with the other column choices
+- The category suggestions list shows each category once: no more "Health/medical" next to your "Health/Medical", and merged names aren't offered
+- Merge categories is easier to find: a Merge categories button in Transactions, and links on Spending by category and Budget, open it in Settings
+- New setting: hide pending charges from bank sync (Settings for this dashboard → Pending charges). They're never counted either way
+- **Pending transactions from bank sync:** charges your bank hasn't posted yet show in a Pending list at the top of Transactions, and as "Pending: $X" under each account. They aren't counted in budgets or totals, and each one leaves the list when it posts, so nothing shows twice
+- **Tip and hold check:** when a charge posts well above its pending amount (a big tip, or a gas station or hotel hold that grew), it's flagged in Needs attention. You choose how much counts (default 30% and $2), or turn it off, in Settings for this dashboard
+- Bank sync settings now explain the timing: SimpleFIN gets new transactions from your banks about once a day, and Larenest checks SimpleFIN about every 6 hours
+
+## Android 1.6.19
 - **Spending pace alerts:** a heads-up in Needs attention when a category is running well ahead of its usual month (compared with the same point in your last 3 months), at most once a week per category. Set how far ahead counts (default 50%), or turn it off, in Settings for this dashboard
 - Accessibility: every form field now has a name screen readers can read out (33 settings and editor fields didn't), messages like "Saved" are announced, and the page language follows the app language. Checked at large text sizes on a phone-sized screen with no sideways scrolling
 - A gentle "How's Larenest going?" note in Needs attention after a week of use (and once more after six weeks), with a Send feedback button. Dismiss it and it stays gone
