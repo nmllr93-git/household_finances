@@ -32,12 +32,15 @@
   S.parsePositions = (t) => parsePositions(t);
 
   function parseCSV(text) {
+    // separator: comma, semicolon or tab, whichever the first lines use most (semicolons are common in files with comma decimals)
+    const head = String(text).split(/\r?\n/).slice(0, 15).join('\n').replace(/"[^"]*"/g, ''), cnt = (ch) => head.split(ch).length - 1;
+    const sep = [',', ';', '\t'].reduce((b, ch) => (cnt(ch) > cnt(b) ? ch : b), ',');
     const out = []; let row = [], cell = '', q = false;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
       if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
       else if (c === '"') q = true;
-      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === sep) { row.push(cell); cell = ''; }
       else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); out.push(row); row = []; cell = ''; }
       else cell += c;
     }
@@ -48,8 +51,11 @@
     s = String(s || '').trim();
     let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-    m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
-    if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }
+    m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+    if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; let mo = m[1], d = m[2];
+      if (S.dates === 'dmy' || (S.dates !== 'mdy' && (S.autoDmy || (+mo > 12 && +d <= 12)))) [mo, d] = [d, mo]; // day first (31/10/2026), chosen or obvious
+      if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
+      return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`; }
     const t = Date.parse(s);
     if (!isNaN(t) && /[a-z]{3}/i.test(s)) { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
     return null;
@@ -57,14 +63,16 @@
   function toNum(s) {
     s = String(s ?? '').trim(); if (!s) return null;
     let neg = /^\(.*\)$/.test(s) || /-$/.test(s) || /^-/.test(s.replace(/[$\s]/g, '')) || /\bDR\b/i.test(s);
+    if (/,\d{1,2}\)?\s*(CR|DR)?$/i.test(s) && !/\.\d{1,2}\)?\s*(CR|DR)?$/i.test(s)) s = s.replace(/\./g, '').replace(',', '.'); // comma decimals: 1.234,56 or -4,50
     const v = parseFloat(s.replace(/[^0-9.]/g, ''));
     if (isNaN(v)) return null;
     if (/\bCR\b/i.test(s)) neg = false;
     return neg ? -v : v;
   }
-  function detect() {
+  function detect(forceHr) {
     const g = S.grid;
     let hr = -1;
+    if (forceHr != null) hr = forceHr; else
     for (let i = 0; i < Math.min(15, g.length); i++) {
       const r = g[i].map((x) => x.toLowerCase());
       if (r.some((x) => /date/.test(x)) && r.some((x) => /amount|debit|credit|withdraw|deposit/.test(x))) { hr = i; break; }
@@ -77,16 +85,22 @@
     const c = { date: find(/trans.*date|^date$|posted|post date|date/), desc: find(/desc|payee|merchant|name|memo|details|transaction$/),
       amount: find(/^amount|amount/), debit: find(/debit|withdraw|charge/), credit: find(/credit(?!.*card)|deposit/), balance: find(/balance/),
       id: find(/^fitid$|^transaction id$|^transaction number$|^reference( number| no\.?| #)?$|^ref(erence)? ?(no|#)$/) }; // the bank's own transaction id, when the file has one
-    if (hr < 0) { // no header: guess from the cells
-      const sample = body.slice(0, 20);
+    if (hr < 0 && forceHr == null) { // no header row found: skip title lines above the table (rows much shorter than the table)
+      let k = 0; while (k < Math.min(10, g.length - 1) && g[k].filter((x) => x !== '').length < Math.max(2, width - 1)) k++;
+      // the first full row is the column names when none of its cells is a date or a number
+      if (forceHr == null && k < g.length && g[k].every((x) => !toDate(x) && toNum(x) === null)) return detect(k);
+      else if (k > 0) { hr = k - 1; S.hdrRow = hr; S.header = Array.from({ length: width }, (_, i) => `Column ${i + 1}`); }
+    }
+    if (c.date < 0 || (c.amount < 0 && c.debit < 0 && c.credit < 0) || c.desc < 0) { // columns the names didn't give away: guess from the cells
+      const sample = g.slice(hr + 1).slice(0, 20);
       const score = (i, f) => sample.filter((r) => f(r[i])).length;
       for (let i = 0; i < width; i++) {
         if (c.date < 0 && score(i, (v) => toDate(v)) > sample.length * 0.7) c.date = i;
-        else if (c.amount < 0 && score(i, (v) => toNum(v) !== null && /\d/.test(v || '')) > sample.length * 0.7) c.amount = i;
+        else if (c.amount < 0 && c.debit < 0 && c.credit < 0 && score(i, (v) => toNum(v) !== null && /\d/.test(v || '')) > sample.length * 0.7) c.amount = i;
       }
-      let best = -1, bl = 0;
-      for (let i = 0; i < width; i++) { if (i === c.date || i === c.amount) continue; const l = sample.reduce((s, r) => s + String(r[i] || '').length, 0); if (l > bl) { bl = l; best = i; } }
-      c.desc = best;
+      if (c.desc < 0) { let best = -1, bl = 0;
+        for (let i = 0; i < width; i++) { if (i === c.date || i === c.amount) continue; const l = sample.reduce((s, r) => s + String(r[i] || '').length, 0); if (l > bl) { bl = l; best = i; } }
+        c.desc = best; }
     }
     if (c.amount >= 0) { c.debit = -1; c.credit = -1; }
     S.cols = c;
@@ -105,6 +119,8 @@
   }
   function parseRows() {
     const c = S.cols, body = S.grid.slice(S.hdrRow + 1);
+    // a file is day-first if any of its dates can only be read that way (31/10/2026); then all of its dates are read day-first
+    S.autoDmy = c.date >= 0 && body.some((r) => { const m = String(r[c.date] || '').trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-]\d{2,4}/); return m && +m[1] > 12 && +m[2] <= 12; });
     const raw = [];
     for (const r of body) {
       const date = toDate(r[c.date]);
@@ -144,7 +160,7 @@
   const mapKey = (book, acct) => 'fd-impmap:' + book + '|' + String(acct || '').trim().toLowerCase();
   const sig = () => S.header.map((h) => String(h).trim().toLowerCase()).join('|');
   const curAcct = () => { const fm = document.querySelector('#fd-import-form'); const f = fm ? new FormData(fm) : null; return f ? [String(f.get('book') || ''), String(f.get('account') || '')] : ['', '']; };
-  function saveMap(book, acct) { if (S.pdf || S.ofx || !S.header.length) return; try { localStorage.setItem(mapKey(book, acct), JSON.stringify({ sig: sig(), cols: S.cols, sign: S.sign, savedAt: new Date().toISOString() })); } catch {} }
+  function saveMap(book, acct) { if (S.pdf || S.ofx || !S.header.length) return; try { localStorage.setItem(mapKey(book, acct), JSON.stringify({ sig: sig(), cols: S.cols, sign: S.sign, dates: S.dates || 'auto', savedAt: new Date().toISOString() })); } catch {} }
   function applyMap() {
     S.mapUsed = false; if (S.pdf || S.ofx || !S.header.length) return false;
     const [book, acct] = curAcct(); if (!acct) return false;
@@ -152,7 +168,7 @@
     if (!m || m.sig !== sig() || !m.cols) return false;
     const w = S.header.length, ok = (i) => Number.isInteger(i) && i >= -1 && i < w;
     if (!Object.values(m.cols).every(ok)) return false;
-    S.cols = { ...S.cols, ...m.cols }; S.sign = ['auto', 'neg', 'pos'].includes(m.sign) ? m.sign : 'auto'; S.mapUsed = true; return true;
+    S.cols = { ...S.cols, ...m.cols }; S.sign = ['auto', 'neg', 'pos'].includes(m.sign) ? m.sign : 'auto'; S.dates = ['auto', 'mdy', 'dmy'].includes(m.dates) ? m.dates : 'auto'; S.mapUsed = true; return true;
   }
   S.saveMap = saveMap; S.applyMap = applyMap;
   document.querySelectorAll('#fd-import-form input[name=account]').forEach((i) => i.addEventListener('change', () => { if (S.grid.length && applyMap()) { refresh(); fillBalance(); } else dash.draw('importPreview'); }));
@@ -193,6 +209,18 @@
       sel.onchange = () => { S.cols[key] = Number(sel.value); if (key === 'amount' && S.cols.amount >= 0) { S.cols.debit = -1; S.cols.credit = -1; } refresh(); fillBalance(); };
       l.append(sel); wrap.append(l);
     };
+    { // the header row (when it wasn't found) and the date order (for day-first files)
+      const l = document.createElement('label'); l.className = 'fd-field'; l.append('Column names are in');
+      const sel = document.createElement('select'); sel.className = 'dash-select'; sel.append(new Option('No header row', '-1'));
+      S.grid.slice(0, 10).forEach((r, i) => sel.append(new Option(`Row ${i + 1}: ${r.filter(Boolean).slice(0, 3).join(', ').slice(0, 40)}`, String(i))));
+      sel.value = String(S.hdrRow); sel.onchange = () => { detect(Number(sel.value)); refresh(); fillBalance(); dash.draw('importPreview'); };
+      l.append(sel); wrap.append(l);
+      const l2 = document.createElement('label'); l2.className = 'fd-field'; l2.append('Dates are');
+      const s2 = document.createElement('select'); s2.className = 'dash-select';
+      s2.append(new Option('Detect automatically', 'auto'), new Option('Month first (10/31/2026)', 'mdy'), new Option('Day first (31/10/2026)', 'dmy'));
+      s2.value = S.dates || 'auto'; s2.onchange = () => { S.dates = s2.value; refresh(); fillBalance(); };
+      l2.append(s2); wrap.append(l2);
+    }
     pick('Date column', 'date');
     pick('Description column', 'desc');
     pick('Amount column', 'amount', true);
@@ -371,7 +399,7 @@
       S.text = String(rd.result || ''); S.fileName = f.name;
       if (/<OFX>|OFXHEADER/i.test(S.text.slice(0, 4000))) { readOfx(S.text); return; }
       S.grid = parseCSV(S.text); S.sign = 'auto'; S.ofx = false;
-      detect(); applyMap(); refresh(); fillBalance();
+      S.dates = 'auto'; detect(); applyMap(); refresh(); fillBalance();
     };
     rd.readAsText(f);
   }));
