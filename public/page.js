@@ -4296,11 +4296,11 @@
     row('Amounts', chk('Hide cents (show $1,234 instead of $1,234.56)', !!s.noCents, (v) => { s.noCents = v; }));
     row('Pending charges', chk('Show charges the bank hasn’t posted yet (from bank sync)', !s.hidePending, (v) => { s.hidePending = !v; }), 'Pending charges are never counted in budgets or totals either way; this only hides the Pending list in Transactions and the pending note on accounts.');
     { const tc = { pct: 30, min: 2, ...(s.tipCheck || {}) }; const w = document.createElement('div'); w.className = 'fd-setinline';
-      const on = chk('Flag charges that post higher than they were pending, by at least', !tc.off, (v) => { s.tipCheck = { ...tc, ...(s.tipCheck || {}), off: !v }; });
+      const on = chk('Flag a charge when it posts at least', !tc.off, (v) => { s.tipCheck = { ...tc, ...(s.tipCheck || {}), off: !v }; });
       const num = (v, step, k) => { const i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.step = step; i.value = v; i.className = 'fd-in fd-numsm'; i.addEventListener('input', () => { s.tipCheck = { ...tc, ...(s.tipCheck || {}), [k]: Math.max(0, Number(i.value) || 0) }; }); return i; };
-      const t1 = document.createElement('span'); t1.textContent = TR('% and'); const t2 = document.createElement('span'); t2.textContent = '$';
-      w.append(on, num(tc.pct, '1', 'pct'), t1, t2, num(tc.min, '0.5', 'min'));
-      row('Tip and hold check', w, 'Shows in Needs attention when a charge posts for more than it was pending, like a big tip or a gas station or hotel hold that grew. Default: 30% and $2. Needs bank sync.'); }
+      const t1 = document.createElement('span'); t1.textContent = TR('% higher, and at least $'); const t3 = document.createElement('span'); t3.textContent = TR('more than the pending amount');
+      w.append(on, num(tc.pct, '1', 'pct'), t1, num(tc.min, '0.5', 'min'), t3);
+      row('Tip and hold check', w, 'For example, at 30% and $2: a $40 pending charge that posts as $55 is flagged ($15 and 37% more); a $4 coffee that posts as $5.50 isn’t (only $1.50 more). Shows in Needs attention. Needs bank sync.'); }
     { const det = document.createElement('details'); det.className = 'fd-showset'; const sm = document.createElement('summary'); sm.textContent = 'Sections & details to show (untick to hide)'; det.append(sm);
       const NAMES = { overview: 'Overview', accounts: 'Accounts', expenses: 'Expenses', budget: 'Budget', markets: 'Markets', review: 'Year in review' };
       const seen = new Set();
