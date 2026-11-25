@@ -437,6 +437,13 @@
   const prevMonths = (n) => { const out = []; const d = new Date(); d.setUTCDate(15); for (let i = 1; i <= n; i++) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 15)); out.push(x.toISOString().slice(0, 7)); } return out; };
   let FCSUM = null; // filled in by the cash forecast each time it draws
   const T = (title, go, fn) => ({ title, go, fn });
+  // net worth the same way the Accounts list adds it up: your open accounts' latest balances, accounts and assets shared
+  // into this dashboard (when counted in net worth here), and home, vehicles & other assets
+  const nwNow = () => { const L = acctList().filter((x) => x.active !== false && x.bal), sh = (k) => sharedSum([k], 'nw');
+    if (!L.length && !sharedIn().length && !assetsAll().length) return null;
+    const sum = (k) => L.filter((x) => x.kind === k).reduce((t, x) => t + (Number(x.bal.balance) || 0), 0) + sh(k);
+    const own = sum('deposit') + sum('investment') + assetsAll().reduce((t, a) => t + assetNow(a), 0) + sh('asset'), owe = sum('credit') + sum('mortgage') + sum('loan');
+    return { own, owe, net: own - owe }; };
   // series for the tile charts
   const monthsBack = (n) => [...prevMonths(n - 1).reverse(), nowM()];
   const MS = (m) => new Date(m + '-15T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
@@ -445,8 +452,7 @@
   const monRows = () => rows('monthly').filter((r) => r.book === book()).sort((a, b) => a.month.localeCompare(b.month));
   const catsOf = (m) => { const by = {}; for (const t of expM(m)) { const c = t.category || 'Uncategorized'; if (/^transfer$/i.test(c)) continue; by[c] = (by[c] || 0) + (Number(t.amount) || 0); } return by; };
   const GT = {
-    nw: T('Net worth', 'networth', () => { const a = ['deposit', 'investment'].map(bal1).filter(Boolean), d = ['credit', 'loan', 'mortgage'].map(bal1).filter(Boolean); if (!a.length && !d.length) return null;
-      const own = a.reduce((s, r) => s + r.total, 0), owe = d.reduce((s, r) => s + Math.abs(r.total), 0); const sr = balSeries(['deposit', 'investment', 'credit', 'loan', 'mortgage']);
+    nw: T('Net worth', 'networth', () => { const n = nwNow(); if (!n) return null; const own = n.own, owe = n.owe; const sr = balSeries(['deposit', 'investment', 'credit', 'loan', 'mortgage']);
       return [money0(own - owe), `own ${money0(own)} · owe ${money0(owe)}`, '', sr ? { spark: sr.v, l: sr.l } : { meter: owe ? own / (own + owe) : 1, ml: ['owned', 'owed'] }]; }),
     cash: T('Checking & savings', 'deposits', () => { const r = bal1('deposit'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['deposit']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
     invest: T('Investments', 'investments', () => { const r = bal1('investment'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['investment']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
@@ -2304,7 +2310,7 @@
     const h3 = card?.querySelector('h3'); if (h3) h3.textContent = av ? 'What you own' : 'Cash & investments';
     const mode = vGet('assetCard', 'ring'); card?.querySelectorAll('.fd-num').forEach((n) => { n.hidden = mode !== 'num'; });
     const tog = vToggle('assetCard', 'ring', [['num', 'Numbers'], ['ring', 'Ring']], ['kAssetViz']);
-    const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); nb.textContent = money0(cv + iv + av - debtTot() - shD); const dv = debtTot() + shD; nw.append('Net worth ', nb, ` = ${money0(cv + iv + av)} owned − ${money0(dv)} owed`);
+    const nw = document.createElement('p'); nw.className = 'fd-sub fd-asset-tot'; const nb = document.createElement('b'); const N = nwNow() || { own: cv + iv + av, owe: debtTot() + shD }; nb.textContent = money0(N.own - N.owe); nw.append('Net worth ', nb, ` = ${money0(N.own)} owned − ${money0(N.owe)} owed`);
     const hasHome = assetsAll().some((x) => /home|house|real|property/i.test(String(x.type || '') + ' ' + String(x.name || ''))) || sharedIn().some((d) => d.kind === 'asset' && /home|house|real|property/i.test(String(d.type || '') + ' ' + String(d.name || '')));
     const hasMort = (latestTotal(['mortgage'])[0]?.total || 0) + sharedSum(['mortgage'], 'nw') > 0;
     if (hasHome && !hasMort) { const w = document.createElement('p'); w.className = 'fd-note fd-bad'; w.textContent = 'Your home’s full value is counted, but no mortgage balance is on this dashboard, so net worth is too high. Import a mortgage statement here, or share the mortgage from the dashboard that has it.'; el.append(w); } if (shC + shI + shA) { const sn = document.createElement('span'); sn.className = 'fd-zero'; sn.textContent = ` · incl. ${money0(shC + shI + shA)} shared`; nw.append(sn); }
