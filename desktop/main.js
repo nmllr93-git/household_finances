@@ -3,7 +3,7 @@
 //   Tray icon: open, allow other devices on/off, start/stop, phone addresses, Tailscale status, start with Windows.
 // - "Connect to another computer" role: opens the connect screen and then that server's pages.
 'use strict';
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, clipboard, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, dialog, clipboard, powerSaveBlocker, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { fork, execFile } = require('node:child_process');
@@ -229,11 +229,21 @@ function setupUpdates() {
     // normal window so any problem is visible, then reopens Larenest. If anything still holds the app open, exit anyway.
     if (r.response === 0) { quitting = true; await stopChild(); stopped = true; setImmediate(() => { autoUpdater.quitAndInstall(false, true); setTimeout(() => app.exit(0), 4000); }); }
   });
-  setTimeout(() => checkUpdates(false), 30e3); setInterval(() => checkUpdates(false), 24 * 3600e3);
+  // Check soon after starting, then every 6 hours. A timer alone isn't enough for an app that's left open: a computer that
+  // sleeps overnight can go days without the timer firing, so also check after waking up and when the window comes forward,
+  // at most every 6 hours.
+  setTimeout(() => checkUpdates(false), 30e3);
+  setInterval(() => checkUpdates(false), 30 * 60e3); // checkUpdates itself skips if the last check was under 6 hours ago
+  try { powerMonitor.on('resume', () => setTimeout(() => checkUpdates(false), 60e3)); powerMonitor.on('unlock-screen', () => checkUpdates(false)); } catch {}
+  app.on('browser-window-focus', () => checkUpdates(false));
 }
+let lastCheck = 0;
 function checkUpdates(manual) {
   if (!autoUpdater || !app.isPackaged) { if (manual) dialog.showMessageBox({ message: 'Updates work in the installed app', detail: 'You are running from source (npm start).' }); return; }
-  if (updBusy) return; updBusy = true; updManual = manual;
+  if (!manual && Date.now() - lastCheck < 6 * 3600e3) return;
+  if (updBusy && !manual) return;
+  lastCheck = Date.now(); updBusy = true; updManual = manual;
+  const busyAt = lastCheck; setTimeout(() => { if (updBusy && lastCheck === busyAt && !manual) updBusy = false; }, 30 * 60e3); // never stay stuck
   autoUpdater.checkForUpdates().catch(() => { updBusy = false; });
 }
 ipcMain.handle('fd:checkUpdates', () => checkUpdates(true));

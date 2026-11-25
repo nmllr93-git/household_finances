@@ -1270,7 +1270,7 @@
   dash.draw('txReceipt', (el) => {
     el.replaceChildren(); if (!editing) return;
     const mine = rows('receipts').filter((r) => r.txKey === editing.key), ro = document.body.classList.contains('fd-readonly');
-    const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Receipt photos'; el.append(h);
+    const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Receipts'; el.append(h);
     const wrap = document.createElement('div'); wrap.className = 'fd-rcpts'; el.append(wrap);
     mine.forEach((r) => { const f = document.createElement('figure'); let img;
       if (r.mime === 'application/pdf') { img = document.createElement('button'); img.type = 'button'; img.className = 'fd-rcpt-pdf'; img.textContent = '📄 ' + (r.name && r.name !== 'Receipt' ? r.name : 'PDF receipt'); img.title = TR('Open the PDF'); }
@@ -4167,7 +4167,8 @@
     if (prefGet('gsDismissed', false)) row('Getting started list', rbtn('Show it again', () => { prefSet('gsDismissed', false).then(() => { try { localStorage.removeItem('fd-gs-hide-' + book()); } catch (e) {} dash.draw('gettingStarted'); dash.draw('settingsView'); }); }));
     if (window.FDApp && FDApp.checkUpdates) { const w = document.createElement('span'); w.className = 'fd-updrow'; const v = document.createElement('span'); v.className = 'fd-zero';
       FDApp.version?.().then((x) => { v.textContent = 'Version ' + x; }).catch(() => {});
-      w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), ' ', v); row('Desktop app', w, 'Checks automatically once a day. This only updates the app on this computer.'); }
+      w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), ' ', v); row('Desktop app', w, 'Checks automatically every few hours, and after the computer wakes up. This only updates the app on this computer.'); }
+    else if (window.FDApp && FDApp.desktop) row('Desktop app', phMsg('To check for updates, use the Larenest icon in the taskbar tray (or the Help menu) → Check for updates. Newer versions also have a button here.'));
     if (window.FDI18n) row('Language', sel(Object.entries(FDI18n.langs), FDI18n.lang, (v) => FDI18n.set(v)), FDI18n.lang === 'es' ? 'Spanish is in beta: a few screens are still in English. Tell us what reads oddly with Send feedback.' : 'For this device. Amounts and dates stay in US format.');
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
     if (s.type === 'shared') {

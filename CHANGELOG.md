@@ -6,6 +6,8 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 ## Unreleased
 - Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
 - Settings: removed a stray "Show" button next to the Logins box
+- Desktop app: checks for updates every few hours and after the computer wakes up (it used to wait a full day of running, which a computer that sleeps rarely reached)
+- Transaction editor: a little more space between fields; the receipts heading now says Receipts
 - Business: editing a business transaction (for example to add a receipt) now returns you to Business transactions, at the same spot, after you save or cancel
 
 ## Desktop 1.0.36

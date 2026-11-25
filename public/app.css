@@ -692,7 +692,7 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-dupbox > .fd-btn { margin: 0 6px 6px 0; }
 .fd-txnote { font-size: 12px; color: var(--color-fg); opacity: .8; margin-top: 2px; white-space: normal; }
 .fd-field textarea { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 8px; resize: vertical; }
-.fd-narrow { justify-content: flex-end; } .fd-rb-row .fd-narrow > input, .fd-rb-row .fd-narrow > select, .fd-narrow > input, .fd-narrow > select { flex: none; }
+.fd-rb-row .fd-narrow { justify-content: flex-end; } .fd-rb-row .fd-narrow > input, .fd-rb-row .fd-narrow > select, .fd-narrow > input, .fd-narrow > select { flex: none; }
 .fd-yx { margin: 6px 0 12px; align-items: start; }
 .fd-srbars { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; align-items: end; min-height: 90px; }
 .fd-srbar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; font-size: 11px; color: var(--color-fg-muted); min-width: 0; }
@@ -717,3 +717,6 @@ details.fd-setgrp:not(.fd-setgrp-adv) > summary.fd-setgrp-h::-webkit-details-mar
 details.fd-setgrp:not(.fd-setgrp-adv) > summary.fd-setgrp-h::before { content: '▾'; font-size: 12px; transition: transform .15s; }
 details.fd-setgrp:not(.fd-setgrp-adv):not([open]) > summary.fd-setgrp-h::before { transform: rotate(-90deg); }
 details.fd-setgrp:not([open]) { margin-bottom: 6px; }
+/* transaction editor: a little room between one box and the next field's label */
+#fd-tx-form > .fd-field, #fd-tx-form > .fd-row, #fd-tx-form > .fd-check { margin-bottom: 10px; }
+#fd-tx-form .fd-field { gap: 4px; }
