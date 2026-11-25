@@ -18,7 +18,7 @@
   else root.FDSimpleFin = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  const MANUAL_GAP = 15 * 60e3, AUTO_GAP = 6 * 3600e3, FIRST_DAYS = 60, OVERLAP_DAYS = 5, SEEN_MAX = 4000;
+  const MANUAL_GAP = 15 * 60e3, AUTO_GAP = 6 * 3600e3, FIRST_DAYS = 90, OVERLAP_DAYS = 5, SEEN_MAX = 4000;
   const KINDS = ['deposit:checking', 'deposit:savings', 'deposit:hysa', 'deposit:money_market', 'deposit:cd', 'deposit:cash_mgmt', 'credit:card', 'credit:loc',
     'mortgage:mortgage', 'loan:heloc', 'loan:auto', 'loan:student', 'loan:personal', 'loan:other', 'investment:brokerage', 'investment:401k', 'investment:403b',
     'investment:457b', 'investment:roth_ira', 'investment:trad_ira', 'investment:rollover_ira', 'investment:sep_ira', 'investment:hsa', 'investment:529',

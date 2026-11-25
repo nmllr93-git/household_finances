@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Bank sync: the first sync now brings in up to 90 days of history (was 60), where the bank provides it
 - Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
 - Settings: removed a stray "Show" button next to the Logins box
 - Desktop app: the daily update check now also happens on a computer that sleeps overnight (it checks when the app starts and once a day)
