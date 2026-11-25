@@ -3,7 +3,17 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.37
+- Fixed: possible duplicates weren't found when a statement and bank sync used different names for the same (merged) account, such as "Hills Bank Checking" and "Hills Bank"
+- Bank sync: the first sync now brings in up to 90 days of history (was 60), where the bank provides it
+- Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
+- Settings: removed a stray "Show" button next to the Logins box
+- Desktop app: the daily update check now also happens on a computer that sleeps overnight (it checks when the app starts and once a day)
+- Settings for this dashboard: tidier layout, with labels in one column and each setting's explanation in small text under it
+- Transaction editor: a little more space between fields; the receipts heading now says Receipts
+- Business: editing a business transaction (for example to add a receipt) now returns you to Business transactions, at the same spot, after you save or cancel
+
+## Android 1.6.17
 - Fixed: possible duplicates weren't found when a statement and bank sync used different names for the same (merged) account, such as "Hills Bank Checking" and "Hills Bank"
 - Bank sync: the first sync now brings in up to 90 days of history (was 60), where the bank provides it
 - Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
