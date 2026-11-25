@@ -1371,6 +1371,30 @@
   const dupIgnore = async (t) => { const d = await db(); if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
     else await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); };
   let dupOpen = false;
+  // ---- pending transactions from bank sync: shown, never counted (the list is replaced on every sync) ----
+  let PEND = { book: null, pending: [], flags: [] };
+  const loadPending = async () => {
+    const id = window.HF && window.HF.state.bookId; if (!id) return;
+    try { const j = await FDStore.json('GET', `/api/books/${encodeURIComponent(id)}/simplefin`); PEND = { book: id, pending: (j && j.connected && j.pending) || [], flags: (j && j.connected && j.flags) || [] }; }
+    catch (e) { PEND = { book: id, pending: [], flags: [] }; }
+    ['pendingRows', 'acctRows', 'healthRows'].forEach((d) => { try { dash.draw(d); } catch (e) {} });
+  };
+  setTimeout(loadPending, 1500); setInterval(loadPending, 30 * 60e3);
+  const pendFor = () => (PEND.book === (window.HF && window.HF.state.bookId) ? PEND.pending : []);
+  dash.draw('pendingRows', (el) => {
+    el.replaceChildren(); const P = pendFor(); if (!P.length) return;
+    const box = document.createElement('details'); box.className = 'fd-rb fd-pendbox';
+    const sm = document.createElement('summary'); sm.className = 'fd-rb-h'; const tot = P.reduce((a, t) => a + (t.amount > 0 ? t.amount : 0), 0);
+    sm.textContent = TR('{0} pending at the bank ({1}), not counted yet').replace('{0}', P.length).replace('{1}', money2(tot)); box.append(sm);
+    box.append(phMsg('Charges your bank hasn’t posted yet. They aren’t in budgets or totals; once one posts, it shows up below as a normal transaction and leaves this list. Bank sync refreshes about once a day.'));
+    const tbl = document.createElement('table'); tbl.className = 'fd-table fd-pendtable';
+    [...P].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 100).forEach((t) => { const tr = document.createElement('tr');
+      const c = (x, cl) => { const d = document.createElement('td'); d.textContent = x; if (cl) d.className = cl; return d; };
+      const d1 = c(t.date), d2 = c(t.description, 'fd-l'), d3 = c(money2(Math.abs(t.amount)) + (t.amount < 0 ? ' ' + TR('(money in)') : ''), 'fd-r'), d4 = c(t.account, 'fd-zero'); d2.translate = false; d4.translate = false;
+      tr.append(d1, d2, d3, d4); tbl.append(tr); });
+    const w = document.createElement('div'); w.className = 'fd-tablewrap'; w.append(tbl); box.append(w); el.append(box);
+  });
+
   dash.draw('dupReview', (el) => {
     el.replaceChildren(); const P0 = dupPairs(); if (!P0.length) return;
     const ro = document.body.classList.contains('fd-readonly'), box = document.createElement('div'); box.className = 'fd-rb fd-dupbox';
@@ -1932,6 +1956,8 @@
         const mi = a.rate && bal ? (bal * a.rate) / 100 / 12 : null; if (mi) intr += mi;
         const tr = document.createElement('tr');
         const nm = td(a.name + (a.owner && !a.name.startsWith(a.owner) ? ` (${a.owner})` : ''), 'fd-l'); if (a.note) { nm.title = a.note; const s = document.createElement('div'); s.className = 'fd-zero'; s.textContent = a.note; nm.append(s); }
+        { const kA = keyA(a.name), names = new Set([kA, ...(a.reg ? [a.reg.name, a.reg.match, ...(a.reg.aliases || [])].filter(Boolean).map(keyA) : [])]); const pp = pendFor().filter((t) => names.has(keyA(t.account)));
+          if (pp.length) { const s2 = document.createElement('div'); s2.className = 'fd-zero fd-pendnote'; const sum = pp.reduce((x, t) => x + t.amount, 0); s2.textContent = TR('Pending: {0} ({1})').replace('{0}', (sum > 0 ? '−' : '+') + money2(Math.abs(sum))).replace('{1}', pp.length); nm.append(s2); } }
         shareIcon(nm, a.reg && a.reg.shareTo, true); if (closed) { nm.append(' (closed)'); tr.style.opacity = '0.55'; }
         if (kind === 'credit' && Number(a.limit) > 0 && bal != null) {
           const pct = Math.max(0, Math.min(100, (bal / Number(a.limit)) * 100));
@@ -2139,6 +2165,8 @@
     for (const x of econAlerts()) out.push(x);
     for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: x.year ? TR('{0} costs {1}% more than a year ago: {2} → {3}, about {4} more a year. Worth a call to ask for a better price, or cancelling?').replace('{0}', x.vendor).replace('{1}', x.pct).replace('{2}', money2(x.prev)).replace('{3}', money2(x.last)).replace('{4}', money0(x.extra)) : `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
     for (const r of subRemindersDue()) out.push({ id: 'subrem:' + r.vendor + ':' + r.date, sig: r.date, lvl: 'warn', text: TR(SUB_WHY[r.why] || SUB_WHY.review).replace('{0}', r.vendor) + ' ' + (r.date <= todayISO() ? TR('(today or earlier)') : TR('(on {0})').replace('{0}', r.date)) + (r.note ? ' · ' + r.note : ''), go: 'subscriptions' });
+    try { for (const f of (PEND.book === (window.HF && window.HF.state.bookId) ? PEND.flags : [])) { if (Date.now() - Date.parse(f.at || f.date) > 30 * 864e5) continue;
+      out.push({ id: 'tip:' + f.key, sig: String(f.posted), lvl: 'warn', text: TR('{0} posted for {1}, but was {2} while pending (+{3}%), on {4}. A big tip or a hold that grew? Worth checking the receipt.').replace('{0}', f.description).replace('{1}', money2(f.posted)).replace('{2}', money2(f.pending)).replace('{3}', Math.round((f.posted / f.pending - 1) * 100)).replace('{4}', f.account), go: 'tx' }); } } catch (e) {}
     try { const dp = dupPairs(); if (dp.length) out.push({ id: 'dupes', sig: String(dp.length), lvl: 'warn', text: `${dp.length} transaction${dp.length === 1 ? ' looks' : 's look'} like ${dp.length === 1 ? 'a duplicate' : 'duplicates'}: the same purchase from bank sync and from a statement, a few days apart. Review and keep one copy.`, go: 'dupes' }); } catch {}
     try { if (hasBiz()) { const q0 = bizNextDue(), days = q0 ? Math.round((Date.parse(q0.due) - Date.now()) / 864e5) : 99;
       if (q0 && days <= 14) out.push({ id: `biztax:${q0.year}:${q0.q}`, sig: q0.due, lvl: 'warn', text: `Quarterly estimated tax (Q${q0.q} ${q0.year}) is due ${q0.due}${days <= 0 ? ' (today)' : ` (in ${days} day${days === 1 ? '' : 's'})`}. About ${money0(q0.estimate)} set aside from business profit.`, go: 'biztax' });
@@ -2149,7 +2177,7 @@
     if (where === 'dupes') { showGroup('tx'); dupOpen = true; dash.draw('dupReview'); setTimeout(() => document.querySelector('#fd-dupes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150); return; }
     if (where === 'biztax' || where === 'biztx') { showGroup('business'); setTimeout(() => document.querySelector(where === 'biztax' ? '#biz-tax' : '#biz-tx')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
     if (where === 'needs') { showGroup('tx'); q('fd-tneeds').forEach((c) => { c.checked = true; c.dispatchEvent(new Event('change')); }); setTimeout(() => document.querySelector('#transactions')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
-    const g = { import: 'import', accounts: 'accounts', subscriptions: 'expenses' }[where] || 'all';
+    const g = { import: 'import', accounts: 'accounts', subscriptions: 'expenses', tx: 'tx' }[where] || 'all';
     showGroup(g); setTimeout(() => document.querySelector('#' + (where === 'subscriptions' ? 'subscriptions' : where === 'accounts' ? 'accounts' : 'import'))?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
   dash.draw('healthRows', (el) => {
@@ -3237,7 +3265,7 @@
         box.append(r, msg); return;
       }
       const when = st.lastSync ? new Date(st.lastSync).toLocaleString(LOC, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'not yet';
-      box.append(phMsg(`Connected. Last sync: ${when}. New posted transactions are added about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}; pending ones wait until they post. Rules, categories and duplicate checks work the same as for imported statements.`));
+      box.append(phMsg(`Connected. Last sync: ${when}. Larenest checks ${P.label} about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}, and Sync now checks right away.${P.id === 'simplefin' ? ' SimpleFIN itself gets new transactions from your banks about once a day, so a purchase can take up to a day (sometimes more) to show up, however often you sync.' : ''} Pending charges are shown in Transactions but only counted once they post. Rules, categories and duplicate checks work the same as for imported statements.`));
       if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
       if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
       for (const n of st.notes || []) box.append(phMsg(P.label + ': ' + n));
@@ -3274,7 +3302,7 @@
         rbtn('Sync now', async (e) => {
           const b = e.currentTarget || e.target; if (b.disabled) return; b.disabled = true; b.classList.add('fd-busy'); b.textContent = 'Syncing…';
           msg.className = 'fd-note fd-sync-msg'; msg.textContent = `Syncing with ${P.label}… this can take up to a minute.`;
-          try { await call('', 'POST', { accounts: draft }); const j = await call('/sync', 'POST'); st = j; draw();
+          try { await call('', 'POST', { accounts: draft }); const j = await call('/sync', 'POST').then((j) => { setTimeout(loadPending, 500); return j; }); st = j; draw();
             const at = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             const m = box.querySelector('.fd-sync-msg'); if (m) { m.className = 'fd-note fd-good fd-sync-msg'; m.textContent = '✓ Finished syncing at ' + at + '. ' + (j.added ? `Added ${j.added} new transaction${j.added === 1 ? '' : 's'}.` : 'Up to date; no new transactions.'); }
             const nb = [...box.querySelectorAll('button')].find((x) => x.textContent === 'Sync now'); if (nb) { nb.textContent = '✓ Synced'; setTimeout(() => { nb.textContent = 'Sync now'; }, 4000); }

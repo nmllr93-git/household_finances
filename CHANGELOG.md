@@ -3,6 +3,11 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- **Pending transactions from bank sync:** charges your bank hasn't posted yet show in a Pending list at the top of Transactions, and as "Pending: $X" under each account. They aren't counted in budgets or totals, and each one leaves the list when it posts, so nothing shows twice
+- **Tip and hold check:** when a charge posts for 30% or more above its pending amount (a big tip, or a gas station or hotel hold that grew), it's flagged in Needs attention
+- Bank sync settings now explain the timing: SimpleFIN gets new transactions from your banks about once a day, and Larenest checks SimpleFIN about every 6 hours
+
 ## Desktop 1.0.38
 - **Merge categories** (⚙ Settings → Settings for this dashboard): combine two names that mean the same thing, like Health/Medical and Health/medical. Look-alike names are suggested for you. The old name counts as the new one in transactions, budgets and reports, and Undo brings it back
 

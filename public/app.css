@@ -741,3 +741,5 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 @media (max-width: 600px) { .fd-setgrid > .fd-rb-row { grid-template-columns: 1fr; padding: 10px 0; } }
 .fd-setgrid > .fd-rb-row { width: 100%; box-sizing: border-box; max-width: none; }
 .fd-catmerge { display: flex; flex-direction: column; gap: 8px; } .fd-catmerge span { font-size: 13px; } .fd-catmerge .fd-zero span { color: var(--color-fg-muted); }
+.fd-pendbox { margin: 8px 0 12px; } .fd-pendbox > summary { cursor: pointer; }
+.fd-pendtable td { color: var(--color-fg-muted); font-style: italic; } .fd-pendnote { font-style: italic; }

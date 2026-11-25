@@ -70,7 +70,7 @@
     }
     async function pull(access, startUnix) {
       const { base, auth } = splitAccess(access);
-      const r = await env.request('GET', `${base}/accounts?start-date=${Math.floor(startUnix)}`, { Authorization: auth });
+      const r = await env.request('GET', `${base}/accounts?start-date=${Math.floor(startUnix)}&pending=1`, { Authorization: auth }); // pending ones are shown, never saved
       if (r.status === 402) throw err(402, 'Your SimpleFIN subscription needs attention (payment required). Check your SimpleFIN Bridge account.');
       if (r.status === 403) throw err(403, 'SimpleFIN refused this connection. It may have been revoked; disconnect and connect again with a new setup token.');
       if (r.status >= 400) throw err(502, 'SimpleFIN returned an error (HTTP ' + r.status + ')' + (String(r.text || '').trim() ? ': ' + String(r.text).trim().slice(0, 160) : '.'));
@@ -91,6 +91,7 @@
     const view = (st) => ({
       provider: P.id, label: P.label, multi: !!P.multi, banks: P.multi && st && Array.isArray(st.access) ? st.access.map((x) => x.institution || 'Bank') : [],
       connected: !!(st && st.access && (!Array.isArray(st.access) || st.access.length)), lastSync: (st && st.lastSync) || null, lastError: (st && st.lastError) || '', notes: (st && st.notes) || [], kinds: KINDS,
+      pending: (st && st.pending) || [], flags: (st && st.flags) || [],
       accounts: Object.entries((st && st.accounts) || {}).map(([id, a]) => ({ id, name: a.name, org: a.org, map: a.map, kind: a.kind, skip: !!a.skip, review: !!a.review, flip: !!a.flip, synced: (a.seen || []).length })),
     });
 
@@ -118,11 +119,18 @@
           for (const t of l || []) { if (t.id) { A.ids.add(String(t.id)); continue; } const f = `${t.date}|${Number(t.amount)}|${String(t.description || '').trim()}`; per.set(f, (per.get(f) || 0) + 1); }
           for (const [f, n] of per) A.fp.set(f, Math.max(A.fp.get(f) || 0, n)); }
         let added = 0, docs = 0;
+        // Pending transactions are shown (Transactions, Accounts) but never saved: the whole list is replaced on every sync,
+        // so when a charge posts (often with a new id and a slightly different amount) its pending copy just disappears.
+        const pendNow = [], prevPend = Array.isArray(st.pending) ? st.pending : [], newPosted = [];
         for (const a of res.accounts) {
           const m = st.accounts[String(a.id)]; if (!m || m.skip || m.review) continue;
           const seen = new Set(m.seen || []), A = acctOf(m.map), txns = [];
           for (const t of Array.isArray(a.transactions) ? a.transactions : []) {
-            if (t.pending || !t.posted) continue; // only posted transactions, so nothing counts twice when a pending charge settles
+            if (t.pending || !t.posted) {
+              const amt = Math.round((m.flip ? 1 : -1) * Number(t.amount) * 100) / 100;
+              if (isFinite(amt) && amt && pendNow.length < 300) pendNow.push({ account: m.map, date: day(t.transacted_at || t.posted || now / 1000), description: String(t.description || t.payee || '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Transaction', amount: amt, id: String(t.id || '') });
+              continue; // only posted transactions are saved, so nothing counts twice when a pending charge settles
+            }
             const id = String(t.id || ''); if (id && seen.has(id)) continue;
             const amount = Math.round((m.flip ? 1 : -1) * Number(t.amount) * 100) / 100; if (!isFinite(amount) || !amount) { if (id) seen.add(id); continue; }
             const sid = id ? (P.id || 'sync') + ':' + String(a.id) + ':' + id : ''; // the provider's id, scoped to provider and account
@@ -130,7 +138,7 @@
             if (id) seen.add(id);
             if (sid && A.ids.has(sid)) continue;
             const f = `${row.date}|${row.amount}|${row.description}`, left = A.fp.get(f) || 0; if (left > 0) { A.fp.set(f, left - 1); continue; } // already imported from a statement
-            txns.push(row);
+            txns.push(row); newPosted.push({ ...row, account: m.map });
           }
           const rawBal = Number(a.balance), bal = isFinite(rawBal) ? Math.round((OWED.test(m.kind) ? Math.abs(rawBal) : rawBal) * 100) / 100 : null;
           m.seen = [...seen].slice(-SEEN_MAX);
@@ -151,6 +159,18 @@
           }
           m.lastBal = bal; added += txns.length;
         }
+        // A charge that posted for noticeably more than it was pending (a big tip, a gas station or hotel hold that grew):
+        // same account and store, a pending copy that's now gone, within a week, posted 30%+ (and $2+) higher.
+        const word = (d) => String(d || '').toLowerCase().replace(/^(sq|tst|pos|purchase|debit|card|pp|paypal)\b[\s*#:]*/g, '').replace(/[^a-z]+/g, ' ').trim().split(' ').filter((w) => w.length > 2).slice(0, 2).join(' ');
+        const gone = prevPend.filter((p) => !pendNow.some((q) => (p.id && q.id === p.id) || (q.account === p.account && q.amount === p.amount && q.description === p.description)));
+        const used = new Set(), flags = Array.isArray(st.flags) ? st.flags : [];
+        for (const r of newPosted) {
+          if (r.amount <= 0) continue;
+          const i = gone.findIndex((p, k) => !used.has(k) && p.account === r.account && p.amount > 0 && word(p.description) && word(p.description) === word(r.description) && Math.abs(Date.parse(p.date) - Date.parse(r.date)) <= 7 * 864e5 && r.amount >= p.amount);
+          if (i < 0) continue; used.add(i); const p = gone[i];
+          if (r.amount - p.amount >= 2 && r.amount > p.amount * 1.3) flags.push({ key: (r.id || `${r.account}|${r.date}|${r.amount}`), account: r.account, description: r.description, date: r.date, pending: p.amount, posted: r.amount, at: new Date(now).toISOString() });
+        }
+        st.flags = flags.slice(-50); st.pending = pendNow;
         st.lastSync = now; st.lastError = ''; st.notes = res.errors;
         await env.save(bookId, st);
         return { added, statements: docs, notes: res.errors };
@@ -178,6 +198,7 @@
           if (!Object.keys(next.accounts).length && !next.lastError && P.emptyNote) next.notes = [...(next.notes || []), P.emptyNote];
           await env.save(bookId, next); return { status: 200, body: view(next) };
         }
+        if (b.dismiss) { st.flags = (st.flags || []).filter((f) => f.key !== String(b.dismiss)); await env.save(bookId, st); return { status: 200, body: view(st) }; }
         if (b.accounts && typeof b.accounts === 'object') {
           for (const [id, v] of Object.entries(b.accounts)) { const a = (st.accounts || {})[id]; if (!a || !v) continue;
             if (typeof v.map === 'string' && v.map.trim()) a.map = v.map.trim().slice(0, 60); if (KINDS.includes(v.kind)) a.kind = v.kind; a.skip = !!v.skip; delete a.review; if ('flip' in v) a.flip = !!v.flip; }
