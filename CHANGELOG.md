@@ -3,6 +3,10 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
+- Settings: removed a stray "Show" button next to the Logins box
+
 ## Desktop 1.0.36
 - **Receipts can be PDFs** (e-receipts and invoices): attach them to transactions and manual entries; a PDF receipt fills in the store, date and total on any device
 - Fixed: adding a JPG or PNG receipt photo was refused (and saved photos didn't show) when using the dashboard from the PC server

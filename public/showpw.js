@@ -12,7 +12,7 @@
   const scan = (root) => { if (root.querySelectorAll) root.querySelectorAll('input[type=password]').forEach(add); };
   const css = document.createElement('style');
   css.textContent = '.fd-pw{position:relative;display:block;width:100%}.fd-pw>input{width:100%;padding-right:4.2em!important;box-sizing:border-box}' +
-    '.fd-pw-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:inherit;opacity:.7;font:inherit;font-size:.85em;cursor:pointer;padding:4px 6px}.fd-pw-btn:hover{opacity:1}';
+    '.fd-pw:has(>input[hidden]){display:none}.fd-pw-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:inherit;opacity:.7;font:inherit;font-size:.85em;cursor:pointer;padding:4px 6px}.fd-pw-btn:hover{opacity:1}';
   const go = () => { document.head.append(css); scan(document); new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => n.nodeType === 1 && (n.matches && n.matches('input[type=password]') ? add(n) : scan(n))))).observe(document.body, { childList: true, subtree: true }); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 })();

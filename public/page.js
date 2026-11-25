@@ -3869,8 +3869,12 @@
     if (/ fd-phonebox /.test(c)) return 'phone';
     return 'dash'; };
   const setGroups = (el) => {
-    const g = {}; for (const [k, t] of SET_GROUPS) { const w = document.createElement(k === 'adv' ? 'details' : 'div'); w.className = 'fd-setgrp fd-setgrp-' + k; w.hidden = true;
-      const h = document.createElement(k === 'adv' ? 'summary' : 'h3'); h.className = 'fd-setgrp-h'; h.textContent = k === 'adv' ? t + ' (bank keys, menus, sections, recent changes)' : t; w.append(h); g[k] = w; el.append(w); }
+    // every group folds; open by default except Advanced. What you fold is remembered on this device.
+    const folds = (() => { try { return JSON.parse(localStorage.getItem('fd-setgrp-fold') || '{}'); } catch (e) { return {}; } })();
+    const g = {}; for (const [k, t] of SET_GROUPS) { const w = document.createElement('details'); w.className = 'fd-setgrp fd-setgrp-' + k; w.hidden = true;
+      w.open = k in folds ? !folds[k] : k !== 'adv';
+      w.addEventListener('toggle', () => { folds[k] = !w.open; try { localStorage.setItem('fd-setgrp-fold', JSON.stringify(folds)); } catch (e) {} });
+      const h = document.createElement('summary'); h.className = 'fd-setgrp-h'; h.textContent = k === 'adv' ? t + ' (bank keys, menus, sections, recent changes)' : t; w.append(h); g[k] = w; el.append(w); }
     const place = (n) => { if (n.nodeType !== 1 || n.classList.contains('fd-setgrp')) return; const k = setGroupOf(n), w = g[k];
       // bank sync first in its section, then everything else in the order it arrives
       if (n.classList.contains('fd-syncbox')) { const after = [...w.children].filter((x) => x.classList.contains('fd-syncbox')).pop() || w.firstChild; after.after(n); } else w.append(n);
