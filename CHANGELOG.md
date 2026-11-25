@@ -8,6 +8,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 - Fixed: adding a JPG or PNG receipt photo was refused (and saved photos didn't show) when using the dashboard from the PC server
 - Fixed: a receipt added in Add income or an expense by hand wasn't kept with the entry
 - Host options: spacing next to Connect a phone
+- Phones: the Business tab's download buttons are an even, full-width stack
 
 ## Desktop 1.0.35
 - **Logins (server owner):** see everyone else who can sign in, set a new password for someone who forgot theirs, or remove a login, from ⚙ Settings in any browser

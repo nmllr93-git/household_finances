@@ -3943,17 +3943,18 @@
     if (r.carNotCounted) el.append(phMsg(`Car costs on line 9 (${money2(r.carNotCounted)}) aren’t counted because you chose the standard mileage rate. Parking and tolls still count: mark them as line 27a.`, 'fd-zero'));
     el.append(phMsg('Meals are usually 50% deductible. Use the mileage log or actual car costs (line 9), not both; choose which under Mileage log → Vehicle details. Home office uses the simplified method ($5 a square foot, up to 300). These totals are a starting point for you or your tax preparer, not tax advice.', 'fd-zero'));
     const who = BZSEL.biz ? BZSEL.biz.replace(/[^\w-]+/g, '-').toLowerCase() : 'business';
-    el.append(rbtn('Download transactions (CSV)', () => {
+    const dl = document.createElement('div'); dl.className = 'fd-dlrow';
+    dl.append(rbtn('Download transactions (CSV)', () => {
       const lines = [['Date', 'Business', 'Schedule C line', 'Vendor', 'Category', 'Description', 'Amount', 'Business %', 'Business amount', 'Account', 'Receipt'].join(',')]
         .concat(r.list.map((t) => [t.date || t.month, t.biz, t.line === 'income' ? 'Income' : `${t.line} ${lineName(t.line)}`, t.vendor, t.category, t.description, Number(t.amount).toFixed(2), t.bizPct || 100, t.share.toFixed(2), t.source, rcptKeys().has(t.splitOf || t.key) ? 'yes' : ''].map(csvEsc).join(',')));
-      saveFile(`${who}-${BZSEL.year}-transactions.csv`, lines.join('\r\n'), 'text/csv'); }, false), ' ',
+      saveFile(`${who}-${BZSEL.year}-transactions.csv`, lines.join('\r\n'), 'text/csv'); }, false),
     rbtn('Download summary (CSV)', () => {
       const L = [['Line', 'Item', 'Amount'].join(','), ['1', 'Gross receipts (income)', r.income.toFixed(2)].join(','), ...r.lines.map((l) => [l.code, l.label, l.amount.toFixed(2)].map(csvEsc).join(',')),
         ['24b', 'Meals deductible (50%)', r.mealsDeductible.toFixed(2)].join(','), ['9', `Standard mileage (${Math.round(r.miles)} mi)`, r.mileageCounted.toFixed(2)].map(csvEsc).join(','), ...(r.cogs ? [['4', 'Cost of goods sold (Part III)', r.cogs.toFixed(2)].join(',')] : []), ['30', 'Home office (simplified)', r.homeOffice.toFixed(2)].map(csvEsc).join(','), ['31', 'Net profit', r.net.toFixed(2)].map(csvEsc).join(',')];
-      saveFile(`${who}-${BZSEL.year}-schedule-c-summary.csv`, L.join('\r\n'), 'text/csv'); }), ' ',
+      saveFile(`${who}-${BZSEL.year}-schedule-c-summary.csv`, L.join('\r\n'), 'text/csv'); }),
     rbtn('Print or save as PDF', () => bizPrint(r)));
     { const pk = rbtn('Download tax packet (ZIP)', async () => { pk.disabled = true; const t0 = pk.textContent; pk.textContent = 'Building…'; try { await bizPacket(r); } catch (e) { alert('Couldn’t build the tax packet: ' + e.message); } pk.disabled = false; pk.textContent = t0; }, false);
-      el.append(document.createElement('br'), pk, phMsg('One file for your tax preparer: the Schedule C summary, business transactions, every transaction for the year (business and personal), mileage log, estimated payments, a printable summary and the receipt photos.', 'fd-zero')); }
+      dl.append(pk); el.append(dl, phMsg('One file for your tax preparer: the Schedule C summary, business transactions, every transaction for the year (business and personal), mileage log, estimated payments, a printable summary and the receipt photos.', 'fd-zero')); }
   });
   // printable summary as an HTML page (also put inside the tax packet)
   const bizHtml = (r, auto) => {
