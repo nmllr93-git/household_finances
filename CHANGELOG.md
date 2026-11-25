@@ -3,6 +3,9 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- **Merge categories** (⚙ Settings → Settings for this dashboard): combine two names that mean the same thing, like Health/Medical and Health/medical. Look-alike names are suggested for you. The old name counts as the new one in transactions, budgets and reports, and Undo brings it back
+
 ## Desktop 1.0.37
 - Fixed: possible duplicates weren't found when a statement and bank sync used different names for the same (merged) account, such as "Hills Bank Checking" and "Hills Bank"
 - Bank sync: the first sync now brings in up to 90 days of history (was 60), where the bank provides it

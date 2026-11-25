@@ -445,3 +445,8 @@ window.FDI18n.add({ 'Filled in the {0} from the receipt. Check them before savin
 window.FDI18n.add({ 'Checks automatically every few hours, and after the computer wakes up. This only updates the app on this computer.': 'Busca automáticamente cada pocas horas y cuando la computadora se reactiva. Solo actualiza la app de esta computadora.', 'To check for updates, use the Larenest icon in the taskbar tray (or the Help menu) → Check for updates. Newer versions also have a button here.': 'Para buscar actualizaciones, usa el ícono de Larenest en la bandeja de la barra de tareas (o el menú Ayuda) → Check for updates. Las versiones más nuevas también tienen un botón aquí.' });
 window.FDI18n.add({ 'Receipts': 'Recibos' });
 window.FDI18n.add({ 'Checks automatically when the app starts and once a day. This only updates the app on this computer.': 'Busca automáticamente al abrir la app y una vez al día. Solo actualiza la app de esta computadora.' });
+window.FDI18n.add({
+  'Merge categories': 'Combinar categorías', '{0} look like the same category.': '{0} parecen la misma categoría.', ' and ': ' y ', 'Merge into “{0}”': 'Combinar en “{0}”', 'into': 'en', 'Merge': 'Combinar', 'Undo': 'Deshacer',
+  'Merge “{0}” into “{1}”? Transactions, budgets and reports will count “{0}” as “{1}”. You can undo this here.': '¿Combinar “{0}” en “{1}”? Transacciones, presupuestos e informes contarán “{0}” como “{1}”. Puedes deshacerlo aquí.',
+  'For two names that mean the same thing. The old name counts as the new one in transactions, budgets and reports; nothing is deleted, and Undo brings it back.': 'Para dos nombres que significan lo mismo. El nombre anterior cuenta como el nuevo en transacciones, presupuestos e informes; no se borra nada y Deshacer lo restaura.',
+});

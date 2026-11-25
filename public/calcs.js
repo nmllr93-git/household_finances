@@ -91,8 +91,8 @@ if (typeof window !== 'undefined') { window.FDSchedule = scheduleOccurrences; wi
 dash.calc('all_txns', {
   title: 'All transactions, cleaned (including ignored ones)',
   description: 'Sheet rows, imported statement rows and manual entries, each with a cleaned-up vendor name. For any book and month with imported statement transactions, the imports replace the sheet rows. Your rules are applied next, then your edits to single transactions (including splits). Transactions you ignored, or that an ignore rule matches, are marked as ignored.',
-  inputs: ['sheet_history', 'imports', 'manual', 'edits', 'rules'],
-  fn: (sheetRows, importBatches, manualRows, editRows, ruleRows) => {
+  inputs: ['sheet_history', 'imports', 'manual', 'edits', 'rules', 'prefs'],
+  fn: (sheetRows, importBatches, manualRows, editRows, ruleRows, prefRows) => {
     const RULES = [
       [/^office chair$/i, 'Amazon'],
       [/prime video/i, 'Prime Video'], [/youtube ?tv/i, 'YouTube TV'], [/hbo|max\.com/i, 'HBO Max'],
@@ -269,6 +269,9 @@ dash.calc('all_txns', {
         splits.forEach((s, n) => final.push({ ...base, key: `${t.key}#${n + 1}`, splitOf: t.key, category: s.category, amount: Math.round(Number(s.amount) * 100) / 100 }));
       } else final.push(base);
     }
+    // merged categories (⚙ Settings → Merge categories): an old name counts as the one it was merged into, everywhere
+    const merges = catMerges(prefRows);
+    if (merges.size) for (const t of final) { const m = merges.get(t.book); if (m && t.category) { const to = m[String(t.category).trim().toLowerCase()]; if (to) t.category = to; } }
     return final;
   },
 });
@@ -449,19 +452,21 @@ dash.calc('categories', {
     const thisMonth = now.toISOString().slice(0, 7);
     const dim = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
     const elapsed = Math.min(1, now.getUTCDate() / dim);
+    const MERGE = catMerges(prefs);
     for (const book of ['Personal', 'Shared']) {
+      const mm = MERGE.get(book) || {}, mc = (c) => mm[String(c || '').trim().toLowerCase()] || c; // merged categories
       const sheetMonths = [...new Set((sheetBudgets || []).filter((b) => b.book === book).map((b) => b.month))].sort();
       const sheetPlan = (m) => {
         const pm = sheetMonths.filter((x) => x <= m).pop() || sheetMonths[sheetMonths.length - 1];
         const o = {};
-        for (const b of sheetBudgets || []) if (b.book === book && b.month === pm) o[b.category] = Number(b.planned);
+        for (const b of sheetBudgets || []) if (b.book === book && b.month === pm) { const c = mc(b.category); o[c] = (o[c] || 0) + Number(b.planned); }
         return o;
       };
       const mine = (budgets || []).filter((b) => b.book === book && b.category && /^\d{4}-\d{2}$/.test(b.from || ''))
         .sort((a, b) => (a.from === b.from ? String(a.createdAt).localeCompare(String(b.createdAt)) : a.from.localeCompare(b.from)));
       const planFor = (m) => {
         const o = sheetPlan(m), roll = {}, since = {};
-        for (const b of mine) if (b.from <= m) { o[b.category] = Number(b.amount) || 0; roll[b.category] = !!b.rollover; since[b.category] = b.from; }
+        for (const b of mine) if (b.from <= m) { const c = mc(b.category); o[c] = Number(b.amount) || 0; roll[c] = !!b.rollover; since[c] = b.from; }
         return { plan: o, roll, since };
       };
       const actualFor = (m) => {
@@ -813,6 +818,14 @@ if (typeof window !== 'undefined') { window.FDBusiness = businessSummary; window
 // pending purchase often posts a day or two later. A pair: same dashboard and account, same kind and amount (to the cent),
 // dates at most `days` apart, one copy from bank sync and the other from a statement or typed in by hand.
 // origin(key) → 'sync' | 'file' | 'manual'; ok: Set of "keyA|keyB" pairs the user said aren't duplicates. Each transaction is used once.
+// prefs "catMerge" per book: { 'health/medical': 'Health/Medical' } (old name, lower case → the name it now counts as)
+function catMerges(prefRows) {
+  const out = new Map();
+  for (const p of [...(prefRows || [])].filter((p) => p && p.key === 'catMerge').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))) {
+    try { const v = JSON.parse(p.value); if (v && typeof v === 'object') out.set(p.book, v); } catch (e) {}
+  }
+  return out;
+}
 function likelyDupes(txns, origin, opts) {
   const o = opts || {}, days = o.days == null ? 3 : o.days, ok = o.ok || new Set(), c = (x) => Math.round(Math.abs(Number(x)) * 100);
   const ms = (d) => Date.parse(String(d) + 'T00:00:00Z');

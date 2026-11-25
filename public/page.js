@@ -4264,6 +4264,30 @@
       [['b-mtg', 'Budgets: mortgage payments (shown under Mortgage)'], ['b-today', 'Budget ring: today marker'], ['b-pace', 'Budget ring: spending-pace marker'], ['m-idx', 'Markets: indexes'], ['m-com', 'Markets: commodities'], ['m-sec', 'Markets: sectors'], ['m-mov', 'Markets: top movers'], ['e-rate', 'Economy: interest rates'], ['e-treas', 'Economy: Treasury savings options'], ['e-fx', 'Economy: exchange rates'], ['e-cal', 'Economy: economic calendar'], ['m-scr', 'Markets: stock screener'], ['e-infl', 'Economy: inflation'], ['e-ener', 'Economy: energy & housing'], ['h-alloc', 'Holdings: allocation'], ['h-watch', 'Holdings: watchlist'], ['h-divcal', 'Holdings: dividend calendar'], ['h-rings', 'Holdings: allocation rings'], ['h-det', 'Holdings: news & analyst details']]
         .forEach(([k, lab]) => w2.append(chk(lab, !(s.hideParts || []).includes(k), (on) => { const x = new Set(s.hideParts || []); on ? x.delete(k) : x.add(k); s.hideParts = [...x]; })));
       det.append(w2); const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(det); box.append(r); }
+    // merge categories that mean the same thing (Health/Medical and Health/medical): the old name counts as the new one everywhere
+    if (!document.body.classList.contains('fd-readonly')) {
+      const cur = { ...(prefGet('catMerge', {}) || {}) };
+      const use = {}; rows('txns').filter((t) => t.book === book() && t.category).forEach((t) => { use[t.category] = (use[t.category] || 0) + 1; });
+      rows('budgets').filter((b) => b.book === book() && b.category).forEach((b) => { use[b.category] = use[b.category] || 0; });
+      const cats = Object.keys(use).sort((a, b) => a.localeCompare(b));
+      const w = document.createElement('div'); w.className = 'fd-catmerge';
+      const save = async (m) => { await prefSet('catMerge', m); dash.draw('settingsView'); };
+      // likely the same: equal apart from capitals, spaces and punctuation
+      const norm = (c) => c.toLowerCase().replace(/[^a-z0-9]+/g, ''); const byN = {}; cats.forEach((c) => { (byN[norm(c)] = byN[norm(c)] || []).push(c); });
+      Object.values(byN).filter((g) => g.length > 1).forEach((g) => { const nice = (c) => (/^[A-Z]/.test(c) ? 2 : 0) + (/\s\/\s|\s{2}/.test(c) ? 0 : 1) + (/[A-Z][a-z]*\/[A-Z]/.test(c) ? 1 : 0); const to = [...g].sort((a, b) => use[b] - use[a] || nice(b) - nice(a))[0];
+        const r = document.createElement('div'); r.className = 'fd-setinline'; const t = document.createElement('span'); t.textContent = TR('{0} look like the same category.').replace('{0}', g.map((x) => `“${x}”`).join(TR(' and ')));
+        r.append(t, rbtn(TR('Merge into “{0}”').replace('{0}', to), () => { const m = { ...cur }; g.filter((x) => x !== to).forEach((x) => { m[x.trim().toLowerCase()] = to; }); return save(m); })); w.append(r); });
+      // any two
+      const a = document.createElement('select'), b = document.createElement('select'); [a, b].forEach((x) => { x.className = 'dash-select'; x.setAttribute('translate', 'no'); cats.forEach((c) => x.append(new Option(c, c))); }); if (cats[1]) b.value = cats[1];
+      const r = document.createElement('div'); r.className = 'fd-setinline'; const into = document.createElement('span'); into.textContent = TR('into');
+      r.append(a, into, b, rbtn('Merge', () => { if (a.value === b.value) return; if (!confirm(TR('Merge “{0}” into “{1}”? Transactions, budgets and reports will count “{0}” as “{1}”. You can undo this here.').replace(/\{0\}/g, a.value).replace(/\{1\}/g, b.value))) return;
+        const m = { ...cur, [a.value.trim().toLowerCase()]: b.value }; Object.keys(m).forEach((k) => { if (m[k].trim().toLowerCase() === a.value.trim().toLowerCase()) m[k] = b.value; }); return save(m); }, false));
+      if (cats.length > 1) w.append(r);
+      // merged so far, each can be undone
+      Object.entries(cur).forEach(([from, to]) => { const r2 = document.createElement('div'); r2.className = 'fd-setinline fd-zero'; const t = document.createElement('span'); t.setAttribute('translate', 'no'); t.textContent = `${from} → ${to}`;
+        r2.append(t, rbtn('Undo', () => { const m = { ...cur }; delete m[from]; return save(m); })); w.append(r2); });
+      row('Merge categories', w, 'For two names that mean the same thing. The old name counts as the new one in transactions, budgets and reports; nothing is deleted, and Undo brings it back.');
+    }
     const hw = document.createElement('div'); hw.className = 'fd-chkgrid';
     HOPTS.forEach(([k, lab]) => hw.append(chk(lab, (s.hideDefault || { mortgage: true })[k] ?? false, (v) => { s.hideDefault = { ...(s.hideDefault || { mortgage: true }), [k]: v }; })));
     row('“Biggest” lists hide by default', hw);
