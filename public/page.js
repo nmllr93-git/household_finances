@@ -437,6 +437,10 @@
   const prevMonths = (n) => { const out = []; const d = new Date(); d.setUTCDate(15); for (let i = 1; i <= n; i++) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 15)); out.push(x.toISOString().slice(0, 7)); } return out; };
   let FCSUM = null; // filled in by the cash forecast each time it draws
   const T = (title, go, fn) => ({ title, go, fn });
+  // balance tiles: this dashboard's accounts plus accounts shared into it (each share's ⇄ checkboxes decide what counts here)
+  const withShared = (r, sh, kinds, debt) => { if (!r && !sh) return null; const own = r ? r.total : 0, tot = debt ? Math.abs(own) + Math.abs(sh) : own + sh;
+    const sub = sh ? `incl. ${money0(Math.abs(sh))} shared ⇄` : r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`;
+    const sr = balSeries(kinds, debt ? -1 : 1); return [money0(tot), sub, !debt && r && r.change < 0 && !sh ? 'bad' : debt ? '' : 'good', sr && { spark: sr.v, l: sr.l, down: !!debt }]; };
   // net worth the same way the Accounts list adds it up: your open accounts' latest balances, accounts and assets shared
   // into this dashboard (when counted in net worth here), and home, vehicles & other assets
   const nwNow = () => { const L = acctList().filter((x) => x.active !== false && x.bal), sh = (k) => sharedSum([k], 'nw');
@@ -454,10 +458,13 @@
   const GT = {
     nw: T('Net worth', 'networth', () => { const n = nwNow(); if (!n) return null; const own = n.own, owe = n.owe; const sr = balSeries(['deposit', 'investment', 'credit', 'loan', 'mortgage']);
       return [money0(own - owe), `own ${money0(own)} · owe ${money0(owe)}`, '', sr ? { spark: sr.v, l: sr.l } : { meter: owe ? own / (own + owe) : 1, ml: ['owned', 'owed'] }]; }),
-    cash: T('Checking & savings', 'deposits', () => { const r = bal1('deposit'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['deposit']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
-    invest: T('Investments', 'investments', () => { const r = bal1('investment'); return r && [money0(r.total), r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`, r.change < 0 ? 'bad' : 'good', (() => { const sr = balSeries(['investment']); return sr && { spark: sr.v, l: sr.l }; })()]; }),
-    cards: T('Credit cards owed', 'accounts', () => { const r = bal1('credit'); const sr = balSeries(['credit'], -1); return r && [money0(Math.abs(r.total)), `as of ${r.label}`, '', sr && { spark: sr.v, l: sr.l, down: true }]; }),
-    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean); return r.length ? [money0(r.reduce((s, x) => s + Math.abs(x.total), 0)), r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()] : null; }),
+    cash: T('Checking & savings', 'deposits', () => withShared(bal1('deposit'), sharedSum(['deposit'], 'cash'), ['deposit'])),
+    invest: T('Investments', 'investments', () => withShared(bal1('investment'), sharedSum(['investment'], 'inv'), ['investment'])),
+    cards: T('Credit cards owed', 'accounts', () => withShared(bal1('credit'), sharedSum(['credit'], 'nw'), ['credit'], true)),
+    loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean), sh = sharedSum(['loan', 'mortgage'], 'nw'); if (!r.length && !sh) return null; const tot = r.reduce((t, x) => t + Math.abs(x.total), 0) + Math.abs(sh);
+      return [money0(tot), sh ? `incl. ${money0(Math.abs(sh))} shared ⇄` : r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()]; }),
+    homeAssets: T('Home, vehicles & other', 'assets', () => { const own = assetsAll().map((a) => [a.name, assetNow(a)]), sh = sharedIn().filter((d) => d.kind === 'asset' && shIncl(d).nw).map((d) => [`${d.name} ⇄`, Number(d.balance) || 0]); const all = [...own, ...sh]; if (!all.length) return null;
+      const tot = all.reduce((t, x) => t + x[1], 0); return [money0(tot), sh.length ? `${own.length} yours · ${sh.length} shared ⇄` : `${all.length} item${all.length === 1 ? '' : 's'}`, '', { list: all.sort((a, b) => b[1] - a[1]).slice(0, 4) }]; }),
     spentMonth: T('Spent this month', 'categories', () => { if (st('txns') !== 'ok') return null; const s = sumA(expM(nowM())), pm = prevMonths(3).map((m) => sumA(expM(m))).filter((x) => x > 0), avg = pm.length ? pm.reduce((a, b) => a + b, 0) / pm.length : 0;
       const ms = monthsBack(6); return [money0(s), avg ? `usual month ≈ ${money0(avg)}` : 'so far this month', '', { bars: ms.map((m) => sumA(expM(m))), l: ms.map(MS), ref: avg || null }]; }),
     avgSpend: T('Average spending', 'cashflow', () => { const r = sumRow(); const m = monRows(); return r && [money0(r.avgSpend), `a month · ${rangeLabel()}`, '', m.length > 1 && { bars: m.map((x) => x.spend), l: m.map((x) => MS(x.month)), ref: r.avgSpend }]; }),
@@ -498,7 +505,7 @@
   });
   const TILE_NAME = (id) => (CARD[id] ? CARD[id][1] : GT[id] ? GT[id].title : id);
   const ALL_TILES = [...Object.keys(CARD), ...Object.keys(GT)];
-  const DEF_TILES = { all: ['flow', 'budget', 'where', 'assets', 'debt'], overview: ['flow', 'budget', 'where', 'assets', 'debt'], accounts: ['nw', 'cash', 'invest', 'cards', 'loans'],
+  const DEF_TILES = { all: ['flow', 'budget', 'where', 'assets', 'debt'], overview: ['flow', 'budget', 'where', 'assets', 'debt'], accounts: ['nw', 'cash', 'invest', 'homeAssets', 'cards', 'loans'],
     expenses: ['spentMonth', 'avgSpend', 'topCat', 'subs', 'unusual'], budget: ['budget', 'budLeft', 'budOver', 'spentMonth'], tx: ['needsCat', 'spentMonth', 'income'], business: ['bizProfit', 'bizIncome', 'bizExpenses', 'bizTax', 'bizReceipts'],
     planning: ['fcLow', 'fcEnd', 'nextPay', 'nextBill', 'saveRate'], markets: ['invest', 'nw'], review: ['income', 'avgSpend', 'saveRate', 'nw'], import: [], settings: [] };
   const tilesFor = (g) => { const own = peekLay(g).tiles; if (Array.isArray(own)) return own.filter((x) => ALL_TILES.includes(x));

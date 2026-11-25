@@ -8,6 +8,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 - **Notes on transactions:** add a note in the transaction editor (up to 500 characters). Notes show under the vendor, are searchable, and are included in the business and tax packet downloads
 - Home, vehicles and other assets shared from another dashboard now show in that list too, marked ⇄
 - Fixed: the Net worth tile (and the Cash & investments card) now match the Accounts list: they include your home, vehicles and other assets, and accounts shared into the dashboard
+- Account tiles include accounts shared into the dashboard ("incl. $X shared ⇄"), following each share's counted-here checkboxes; new **Home, vehicles & other** tile, on the Accounts tab by default
 
 ## Desktop 1.0.31
 - **Business features** for freelancers and side businesses without an LLC (⚙ Settings → This dashboard → Business; hidden until you add one):
