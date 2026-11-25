@@ -692,3 +692,4 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-dupbox > .fd-btn { margin: 0 6px 6px 0; }
 .fd-txnote { font-size: 12px; color: var(--color-fg); opacity: .8; margin-top: 2px; white-space: normal; }
 .fd-field textarea { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 8px; resize: vertical; }
+.fd-narrow { justify-content: flex-end; } .fd-rb-row .fd-narrow > input, .fd-rb-row .fd-narrow > select, .fd-narrow > input, .fd-narrow > select { flex: none; }

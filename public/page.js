@@ -2,6 +2,7 @@
 (function () {
   // month and day names follow the chosen language; amounts and number formats stay US
   const LOC = window.FDI18n && window.FDI18n.lang === 'es' ? 'es-US' : 'en-US';
+  const TR = (x) => (window.FDI18n && window.FDI18n.tr ? window.FDI18n.tr(x) : x);
   const { money0, money2, enc, placeholder } = window.FD;
   const book = () => window.FD.book();
   const P = () => ({ range: '6m', ...dash.params() });
@@ -152,7 +153,7 @@
   dash.draw('ledeCmp', (el) => {
     const r = sumRow();
     if (!r || r.spendChangePct === null) { el.replaceChildren(); return; }
-    put(el, txt(', '), span(`${Math.abs(r.spendChangePct)}%`, 'summary', 'spendChangePct', r.key), txt(` ${r.spendChangePct >= 0 ? 'more' : 'less'} than ${prevLabel()}`));
+    put(el, txt(', '), span(`${Math.abs(r.spendChangePct)}%`, 'summary', 'spendChangePct', r.key), txt(' ' + TR(r.spendChangePct >= 0 ? 'more than {0}' : 'less than {0}').replace('{0}', TR(prevLabel()))));
   });
   const latestTotal = (kinds) => rows('balance_totals').filter((r) => r.book === book() && kinds.includes(r.kind) && r.latest);
   dash.draw('ledeCash', (el) => { const t = latestTotal(['deposit'])[0]; if (!t) return dash_(el, st('balance_totals')); put(el, span(money0(t.total), 'balance_totals', 'total', t.key)); });
@@ -667,8 +668,8 @@
     return w === 'month' ? back(1) : w === '3m' ? back(3) : w === '12m' ? back(12) : back(m + 1); };
   const crFmt = (spec) => (v) => (spec.measure === 'count' ? Math.round(v).toLocaleString('en-US') : money0(v));
   const crRun = (spec) => window.FDCustom(spec, rows('txns'), rows('balances'), crMonths(spec.when), book());
-  const crDesc = (s) => `${CR_MEAS[s.measure] || 'Spending'}${s.by && s.by !== 'none' ? ' by ' + ((s.measure === 'balance' ? CR_BY_BAL : CR_BY)[s.by] || s.by).toLowerCase() : ''} · ${(CR_WHEN[s.when] || CR_WHEN.range).replace('The dates picked at the top', rangeLabel())}`
-    + (() => { const f = s.filter || {}, p = []; if ((f.categories || []).length) p.push('categories: ' + f.categories.join(', ')); if ((f.accounts || []).length) p.push('accounts: ' + f.accounts.join(', ')); if (f.text) p.push(`matching “${f.text}”`); if (f.min) p.push(`${money0(f.min)} and up`); return p.length ? ' · ' + p.join(' · ') : ''; })();
+  const crDesc = (s) => `${TR(CR_MEAS[s.measure] || 'Spending')}${s.by && s.by !== 'none' ? ' ' + TR('by') + ' ' + TR((s.measure === 'balance' ? CR_BY_BAL : CR_BY)[s.by] || s.by).toLowerCase() : ''} · ${s.when === 'range' || !CR_WHEN[s.when] ? TR(rangeLabel()) : TR(CR_WHEN[s.when])}`
+    + (() => { const f = s.filter || {}, p = []; if ((f.categories || []).length) p.push(TR('categories:') + ' ' + f.categories.join(', ')); if ((f.accounts || []).length) p.push(TR('accounts:') + ' ' + f.accounts.join(', ')); if (f.text) p.push(`${TR('matching')} “${f.text}”`); if (f.min) p.push(`${money0(f.min)} ${TR('and up')}`); return p.length ? ' · ' + p.join(' · ') : ''; })();
   const crHome = document.createElement('div'); crHome.id = 'fd-customs'; (document.querySelector('.fd') || document.body).append(crHome);
   const crDraft = {}; // id → spec being edited (preview draws from it)
   function crSection(spec) {
@@ -701,7 +702,7 @@
     const r = crRun(spec), fmt = crFmt(spec), show = spec.show || 'bars';
     if (!r.groups.length && !r.other) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = spec.measure === 'balance' ? 'No balances recorded in these months.' : 'Nothing matches in these months. Try a longer time span or fewer filters.'; el.append(p); return; }
     if (show === 'number') { const b = document.createElement('p'); b.className = 'fd-big fd-crnum'; b.textContent = fmt(r.total); const sub = document.createElement('p'); sub.className = 'fd-sub';
-      sub.textContent = spec.measure === 'balance' ? 'latest balance in these months' : `${r.months.length} month${r.months.length === 1 ? '' : 's'}` + (r.months.length > 1 && !['count', 'avg'].includes(spec.measure) ? ` · ${fmt(r.total / r.months.length)} a month` : ''); el.append(b, sub); return; }
+      sub.textContent = spec.measure === 'balance' ? 'latest balance in these months' : (r.months.length === 1 ? TR('1 month') : TR('{0} months').replace('{0}', r.months.length)) + (r.months.length > 1 && !['count', 'avg'].includes(spec.measure) ? ` · ${TR('{0} a month').replace('{0}', fmt(r.total / r.months.length))}` : ''); el.append(b, sub); return; }
     if (show === 'line') { const box = document.createElement('div'); box.className = 'fd-box'; el.append(box);
       const series = ['month', 'none'].includes(spec.by) || spec.measure === 'balance' && spec.by === 'month' ? [{ name: CR_MEAS[spec.measure], byMonth: Object.fromEntries(r.months.map((m) => [m, r.groups.reduce((t, g) => t + (g.byMonth[m] || 0), 0)])) }] : r.groups.slice(0, 6).map((g) => ({ name: g.key, byMonth: g.byMonth }));
       const lab = (m) => new Date(m + '-15T12:00:00Z').toLocaleDateString(LOC, { month: 'short', ...(r.months.length > 12 ? { year: '2-digit' } : {}), timeZone: 'UTC' });
@@ -2860,7 +2861,7 @@
     const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
     const notes = []; if (debts.some((x) => x.estimated)) notes.push('“est.” = no payment set on the account, so a typical card minimum is assumed; set the real one under Accounts → Edit.'); if (debts.some((x) => x.noRate)) notes.push('Debts with no rate are treated as 0% interest.');
     notes.push('Avalanche saves the most interest; snowball clears individual debts sooner. When a debt is paid off, its payment rolls into the next one.');
-    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = notes.join(' '); el.append(p);
+    const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = notes.map(TR).join(' '); el.append(p);
   });
 
   // 90-day cash forecast: bills from Subscriptions & recurring, paychecks detected from income, plus typical other spending
