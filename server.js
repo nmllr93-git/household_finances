@@ -592,6 +592,16 @@ async function api(req, res, url) {
       digestSave(c); return send(res, 200, { ok: true });
     }
   }
+  // Delete your own login (App Store rule: an account made in the app can be deleted in the app). Budgets stay: they belong to the household.
+  if (parts[1] === 'delete-login' && req.method === 'POST') {
+    const b = await readJson(req);
+    if (!checkPw(user, String(b.password || ''))) return send(res, 403, { error: 'That password isn’t right.' });
+    if (user === ownerName()) return send(res, 400, { error: 'This is the login that set up the server, so it can’t be deleted here. To remove everything, uninstall Larenest from that computer and delete its data folder.' });
+    db.prepare('DELETE FROM users WHERE username = ?').run(user); // members and sessions go with it
+    try { db.prepare('UPDATE invites SET created_by = NULL WHERE created_by = ?').run(user); } catch {}
+    console.log(`Login ${user} was deleted by its owner.`);
+    return send(res, 200, { ok: true }, { 'Set-Cookie': cookie(req, '', 0) });
+  }
   if (parts[1] === 'me' && req.method === 'GET') return send(res, 200, { username: user, books: userBooks(user) });
   // Backup health: what's kept where, and the last time a copy was checked. Folder paths only for the owner.
   if (parts[1] === 'backup-health') {

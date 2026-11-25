@@ -12,7 +12,7 @@ fs.writeFileSync(path.join(set, 'Contents.json'), JSON.stringify({ images: [{ fi
 // 2. Info.plist additions
 const plistFile = path.join(APP, 'App', 'Info.plist'); let p = fs.readFileSync(plistFile, 'utf8');
 const add = (key, xml) => { if (!p.includes(`<key>${key}</key>`)) p = p.replace(/<\/dict>\s*<\/plist>\s*$/, `\t<key>${key}</key>\n\t${xml}\n</dict>\n</plist>\n`); };
-add('NSCameraUsageDescription', '<string>Take a photo of a receipt to attach it to a transaction.</string>');
+add('NSCameraUsageDescription', '<string>Scan the QR code that connects the app to your Larenest server, and take photos of receipts to attach to transactions.</string>');
 add('NSPhotoLibraryUsageDescription', '<string>Choose a receipt photo to attach to a transaction.</string>');
 add('NSLocalNetworkUsageDescription', '<string>Connect to your own Larenest server on your home network.</string>');
 add('ITSAppUsesNonExemptEncryption', '<false/>'); // only standard HTTPS: no export-compliance paperwork

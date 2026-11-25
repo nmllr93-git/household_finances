@@ -56,6 +56,14 @@
     try { await FDStore.fetch('/api/logout', { method: 'POST' }); } finally { location.href = '/login.html'; }
   });
 
+  $('#fd-delete-login').addEventListener('click', async () => {
+    if (!confirm('Delete your login on this server? You’ll be signed out and can’t sign in again unless someone sends you a new invite. The budgets themselves stay for the others who use them.')) return;
+    const pw = prompt('Type your password to delete your login:'); if (!pw) return;
+    const r = await FDStore.fetch('/api/delete-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+    if (!r.ok) { let m = 'Couldn’t delete the login.'; try { m = (await r.json()).error || m; } catch {} alert(m); return; }
+    alert('Your login was deleted.'); location.href = '/login.html';
+  });
+
   // Phone-only mode: the app ships its own files, so no offline cache (it could serve old files after an app update).
   if (window.FD_LOCAL) { try { navigator.serviceWorker && navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())); } catch (e) {}
     $('#fd-logout').hidden = true;
@@ -105,7 +113,7 @@
     menu.textContent = '';
     const who = document.getElementById('fd-user'); if (who && who.textContent.trim()) { const h = document.createElement('div'); h.className = 'fd-acctwho'; h.textContent = 'Signed in as ' + who.textContent.trim(); menu.append(h); }
     const item = (label, orig) => { if (!orig) return; const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.textContent = label; b.addEventListener('click', () => { close(); orig.click(); }); menu.append(b); };
-    item('Download backup', document.getElementById('fd-export')); item('Sign out', document.getElementById('fd-logout')); item('Switch server', box.querySelector('.fd-switch'));
+    item('Download backup', document.getElementById('fd-export')); item('Sign out', document.getElementById('fd-logout')); if (!window.FD_LOCAL) item('Delete my login', document.getElementById('fd-delete-login')); item('Switch server', box.querySelector('.fd-switch'));
     item('Send feedback', { click: () => window.FDFeedback && window.FDFeedback() });
   };
   btn.addEventListener('click', (e) => { e.stopPropagation(); if (menu.hidden) { build(); menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); } else close(); });
