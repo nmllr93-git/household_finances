@@ -3,6 +3,12 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- **Receipts can be PDFs** (e-receipts and invoices): attach them to transactions and manual entries; a PDF receipt fills in the store, date and total on any device
+- Fixed: adding a JPG or PNG receipt photo was refused (and saved photos didn't show) when using the dashboard from the PC server
+- Fixed: a receipt added in Add income or an expense by hand wasn't kept with the entry
+- Host options: spacing next to Connect a phone
+
 ## Desktop 1.0.35
 - **Logins (server owner):** see everyone else who can sign in, set a new password for someone who forgot theirs, or remove a login, from ⚙ Settings in any browser
 - **Moving to the https:// address keeps this device's settings** (language, layout, open sections); the old http:// address now carries them over automatically
