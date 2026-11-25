@@ -1380,7 +1380,7 @@
     ['pendingRows', 'acctRows', 'healthRows'].forEach((d) => { try { dash.draw(d); } catch (e) {} });
   };
   setTimeout(loadPending, 1500); setInterval(loadPending, 30 * 60e3);
-  const pendFor = () => (PEND.book === (window.HF && window.HF.state.bookId) ? PEND.pending : []);
+  const pendFor = () => (PEND.book === (window.HF && window.HF.state.bookId) && !(prefGet('settings', {}) || {}).hidePending ? PEND.pending : []);
   dash.draw('pendingRows', (el) => {
     el.replaceChildren(); const P = pendFor(); if (!P.length) return;
     const box = document.createElement('details'); box.className = 'fd-rb fd-pendbox';
@@ -2173,6 +2173,10 @@
       const r = bizSum(new Date().getFullYear(), ''); if (r.missing.length) out.push({ id: 'bizrcpt', sig: String(r.missing.length), lvl: 'info', text: `${r.missing.length} business expense${r.missing.length === 1 ? '' : 's'} of ${money0(BIZ().receiptMin)} or more ${r.missing.length === 1 ? 'needs' : 'need'} a receipt photo.`, go: 'biztx' }); } } catch {}
     return out;
   };
+  // "Merge categories" links on Spending, Budget and Transactions open the tool in ⚙ Settings
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-go-merge]'); if (!b) return; e.preventDefault();
+    showGroup('settings'); setTimeout(() => { const r = document.getElementById('fd-catmerge-row'); if (!r) return; const d = r.closest('details'); if (d) d.open = true;
+      r.scrollIntoView({ behavior: 'smooth', block: 'center' }); r.classList.add('fd-flash'); setTimeout(() => r.classList.remove('fd-flash'), 2200); }, 400); });
   const goTo = (where) => {
     if (where === 'dupes') { showGroup('tx'); dupOpen = true; dash.draw('dupReview'); setTimeout(() => document.querySelector('#fd-dupes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150); return; }
     if (where === 'biztax' || where === 'biztx') { showGroup('business'); setTimeout(() => document.querySelector(where === 'biztax' ? '#biz-tax' : '#biz-tx')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
@@ -4282,6 +4286,7 @@
     TILES.forEach(([id, lab]) => tw.append(chk(lab, !(s.hideTiles || []).includes(id), (on) => { const h = new Set(s.hideTiles || []); if (on) h.delete(id); else h.add(id); s.hideTiles = [...h]; })));
     row('Top row tiles', tw);
     row('Amounts', chk('Hide cents (show $1,234 instead of $1,234.56)', !!s.noCents, (v) => { s.noCents = v; }));
+    row('Pending charges', chk('Show charges the bank hasn’t posted yet (from bank sync)', !s.hidePending, (v) => { s.hidePending = !v; }), 'Pending charges are never counted in budgets or totals either way; this only hides the Pending list in Transactions and the pending note on accounts.');
     { const det = document.createElement('details'); det.className = 'fd-showset'; const sm = document.createElement('summary'); sm.textContent = 'Sections & details to show (untick to hide)'; det.append(sm);
       const NAMES = { overview: 'Overview', accounts: 'Accounts', expenses: 'Expenses', budget: 'Budget', markets: 'Markets', review: 'Year in review' };
       const seen = new Set();
@@ -4314,7 +4319,7 @@
       // merged so far, each can be undone
       Object.entries(cur).forEach(([from, to]) => { const r2 = document.createElement('div'); r2.className = 'fd-setinline fd-zero'; const t = document.createElement('span'); t.setAttribute('translate', 'no'); t.textContent = `${from} → ${to}`;
         r2.append(t, rbtn('Undo', () => { const m = { ...cur }; delete m[from]; return save(m); })); w.append(r2); });
-      row('Merge categories', w, 'For two names that mean the same thing. The old name counts as the new one in transactions, budgets and reports; nothing is deleted, and Undo brings it back.');
+      const mr = row('Merge categories', w, 'For two names that mean the same thing. The old name counts as the new one in transactions, budgets and reports; nothing is deleted, and Undo brings it back.'); mr.id = 'fd-catmerge-row';
     }
     const hw = document.createElement('div'); hw.className = 'fd-chkgrid';
     HOPTS.forEach(([k, lab]) => hw.append(chk(lab, (s.hideDefault || { mortgage: true })[k] ?? false, (v) => { s.hideDefault = { ...(s.hideDefault || { mortgage: true }), [k]: v }; })));

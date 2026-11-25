@@ -133,7 +133,7 @@
 
   <section id="categories">
     <h2>Spending by category</h2>
-    <p class="fd-note">Click a category (in the chart, its legend or the table) to narrow the vendor list and transactions below to it.</p>
+    <p class="fd-note">Click a category (in the chart, its legend or the table) to narrow the vendor list and transactions below to it. <button type="button" class="fd-link" data-go-merge>Two names for the same category? Merge them</button></p>
     <div data-draw="catViz" data-source="cat_trend"></div>
     <div class="fd-box" data-draw="catChart" data-source="cat_trend period"></div>
     <p class="fd-chip" id="fd-cat-chip" hidden>Showing only <b data-draw="catChip"></b> below <button type="button" class="fd-link" id="fd-cat-clear">Show all categories</button></p>
@@ -155,6 +155,7 @@
 
   <section id="budget">
     <h2>Budget vs actual</h2>
+    <p class="fd-note"><button type="button" class="fd-link" data-go-merge>Same category under two names? Merge them</button></p>
     <div class="fd-row">
       <label class="fd-field fd-narrow">Month
         <select class="dash-select" data-draw="budgetMonth" aria-label="Month" data-source="period"></select>
@@ -411,6 +412,7 @@
       </label>
       <label class="fd-check"><input type="checkbox" id="fd-tneeds"> Needs a category (<span data-draw="txNeeds">0</span>)</label>
       <label class="fd-check"><input type="checkbox" id="fd-tedit"> Allow editing</label>
+      <button type="button" class="fd-btn fd-quiet fd-sm" data-go-merge>Merge categories</button>
       <button type="button" class="fd-btn fd-quiet fd-sm" id="fd-colbtn" aria-haspopup="dialog" aria-expanded="false">⚙ Columns</button>
       <button type="button" class="fd-btn fd-quiet fd-sm" id="fd-rulesbtn">Rules ›</button>
       <div class="fd-colpanel" id="fd-colpanel" role="dialog" aria-label="Choose columns" hidden><div class="fd-goal-top"><strong>Columns</strong><button type="button" class="fd-btn fd-sm" id="fd-colclose">Done</button></div><p class="fd-note">Tick the columns to show; use the arrows to reorder.</p><div data-draw="colPicker"></div></div>
@@ -460,7 +462,7 @@
       <p class="fd-msg err" id="fd-tx-miss" hidden>A split needs at least two lines that add up to the full amount.</p>
     </form>
 
-    <div data-draw="pendingRows"></div>
+    <div data-draw="pendingRows" data-source="prefs"></div>
     <div class="fd-scroll">
       <table class="fd-table" data-source="txns" data-row-key="key">
         <thead><tr data-draw="txHead"></tr></thead>
