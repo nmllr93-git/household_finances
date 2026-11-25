@@ -1,5 +1,7 @@
 // Page drawings: range picker, headline figures, charts, tables and the editors.
 (function () {
+  // month and day names follow the chosen language; amounts and number formats stay US
+  const LOC = window.FDI18n && window.FDI18n.lang === 'es' ? 'es-US' : 'en-US';
   const { money0, money2, enc, placeholder } = window.FD;
   const book = () => window.FD.book();
   const P = () => ({ range: '6m', ...dash.params() });
@@ -12,7 +14,7 @@
   const rows = (id) => { const d = dash.data(id).status === 'ok' ? dash.data(id).data || [] : []; return id === 'accounts' ? d.filter((a) => !a.removed) : d; }; // removed-account markers stay out of lists
   const period = () => rows('period');
   const lastMonth = () => { const p = period(); return p[p.length - 1]; };
-  const longName = (m) => new Date(m + '-01T00:00:00Z').toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const longName = (m) => new Date(m + '-01T00:00:00Z').toLocaleString(LOC, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const isCurrent = (m) => new Date().toISOString().slice(0, 7) === m;
   const span = (text, src, field, key, cls) => {
     const s = document.createElement('span');
@@ -450,7 +452,7 @@
     return { own, owe, net: own - owe }; };
   // series for the tile charts
   const monthsBack = (n) => [...prevMonths(n - 1).reverse(), nowM()];
-  const MS = (m) => new Date(m + '-15T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+  const MS = (m) => new Date(m + '-15T00:00:00Z').toLocaleDateString(LOC, { month: 'short', timeZone: 'UTC' });
   const balSeries = (kinds, sign = 1) => { const by = {}; rows('balance_totals').filter((r) => r.book === book() && kinds.includes(r.kind)).forEach((r) => { by[r.month] = (by[r.month] || 0) + (['credit', 'loan', 'mortgage'].includes(r.kind) ? -Math.abs(r.total) : r.total) * sign; });
     const ms = Object.keys(by).sort(); return ms.length > 1 ? { v: ms.map((m) => by[m]), l: ms.map(MS) } : null; };
   const monRows = () => rows('monthly').filter((r) => r.book === book()).sort((a, b) => a.month.localeCompare(b.month));
@@ -499,7 +501,7 @@
     bizIncome: T('Business income', 'biz-summary', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(), m = r.months; return [money0(r.income), `${BZSEL.year} so far`, '', m.length > 1 && { bars: m.map((x) => x.income), l: m.map((x) => MS(x.month)), good: true }]; }),
     bizExpenses: T('Business expenses', 'biz-summary', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(); return [money0(r.expenses), `${BZSEL.year} · ${r.lines.length} tax line${r.lines.length === 1 ? '' : 's'}`, '', r.lines.length ? { list: r.lines.slice().sort((a, b) => b.amount - a.amount).slice(0, 4).map((l) => [l.label, l.amount]) } : null]; }),
     bizTax: T('Next estimated tax', 'biz-tax', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const q0 = bizNextDue(); if (!q0) return ['—', 'nothing due']; const rest = bizSum(q0.year, '').quarters.filter((x) => x.q > q0.q);
-      return [money0(q0.estimate), `Q${q0.q} due ${new Date(q0.due + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`, Date.parse(q0.due) - Date.now() < 14 * 864e5 ? 'bad' : '', rest.length ? { head: 'Later this year', list: rest.map((x) => [`Q${x.q} · ${x.due.slice(5)}`, x.estimate]) } : null]; }),
+      return [money0(q0.estimate), `Q${q0.q} due ${new Date(q0.due + 'T00:00:00Z').toLocaleDateString(LOC, { month: 'short', day: 'numeric', timeZone: 'UTC' })}`, Date.parse(q0.due) - Date.now() < 14 * 864e5 ? 'bad' : '', rest.length ? { head: 'Later this year', list: rest.map((x) => [`Q${x.q} · ${x.due.slice(5)}`, x.estimate]) } : null]; }),
     bizReceipts: T('Receipts needed', 'biz-tx', () => { if (!hasBiz() || st('txns') !== 'ok') return null; const r = bizSum(); return [String(r.missing.length), `business expenses of ${money0(BIZ().receiptMin)}+ without a photo`, r.missing.length ? 'bad' : 'good', r.missing.length ? { list: r.missing.slice(0, 4).map((x) => [`${x.date} · ${x.vendor}`, x.amount]), bad: true } : null]; }),
     bizMiles: T('Business miles', 'biz-miles', () => { if (!hasBiz()) return null; const r = bizSum(); return [`${Math.round(r.miles).toLocaleString('en-US')} mi`, `${money0(r.mileage)} deduction · ${BZSEL.year}`, '', null]; }),
   });
@@ -702,7 +704,7 @@
       sub.textContent = spec.measure === 'balance' ? 'latest balance in these months' : `${r.months.length} month${r.months.length === 1 ? '' : 's'}` + (r.months.length > 1 && !['count', 'avg'].includes(spec.measure) ? ` · ${fmt(r.total / r.months.length)} a month` : ''); el.append(b, sub); return; }
     if (show === 'line') { const box = document.createElement('div'); box.className = 'fd-box'; el.append(box);
       const series = ['month', 'none'].includes(spec.by) || spec.measure === 'balance' && spec.by === 'month' ? [{ name: CR_MEAS[spec.measure], byMonth: Object.fromEntries(r.months.map((m) => [m, r.groups.reduce((t, g) => t + (g.byMonth[m] || 0), 0)])) }] : r.groups.slice(0, 6).map((g) => ({ name: g.key, byMonth: g.byMonth }));
-      const lab = (m) => new Date(m + '-15T12:00:00Z').toLocaleDateString('en-US', { month: 'short', ...(r.months.length > 12 ? { year: '2-digit' } : {}), timeZone: 'UTC' });
+      const lab = (m) => new Date(m + '-15T12:00:00Z').toLocaleDateString(LOC, { month: 'short', ...(r.months.length > 12 ? { year: '2-digit' } : {}), timeZone: 'UTC' });
       window.FD.lineChart(box, { labels: r.months.map(lab), zero: spec.measure !== 'balance', aria: crDesc(spec), fmt, series: series.map((x) => ({ name: x.name, points: r.months.map((m) => ({ label: lab(m), v: Math.round((x.byMonth[m] || 0) * 100) / 100 })) })) }); return; }
     const list = [...r.groups, ...(r.other ? [r.other] : [])], tot = r.total;
     if (show === 'table') { const t = document.createElement('table'); t.className = 'fd-table'; const hd = document.createElement('tr'); [spec.by === 'none' ? '' : (spec.measure === 'balance' ? CR_BY_BAL : CR_BY)[spec.by], CR_MEAS[spec.measure], ...(['count', 'avg', 'balance'].includes(spec.measure) ? [] : ['Share']), ...(spec.measure === 'balance' ? [] : ['Transactions'])].forEach((x, i) => { const th = document.createElement('th'); th.textContent = x; if (!i) th.className = 'fd-l'; hd.append(th); });
@@ -1688,7 +1690,7 @@
     let b = B, i = 0; for (let m = 0; m < n && b > 0.005; m++) { const it = b * r; i += it; b = b + it - P; }
     return { n, interest: i };
   };
-  const addM = (n) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n); return d.toLocaleString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }); };
+  const addM = (n) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n); return d.toLocaleString(LOC, { month: 'short', year: 'numeric', timeZone: 'UTC' }); };
   const dur = (n) => `${Math.floor(n / 12) ? Math.floor(n / 12) + ' yr ' : ''}${n % 12 ? (n % 12) + ' mo' : ''}`.trim();
   const payoffText = (B, a) => {
     const pi = Number(a.payment) - (Number(a.escrow) || 0);
@@ -2022,7 +2024,7 @@
     el.replaceChildren();
     const u = upcoming(); if (!u.length) return empty(el, 4, 'Nothing recurring is expected in the next 30 days.');
     const h = document.createElement('tr'); ['Due', 'Bill', 'Expected', 'How often'].forEach((l, i) => { const th = document.createElement('th'); th.textContent = l; if (i !== 2) th.className = 'fd-l'; h.append(th); }); el.append(h);
-    for (const o of u) { const iso = o.due.date.toISOString().slice(0, 10), wd = o.due.date.getUTCDay(), hol = ((ECO && ECO.holidays) || []).find((h) => h[0] === iso); const tr = document.createElement('tr'); tr.append(td(o.due.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }) + (hol ? ` · ${hol[1]} (bank holiday)` : wd === 0 || wd === 6 ? ' · weekend' : ''), 'fd-l' + (hol || wd === 0 || wd === 6 ? ' fd-warnt' : '')), td(o.x.vendor, 'fd-l'), td(money2(o.x.lastCharge)), td(o.due.monthly ? 'Monthly' : 'Yearly', 'fd-l fd-zero')); el.append(tr); }
+    for (const o of u) { const iso = o.due.date.toISOString().slice(0, 10), wd = o.due.date.getUTCDay(), hol = ((ECO && ECO.holidays) || []).find((h) => h[0] === iso); const tr = document.createElement('tr'); tr.append(td(o.due.date.toLocaleDateString(LOC, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }) + (hol ? ` · ${hol[1]} (bank holiday)` : wd === 0 || wd === 6 ? ' · weekend' : ''), 'fd-l' + (hol || wd === 0 || wd === 6 ? ' fd-warnt' : '')), td(o.x.vendor, 'fd-l'), td(money2(o.x.lastCharge)), td(o.due.monthly ? 'Monthly' : 'Yearly', 'fd-l fd-zero')); el.append(tr); }
     const tr = document.createElement('tr'); tr.className = 'fd-total'; tr.append(td('Total', 'fd-l'), td(''), td(money2(u.reduce((s, o) => s + o.x.lastCharge, 0))), td('')); el.append(tr);
   });
   dash.draw('fcast', (el) => {
@@ -2209,7 +2211,7 @@
       if (left <= 0) t += ' · reached!';
       else if (g.by) {
         const n = new Date(), b = new Date(g.by + 'T00:00:00Z'); const months = (b.getUTCFullYear() - n.getUTCFullYear()) * 12 + b.getUTCMonth() - n.getUTCMonth();
-        t += months > 0 ? ` · save about ${money0(left / months)}/month to reach it by ${b.toLocaleString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ` · ${money0(left)} to go; the target date has passed`;
+        t += months > 0 ? ` · save about ${money0(left / months)}/month to reach it by ${b.toLocaleString(LOC, { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ` · ${money0(left)} to go; the target date has passed`;
       } else t += ` · ${money0(left)} to go`;
       info.textContent = t;
       const body = document.createElement('div'); body.className = 'fd-goal-body'; body.append(bar, info); box.append(top, body); el.append(box);
@@ -2449,7 +2451,7 @@
     const head = document.createElement('div'); head.className = 'fd-rb-row';
     const i = months.indexOf(calM);
     const nav = (d, lab) => { const b = rbtn(lab, () => { calM = months[i + d]; calDay = null; dash.draw('spendCal'); }); b.disabled = !months[i + d]; b.setAttribute('aria-label', d < 0 ? 'Previous month' : 'Next month'); return b; };
-    const t = document.createElement('strong'); t.textContent = new Date(Date.UTC(y, mo - 1, 1)).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const t = document.createElement('strong'); t.textContent = new Date(Date.UTC(y, mo - 1, 1)).toLocaleString(LOC, { month: 'long', year: 'numeric', timeZone: 'UTC' });
     head.append(nav(-1, '‹'), t, nav(1, '›')); el.append(head);
     const grid = document.createElement('div'); grid.className = 'fd-cal';
     (sun ? ['S', 'M', 'T', 'W', 'T', 'F', 'S'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']).forEach((d) => { const h = document.createElement('div'); h.className = 'fd-cal-h'; h.textContent = d; grid.append(h); });
@@ -2519,7 +2521,7 @@
   };
   const tile = (label, value, sub, cls) => { const d = document.createElement('div'); d.className = 'fd-rtile'; const l = document.createElement('div'); l.className = 'fd-zero'; l.textContent = label; const v = document.createElement('div'); v.className = 'fd-rval ' + (cls || ''); v.textContent = value; d.append(l, v); if (sub) { const s2 = document.createElement('div'); s2.className = 'fd-zero fd-rsub'; s2.textContent = sub; d.append(s2); } return d; };
   const yoy = (now, before) => { if (!before) return ''; const p = Math.round(((now - before) / before) * 100); return `${p >= 0 ? '+' : ''}${p}% vs last year`; };
-  const mName = (m, len = 'long') => new Date(m + '-01T00:00:00Z').toLocaleString('en-US', { month: len, timeZone: 'UTC' });
+  const mName = (m, len = 'long') => new Date(m + '-01T00:00:00Z').toLocaleString(LOC, { month: len, timeZone: 'UTC' });
   const miniTable = (title, rowsIn, cols) => {
     const wrap = document.createElement('div'); const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = title; wrap.append(h);
     const t = document.createElement('table'); t.className = 'fd-table'; const tb = document.createElement('tbody');
@@ -2662,7 +2664,7 @@
     el.replaceChildren(); if (st('holdings') !== 'ok' || PART('h-divcal')) return;
     const hs = hRows(); if (!hs.length) return; loadDivs();
     const now = new Date(), start = new Date(now.getFullYear(), now.getMonth(), 1), months = [];
-    for (let i = 0; i < 12; i++) { const d = new Date(start.getFullYear(), start.getMonth() + i, 1); months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString('en-US', { month: 'short' }) + (d.getMonth() === 0 || i === 0 ? ` '${String(d.getFullYear()).slice(2)}` : ''), total: 0, items: [] }); }
+    for (let i = 0; i < 12; i++) { const d = new Date(start.getFullYear(), start.getMonth() + i, 1); months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString(LOC, { month: 'short' }) + (d.getMonth() === 0 || i === 0 ? ` '${String(d.getFullYear()).slice(2)}` : ''), total: 0, items: [] }); }
     hs.forEach((h) => { const c = hCalc(h); if (!c.shares) return;
       const hist = ((h.divs || []).length ? h.divs.map((x) => ({ date: x.date, amount: hNum(x.amount) / (c.shares || 1) })) : (DIVS[h.symbol] || [])).filter((x) => x.date).sort((a, b) => b.date.localeCompare(a.date));
       if (hist.length < 2) return;
@@ -2888,8 +2890,8 @@
     const daily = Math.max(0, avg('spend') - recurringMonthly) / 30.4;
     const low = Number(prefGet('fcLow', 500)) || 0;
     let bal = cash.total, minB = bal, minDay = 0; const pts = [];
-    for (let i = 0; i <= DAYS; i++) { if (i) bal -= daily; ev.filter((e) => e.day === i).forEach((e) => { bal += e.amt; }); if (bal < minB) { minB = bal; minDay = i; } const d = new Date(today.getTime() + i * 864e5); pts.push({ label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), v: Math.round(bal) }); }
-    const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(i > 300 ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+    for (let i = 0; i <= DAYS; i++) { if (i) bal -= daily; ev.filter((e) => e.day === i).forEach((e) => { bal += e.amt; }); if (bal < minB) { minB = bal; minDay = i; } const d = new Date(today.getTime() + i * 864e5); pts.push({ label: d.toLocaleDateString(LOC, { month: 'short', day: 'numeric', timeZone: 'UTC' }), v: Math.round(bal) }); }
+    const when = (i) => new Date(today.getTime() + i * 864e5).toLocaleDateString(LOC, { month: 'short', day: 'numeric', ...(i > 300 ? { year: 'numeric' } : {}), timeZone: 'UTC' });
     const fcName = FC_NAME[DAYS];
     { const fp = ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day)[0], fb = ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day)[0];
       FCSUM = { pts: pts.map((x) => x.v), lowDay: minDay, pays: ev.filter((e) => e.amt > 0).sort((a, b) => a.day - b.day).slice(0, 3).map((e) => [e.label, e.amt, when(e.day)]), bills: ev.filter((e) => e.amt < 0).sort((a, b) => a.day - b.day).slice(0, 3).map((e) => [e.label, e.amt, when(e.day)]), low: minB, lowWhen: when(minDay), end: bal, cash: cash.total, name: fcName, cushion: low, pay: fp && { amt: fp.amt, label: fp.label, when: when(fp.day) }, bill: fb && { amt: fb.amt, label: fb.label, when: when(fb.day) } };
@@ -3157,7 +3159,7 @@
         r.append(inp, rbtn('Connect', async () => { msg.className = 'fd-note'; msg.textContent = 'Connecting…'; try { st = await call('', 'POST', { token: inp.value.trim() }); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
         box.append(r, msg); return;
       }
-      const when = st.lastSync ? new Date(st.lastSync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'not yet';
+      const when = st.lastSync ? new Date(st.lastSync).toLocaleString(LOC, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'not yet';
       box.append(phMsg(`Connected. Last sync: ${when}. New posted transactions are added about every 6 hours${window.FD_LOCAL ? ' (when the app is open)' : ''}; pending ones wait until they post. Rules, categories and duplicate checks work the same as for imported statements.`));
       if (st.lastError) { const e = phMsg('Last problem: ' + st.lastError); e.className = 'fd-note fd-bad'; box.append(e); }
       if (P.multi && (st.banks || []).length) box.append(phMsg('Banks: ' + st.banks.join(', ')));
@@ -3450,7 +3452,7 @@
     const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-actbox'; box.append(rhead('Recent changes')); host.append(box);
     if (!list.length) { box.append(phMsg('Nothing yet. Imports, edits, rules, budgets, accounts, goals and holdings added or removed on this dashboard are listed here, with who did it.')); return; }
     const tb = document.createElement('table'); tb.className = 'fd-table';
-    list.slice(0, 40).forEach((x) => { const tr = document.createElement('tr'); const d = new Date(x.at); tr.append(td(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), 'fd-l fd-zero'), td(x.username || '', 'fd-l'), td(x.action, 'fd-l'), td(x.summary || '', 'fd-l fd-zero')); tb.append(tr); });
+    list.slice(0, 40).forEach((x) => { const tr = document.createElement('tr'); const d = new Date(x.at); tr.append(td(d.toLocaleDateString(LOC, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), 'fd-l fd-zero'), td(x.username || '', 'fd-l'), td(x.action, 'fd-l'), td(x.summary || '', 'fd-l fd-zero')); tb.append(tr); });
     const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); box.append(sc);
     if (list.length > 40) box.append(phMsg(`Showing the latest 40 of ${list.length}.`));
   };
@@ -3618,7 +3620,7 @@
     const t = (ms) => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     const head = document.createElement('div'); head.className = 'fd-rb-row';
     const dot = document.createElement('span'); dot.className = 'fd-mktdot ' + (MK.open ? 'is-open' : ''); 
-    const ht = document.createElement('span'); ht.textContent = `${MK.open ? 'Market open' : 'Market closed'} · updated ${new Date(MK.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${t(MK.at)}${MK.nextRefresh ? ` · next update after ${t(MK.nextRefresh)}` : ''}`;
+    const ht = document.createElement('span'); ht.textContent = `${MK.open ? 'Market open' : 'Market closed'} · updated ${new Date(MK.at).toLocaleDateString(LOC, { month: 'short', day: 'numeric' })} ${t(MK.at)}${MK.nextRefresh ? ` · next update after ${t(MK.nextRefresh)}` : ''}`;
     head.append(dot, ht, rbtn(mkState === 'busy' ? 'Refreshing…' : 'Refresh', () => loadMarkets(true)));
     el.append(head);
     const strip = (title, list, note) => {
@@ -3960,7 +3962,7 @@
     const t = document.createElement('table'); t.className = 'fd-table fd-biztable'; const hd = document.createElement('tr'); ['Payment', 'Covers', 'Due', 'Profit', extra ? 'Needed' : 'Set aside', ...(extra ? ['Paid', 'Still to pay'] : [])].forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i > 2) th.className = 'fd-r'; hd.append(th); }); t.append(hd);
     const cov = ['Jan – Mar', 'Apr – May', 'Jun – Aug', 'Sep – Dec'], nd = r.quarters.find((q) => q.due >= today);
     r.quarters.forEach((q, i) => { const tr = document.createElement('tr'); if (nd === q) tr.className = 'is-next';
-      [`Q${q.q}${q.due < today ? ' ✓' : nd === q ? ' · next' : ''}`, cov[i], new Date(q.due + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }), money2(q.profit), money2(extra ? q.need : q.estimate), ...(extra ? [money2(q.paid), money2(q.owed)] : [])].forEach((v, k) => { const td = document.createElement('td'); td.textContent = v; if (k > 2) td.className = 'fd-r'; tr.append(td); }); t.append(tr); });
+      [`Q${q.q}${q.due < today ? ' ✓' : nd === q ? ' · next' : ''}`, cov[i], new Date(q.due + 'T00:00:00Z').toLocaleDateString(LOC, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }), money2(q.profit), money2(extra ? q.need : q.estimate), ...(extra ? [money2(q.paid), money2(q.owed)] : [])].forEach((v, k) => { const td = document.createElement('td'); td.textContent = v; if (k > 2) td.className = 'fd-r'; tr.append(td); }); t.append(tr); });
     const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
     el.append(optBox('est', 'Make the estimates more accurate (optional)', (d) => {
       const row = document.createElement('div'); row.className = 'fd-row';
@@ -4027,7 +4029,7 @@
     if (window.FDApp && FDApp.checkUpdates) { const w = document.createElement('span'); w.className = 'fd-updrow'; const v = document.createElement('span'); v.className = 'fd-zero';
       FDApp.version?.().then((x) => { v.textContent = 'Version ' + x; }).catch(() => {});
       w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), ' ', v); row('Desktop app', w, 'Checks automatically once a day. This only updates the app on this computer.'); }
-    if (window.FDI18n) row('Language', sel(Object.entries(FDI18n.langs), FDI18n.lang, (v) => FDI18n.set(v)), 'For this device. Amounts and dates stay in US format.');
+    if (window.FDI18n) row('Language', sel(Object.entries(FDI18n.langs), FDI18n.lang, (v) => FDI18n.set(v)), FDI18n.lang === 'es' ? 'Spanish is in beta: a few screens are still in English. Tell us what reads oddly with Send feedback.' : 'For this device. Amounts and dates stay in US format.');
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
     if (s.type === 'shared') {
       const w = document.createElement('div'); w.className = 'fd-people';
@@ -4225,7 +4227,7 @@
     const S0 = prefGet('settlements', { periods: [], payments: [] }) || {}, P = Array.isArray(S0.periods) ? S0.periods : [], PAY = Array.isArray(S0.payments) ? S0.payments : [];
     const save = (next) => prefSet('settlements', { periods: next.periods.slice(-120), payments: next.payments.slice(-500) });
     const months = period().map((m) => m.month).sort(), from = months[0], to = months[months.length - 1];
-    const label = (a, b) => { const f = (m) => new Date(m + '-15T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); return a === b ? f(a) : `${f(a)} – ${f(b)}`; };
+    const label = (a, b) => { const f = (m) => new Date(m + '-15T12:00:00').toLocaleDateString(LOC, { month: 'short', year: 'numeric' }); return a === b ? f(a) : `${f(a)} – ${f(b)}`; };
     const bal = window.FDSettle(P, PAY);
     const box = document.createElement('div'); box.className = 'fd-rb fd-settle'; box.append(rhead('Settling up'));
     const sum = document.createElement('p'); sum.className = 'fd-note';
@@ -4304,11 +4306,11 @@
         const add = rbtn('Add reading', () => { const n = Number(String(mi.value).replace(/[^0-9]/g, '')); if (!(n > 0)) return; asEd.odo = asEd.odo.filter((r) => r.d !== md2.value).concat([{ d: md2.value, mi: n }]).sort((a, b) => (a.d < b.d ? -1 : 1)).slice(-24); dash.draw('assetView'); }, false);
         od.append(mi, md2, add); row('Odometer', od);
         const now = V.milesAt(asEd), pc = V.pace(asEd), info = document.createElement('p'); info.className = 'fd-note';
-        info.textContent = (now ? `${now.estimated ? '≈ ' : ''}${now.mi.toLocaleString()} miles now${now.estimated ? ` (last reading ${now.base.mi.toLocaleString()} on ${new Date(now.base.d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}. ` : 'No readings yet. ')
+        info.textContent = (now ? `${now.estimated ? '≈ ' : ''}${now.mi.toLocaleString()} miles now${now.estimated ? ` (last reading ${now.base.mi.toLocaleString()} on ${new Date(now.base.d + 'T12:00:00').toLocaleDateString(LOC, { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}. ` : 'No readings yet. ')
           + (pc.from === 'readings' ? `You drive about ${pc.perMonth.toLocaleString()} miles a month, worked out from your readings.` : `Between readings it assumes ${pc.perMonth.toLocaleString()} miles a month${pc.from === 'default' ? ' (about average)' : ''}; two readings a month or more apart replace this with your own pace.`);
         box.append(info);
         if (pc.from !== 'readings') { const mp = rin(asEd.mpm || '', '1000', (v) => { asEd.mpm = v; }); mp.inputMode = 'numeric'; mp.style.maxWidth = '7em'; row('Miles per month (estimate)', mp); }
-        if (asEd.odo.length) { const l = document.createElement('div'); l.className = 'fd-chips'; asEd.odo.slice(-6).forEach((r) => { const c = document.createElement('button'); c.type = 'button'; c.className = 'fd-chip'; c.title = 'Remove this reading'; c.textContent = `${new Date(r.d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: ${r.mi.toLocaleString()} ✕`; c.addEventListener('click', () => { asEd.odo = asEd.odo.filter((x) => x !== r); dash.draw('assetView'); }); l.append(c); }); box.append(l); }
+        if (asEd.odo.length) { const l = document.createElement('div'); l.className = 'fd-chips'; asEd.odo.slice(-6).forEach((r) => { const c = document.createElement('button'); c.type = 'button'; c.className = 'fd-chip'; c.title = 'Remove this reading'; c.textContent = `${new Date(r.d + 'T12:00:00').toLocaleDateString(LOC, { month: 'short', year: 'numeric' })}: ${r.mi.toLocaleString()} ✕`; c.addEventListener('click', () => { asEd.odo = asEd.odo.filter((x) => x !== r); dash.draw('assetView'); }); l.append(c); }); box.append(l); }
         // check the value on a free site and type it in; the estimate continues from there
         const lk = document.createElement('div'); lk.className = 'fd-rb-row'; const lb = document.createElement('span'); lb.className = 'fd-rb-lbl'; lb.textContent = 'Check its value'; lk.append(lb);
         V.lookups().forEach(([t, u]) => { const a = document.createElement('a'); a.href = u; a.target = '_blank'; a.rel = 'noopener'; a.textContent = t + ' ↗'; lk.append(a); }); box.append(lk);
@@ -4348,7 +4350,7 @@
       const tr = document.createElement('tr'); tr.className = 'fd-click'; tr.title = 'Edit';
       const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = a.name; shareIcon(b, a.shareTo); const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; const vm = a.type === 'vehicle' && window.FDVehicle && FDVehicle.milesAt(a), curve = a.type === 'vehicle' && window.FDVehicle && a.mode !== 'fixed' && FDVehicle.yearOf(a);
       sub.textContent = ASSET_T[a.type || 'other'][0] + (curve ? ' · age curve' : a.depr ? ` · −${a.depr}%/yr` : '') + (vm ? ` · ${vm.estimated ? '≈' : ''}${vm.mi.toLocaleString()} mi` : '') + (a.vin ? ` · VIN ${a.vin}` : ''); nm.append(b, sub);
-      const up = td(a.asOf ? new Date(a.asOf + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + (stale ? (a.type === 'vehicle' ? ' · check value & miles' : ' · time to update') : '') : '–', stale ? 'fd-bad' : 'fd-zero');
+      const up = td(a.asOf ? new Date(a.asOf + 'T00:00:00').toLocaleDateString(LOC, { month: 'short', year: 'numeric' }) + (stale ? (a.type === 'vehicle' ? ' · check value & miles' : ' · time to update') : '') : '–', stale ? 'fd-bad' : 'fd-zero');
       tr.append(nm, td(money0(now)), td(owed ? money0(owed) : '–'), td(money0(now - owed), now - owed >= 0 ? 'fd-good' : 'fd-bad'), up);
       tr.addEventListener('click', () => { asEd = { i, ...a, _autoDepr: false }; dash.draw('assetView'); });
       tb.append(tr);
@@ -4359,7 +4361,7 @@
       const tr = document.createElement('tr'); tr.className = 'fd-sharedrow'; const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = d.name; nm.append(b);
       const ic = document.createElement('span'); ic.className = 'fd-shared'; ic.textContent = '⇄'; ic.title = `Shared from ${from}${inc ? '' : ' (not counted in net worth here)'}`; ic.setAttribute('aria-label', ic.title); nm.append(' ', ic);
       const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = `${(ASSET_T[d.type] || ASSET_T.other)[0]} · from ${from}. Edit it there.`; nm.append(sub);
-      tr.append(nm, td(money0(val), inc ? '' : 'fd-zero'), td('–'), td(money0(val), (inc ? 'fd-good' : 'fd-zero')), td(d.asOf ? new Date(d.asOf + '-15T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '–', 'fd-zero')); tb.append(tr);
+      tr.append(nm, td(money0(val), inc ? '' : 'fd-zero'), td('–'), td(money0(val), (inc ? 'fd-good' : 'fd-zero')), td(d.asOf ? new Date(d.asOf + '-15T00:00:00').toLocaleDateString(LOC, { month: 'short', year: 'numeric' }) : '–', 'fd-zero')); tb.append(tr);
     }
     t.append(tb); el.append(t);
   });
@@ -4462,7 +4464,7 @@
         tile('Time saved', x ? dur(base.length - withX.length) || '< 1 mo' : '–', ''));
       box.append(g);
       const rows = withX || base, years = {}; const now = new Date();
-      rows.forEach((r) => { const d = new Date(now.getFullYear(), now.getMonth() + 1 + r.m, 1), y = d.getFullYear(); const o = (years[y] = years[y] || { y, principal: 0, interest: 0, balance: 0, months: [] }); o.principal += r.principal; o.interest += r.interest; o.balance = r.balance; o.months.push({ ...r, label: d.toLocaleString('en-US', { month: 'short', year: 'numeric' }) }); });
+      rows.forEach((r) => { const d = new Date(now.getFullYear(), now.getMonth() + 1 + r.m, 1), y = d.getFullYear(); const o = (years[y] = years[y] || { y, principal: 0, interest: 0, balance: 0, months: [] }); o.principal += r.principal; o.interest += r.interest; o.balance = r.balance; o.months.push({ ...r, label: d.toLocaleString(LOC, { month: 'short', year: 'numeric' }) }); });
       const t = document.createElement('table'); t.className = 'fd-table'; const tb = document.createElement('tbody');
       const hr = document.createElement('tr'); ['Year', 'Principal', 'Interest', esc ? 'Escrow' : '', 'Balance at end'].filter((c) => c !== '').forEach((c, i) => { const th = document.createElement('th'); th.textContent = c; if (!i) th.className = 'fd-l'; hr.append(th); }); tb.append(hr);
       Object.values(years).forEach((o) => {
@@ -4642,13 +4644,13 @@
       const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'European Central Bank reference rates (via Frankfurter), updated each working day. Your card\u2019s rate and fees will differ a little. Trips you tag can show their total in another currency under Expenses → Tags.'; fxc.append(n); }
     const CAL = (ECO.calendar || []).filter((x, i, a) => x.name === 'Jobless claims' || a.filter((y) => y.name === x.name).length <= 4); // older cached data listed the Fed every day
     if (!PART('e-cal') && CAL.length) { el.append(rhead('Economic calendar · next few weeks'));
-      const tb = document.createElement('table'); tb.className = 'fd-table'; CAL.slice(0, 14).forEach((c) => { const d = new Date(c.date + 'T12:00:00'); const tr = document.createElement('tr'); tr.append(td(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), 'fd-l'), td(c.name, 'fd-l'), td(c.full, 'fd-l fd-zero')); tb.append(tr); });
+      const tb = document.createElement('table'); tb.className = 'fd-table'; CAL.slice(0, 14).forEach((c) => { const d = new Date(c.date + 'T12:00:00'); const tr = document.createElement('tr'); tr.append(td(d.toLocaleDateString(LOC, { weekday: 'short', month: 'short', day: 'numeric' }), 'fd-l'), td(c.name, 'fd-l'), td(c.full, 'fd-l fd-zero')); tb.append(tr); });
       const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
       const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Release dates from FRED. Inflation, jobs and Fed announcements are the ones most likely to move markets and loan rates.'; el.append(n); }
     if (!PART('e-infl')) grp('Inflation (price change over 12 months)', [infl('cpi', 'US, all items'), infl('cpiMW', 'Midwest, all items'), infl('foodHomeMW', 'Groceries'), infl('diningMW', 'Restaurants'), infl('energyMW', 'Energy'), infl('gasMW', 'Gasoline'), infl('shelterMW', 'Shelter')], 'Midwest figures from the Bureau of Labor Statistics. Compare with how your own spending in each category changed.');
     if (!PART('e-ener')) grp('Energy & housing', [tile2('Midwest gas ($/gal)', ser('eia', 'gas'), (v) => '$' + v.toFixed(2)), tile2('Iowa home electricity', ser('eia', 'elec'), (v) => v.toFixed(1) + '¢/kWh'), infl('hpiIC', 'Iowa City home prices')]);
     const nh = ((ECO.holidays || []).filter((h) => h[0] >= new Date().toISOString().slice(0, 10))[0]); if (nh) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Next bank holiday: ${nh[1]} (${nh[0]}). Bills due that day usually post the next business day.`; el.append(p); }
-    const foot = document.createElement('div'); foot.className = 'fd-rb-row'; const u = document.createElement('span'); u.className = 'fd-zero'; u.textContent = `Updated ${new Date(ECO.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · refreshes daily`; foot.append(u, rbtn('Refresh', () => { ecoState = 'idle'; loadEcon(true); })); el.append(foot);
+    const foot = document.createElement('div'); foot.className = 'fd-rb-row'; const u = document.createElement('span'); u.className = 'fd-zero'; u.textContent = `Updated ${new Date(ECO.at).toLocaleString(LOC, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · refreshes daily`; foot.append(u, rbtn('Refresh', () => { ecoState = 'idle'; loadEcon(true); })); el.append(foot);
     if ((ECO.errors || []).length) { const dt = document.createElement('details'); const sm = document.createElement('summary'); sm.textContent = `Data check: ${ECO.errors.length} item${ECO.errors.length === 1 ? '' : 's'} unavailable`; dt.append(sm); ECO.errors.forEach((e) => { const p = document.createElement('div'); p.className = 'fd-note'; p.textContent = e.replace(/api_key=\w+|registrationkey\W+\w+/g, ''); dt.append(p); }); el.append(dt); }
   });
 

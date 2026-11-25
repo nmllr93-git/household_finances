@@ -6,7 +6,7 @@
 // Money, dates and numbers keep US formatting: the app is still about US accounts in US dollars.
 (function () {
   'use strict';
-  const LANGS = { en: 'English', es: 'Español' };
+  const LANGS = { en: 'English', es: 'Español (beta)' };
   const get = () => { try { return localStorage.getItem('fd-lang') || ''; } catch (e) { return ''; } };
   const pick = () => { const s = get(); if (LANGS[s]) return s; const n = String(navigator.language || 'en').slice(0, 2).toLowerCase(); return LANGS[n] && !s ? n : 'en'; };
   const lang = pick();
@@ -14,9 +14,10 @@
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   function add(table) {
     for (const [en, tr] of Object.entries(table || {})) {
-      if (/\{\d\}/.test(en)) { const keys = []; const re = new RegExp('^' + esc(en).replace(/\\\{(\d)\\\}/g, (m, d) => { keys.push(+d); return '(.+?)'; }) + '$'); PAT.push({ re, keys, tr }); }
+      if (/\{\d\}/.test(en)) { const keys = []; const re = new RegExp('^' + esc(en).replace(/\\\{(\d)\\\}/g, (m, d) => { keys.push(+d); return '(.+?)'; }) + '$'); PAT.push({ re, keys, tr, len: en.replace(/\{\d\}/g, '').length }); }
       else DICT[en] = tr;
     }
+    PAT.sort((a, b) => b.len - a.len); // the most specific pattern wins
   }
   const fill = (s, a) => s.replace(/\{(\d)\}/g, (m, d) => (a[+d] != null ? a[+d] : m));
   // translate one whole string, or return it unchanged
