@@ -3,7 +3,10 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.38
+- **Merge categories** (⚙ Settings → Settings for this dashboard): combine two names that mean the same thing, like Health/Medical and Health/medical. Look-alike names are suggested for you. The old name counts as the new one in transactions, budgets and reports, and Undo brings it back
+
+## Android 1.6.18
 - **Merge categories** (⚙ Settings → Settings for this dashboard): combine two names that mean the same thing, like Health/Medical and Health/medical. Look-alike names are suggested for you. The old name counts as the new one in transactions, budgets and reports, and Undo brings it back
 
 ## Desktop 1.0.37
