@@ -2013,7 +2013,7 @@
   const wAlerts = () => { try { return JSON.parse(localStorage.getItem('fd-alerts') || 'null') || { bills: false, budget: false }; } catch { return { bills: false, budget: false }; } };
   // reach the app's own widget plugin: the plugin list if it's there, otherwise Capacitor's direct native call
   const widgetApi = () => { if (window.LarenestWidgetNative && window.LarenestWidgetNative.update) return { update: (o) => Promise.resolve(window.LarenestWidgetNative.update(o.data)) }; // Android app, any page
-    const C = window.Capacitor; if (!C || (C.getPlatform && C.getPlatform() !== 'android')) return null;
+    const C = window.Capacitor; if (!C || (C.getPlatform && !['android', 'ios'].includes(C.getPlatform()))) return null; // iPhone: the Budget & bills widget
     if (C.Plugins && C.Plugins.LarenestWidget && C.Plugins.LarenestWidget.update) return C.Plugins.LarenestWidget;
     if (typeof C.nativePromise === 'function') return { update: (o) => C.nativePromise('LarenestWidget', 'update', o) };
     return null; };

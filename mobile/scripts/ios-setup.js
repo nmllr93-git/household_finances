@@ -15,6 +15,7 @@ const add = (key, xml) => { if (!p.includes(`<key>${key}</key>`)) p = p.replace(
 add('NSCameraUsageDescription', '<string>Scan the QR code that connects the app to your Larenest server, and take photos of receipts to attach to transactions.</string>');
 add('NSPhotoLibraryUsageDescription', '<string>Choose a receipt photo to attach to a transaction.</string>');
 add('NSLocalNetworkUsageDescription', '<string>Connect to your own Larenest server on your home network.</string>');
+add('NSFaceIDUsageDescription', '<string>Unlock Larenest with Face ID when the app lock is on.</string>');
 add('ITSAppUsesNonExemptEncryption', '<false/>'); // only standard HTTPS: no export-compliance paperwork
 // Home servers are usually plain http on the home network or Tailscale: allow that for the dashboard web view and local addresses only.
 add('NSAppTransportSecurity', '<dict>\n\t\t<key>NSAllowsArbitraryLoadsInWebContent</key>\n\t\t<true/>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>');

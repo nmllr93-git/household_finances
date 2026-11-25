@@ -7,6 +7,11 @@
 name: iOS release
 on:
   workflow_dispatch:
+    inputs:
+      native:
+        description: 'Include the Face ID lock, receipt scanning and the home-screen widget (needs the app group set up)'
+        type: boolean
+        default: true
 permissions:
   contents: read
 jobs:
@@ -30,6 +35,12 @@ jobs:
         working-directory: mobile
         env: { IOS_BUILD: "${{ github.run_number }}" }
         run: npm install && npm run ios:add
+      - name: Add the app's Swift code and the widget
+        if: steps.ok.outputs.go == 'true' && inputs.native
+        env: { APPLE_TEAM_ID: "${{ secrets.APPLE_TEAM_ID }}" }
+        run: |
+          gem list -i xcodeproj >/dev/null || sudo gem install xcodeproj --no-document
+          ruby mobile/scripts/ios-native.rb
       - name: API key
         if: steps.ok.outputs.go == 'true'
         env: { P8: "${{ secrets.APPSTORE_KEY_P8 }}", KID: "${{ secrets.APPSTORE_KEY_ID }}" }

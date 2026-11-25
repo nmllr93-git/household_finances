@@ -426,3 +426,11 @@ window.FDI18n.add({
   'Current PIN': 'PIN actual', 'Change PIN': 'Cambiar PIN', '✓ PIN changed.': '✓ PIN cambiado.', 'Type the current PIN to turn the lock off.': 'Escribe el PIN actual para desactivar el bloqueo.',
   'The lock is a privacy screen. If you forget the PIN and can’t use fingerprint or Face ID, the only way in is to clear the app’s data, so keep a backup file.': 'El bloqueo es una pantalla de privacidad. Si olvidas el PIN y no puedes usar huella o Face ID, la única forma de entrar es borrar los datos de la app, así que guarda una copia de seguridad.',
 });
+window.FDI18n.add({
+  '📷 Scan a receipt': '📷 Escanear un recibo', '📎 Attach a receipt photo': '📎 Adjuntar foto de recibo', 'Reading the receipt…': 'Leyendo el recibo…',
+  'Photo attached. It’s saved with this entry.': 'Foto adjunta. Se guarda con esta entrada.', 'total': 'total', 'date': 'fecha', 'store': 'comercio',
+  'Filled in the {0} from the receipt. Check them before saving; the photo is saved with the entry.': 'Se completó {0} a partir del recibo. Revísalo antes de guardar; la foto se guarda con la entrada.',
+  'Couldn’t read this receipt. Fill it in by hand; the photo is still saved with the entry.': 'No se pudo leer este recibo. Complétalo a mano; la foto igual se guarda con la entrada.',
+  'This device can’t read receipts.': 'Este dispositivo no puede leer recibos.', 'That file isn’t a photo this device can read.': 'Ese archivo no es una foto que este dispositivo pueda leer.',
+  'Switch server…': 'Cambiar de servidor…',
+});

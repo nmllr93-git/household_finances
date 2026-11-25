@@ -27,7 +27,3 @@ Keep the focus on US accounts and US dollars, but let the app's wording appear i
 - Draft split between free and Pro: [PRO-TIERS.md](PRO-TIERS.md).
 
 ## Smaller items
-- Owner-only "Reset password" for other logins from the web Settings page (today it only works on the host computer).
-- Phone-only mode app lock (encryption covers the host only).
-- Year-in-review additions.
-- Carry device settings over when switching to the https:// address.

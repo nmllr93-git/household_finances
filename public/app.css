@@ -702,9 +702,10 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-remed { flex-wrap: wrap; gap: 6px; padding: 4px 0; } .fd-remed input[type=date] { min-width: 0; }
 /* app lock (phone-only mode) */
 html.fd-locked body > *:not(.fd-lock) { visibility: hidden; }
-.fd-lock { position: fixed; inset: 0; z-index: 10000; background: var(--color-bg, #fff); display: flex; align-items: center; justify-content: center; padding: 24px; visibility: visible; }
+.fd-lock { font-family: var(--font-anthropic-sans); color: var(--color-fg); position: fixed; inset: 0; z-index: 10000; background: var(--color-bg, #fff); display: flex; align-items: center; justify-content: center; padding: 24px; visibility: visible; }
 .fd-lock-card { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 12px; text-align: center; }
 .fd-lock-logo { font-size: 40px; } .fd-lock h2 { margin: 0; font-size: 20px; }
 .fd-lock-pin { font-size: 24px; letter-spacing: 8px; text-align: center; padding: 10px; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius, 8px); background: var(--color-bg); color: inherit; }
 .fd-lock-msg { min-height: 1.2em; margin: 0; color: var(--color-bad, #c0392b); font-size: 14px; }
 .fd-lock-forgot { font-size: 12px; color: var(--color-fg-muted); margin: 8px 0 0; }
+.fd-pill.fd-bad { color: var(--color-bad, #c0392b); border-color: currentColor; }
