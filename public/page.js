@@ -2175,6 +2175,19 @@
       for (const f of (PEND.book === (window.HF && window.HF.state.bookId) && !tc.off ? PEND.flags : [])) { if (Date.now() - Date.parse(f.at || f.date) > 30 * 864e5) continue;
         if ((f.posted / f.pending - 1) * 100 < tPct || f.posted - f.pending < tMin) continue;
       out.push({ id: 'tip:' + f.key, sig: String(f.posted), lvl: 'warn', text: TR('{0} posted for {1}, but was {2} while pending (+{3}%), on {4}. A big tip or a hold that grew? Worth checking the receipt.').replace('{0}', f.description).replace('{1}', money2(f.posted)).replace('{2}', money2(f.pending)).replace('{3}', Math.round((f.posted / f.pending - 1) * 100)).replace('{4}', f.account), go: 'tx' }); } } catch (e) {}
+    // spending pace: a category running well ahead of its usual month (the last 3 full months), checked once a week
+    try { const sp = (prefGet('settings', {}) || {}).paceAlert || {}; if (!sp.off && st('txns') === 'ok') {
+      const ahead = Number.isFinite(+sp.pct) ? +sp.pct : 50, now = new Date(), ym = (d) => d.toISOString().slice(0, 7);
+      const thisM = ym(new Date(Date.UTC(now.getFullYear(), now.getMonth(), 15))), prev = [1, 2, 3].map((k) => ym(new Date(Date.UTC(now.getFullYear(), now.getMonth() - k, 15))));
+      const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(), frac = now.getDate() / dim;
+      if (now.getDate() >= 7) {
+        const by = {}; for (const t of rows('txns')) { if (t.book !== book() || t.type !== 'expense' || t.oneTime || t.ignored || !t.category || /^(uncategorized|transfer)$/i.test(t.category)) continue;
+          const m = t.month || String(t.date).slice(0, 7); const i = m === thisM ? 0 : prev.indexOf(m) + 1; if (i < 0 || (i === 0 && m !== thisM)) continue; const o = (by[t.category] = by[t.category] || [0, 0, 0, 0]); o[i] += Number(t.amount) || 0; }
+        const wk = Math.ceil(now.getDate() / 7);
+        Object.entries(by).map(([c, a]) => { const usual = (a[1] + a[2] + a[3]) / 3, pace = usual * frac; return { c, now: a[0], usual, pace, full: a[1] && a[2] && a[3] }; })
+          .filter((x) => x.full && x.usual >= 50 && x.now - x.pace >= 50 && x.now >= x.pace * (1 + ahead / 100)).sort((a, b) => (b.now - b.pace) - (a.now - a.pace)).slice(0, 3)
+          .forEach((x) => out.push({ id: `pace:${x.c}:${thisM}`, sig: String(wk), lvl: 'info', text: TR('{0} is running ahead of usual: {1} so far this month, compared with about {2} by now in a typical month ({3} for a whole month).').replace('{0}', x.c).replace('{1}', money0(x.now)).replace('{2}', money0(x.pace)).replace('{3}', money0(x.usual)), go: 'budgetcat:' + x.c }));
+      } } } catch (e) {}
     // a gentle feedback nudge after a week of use (and once more after six weeks); dismissing it is remembered like any other item
     try { let first = Number(localStorage.getItem('fd-first-use')) || 0; if (!first) { first = Date.now(); localStorage.setItem('fd-first-use', String(first)); }
       const days = (Date.now() - first) / 864e5, k = days >= 42 ? '42d' : days >= 7 ? '7d' : '';
@@ -2190,6 +2203,7 @@
     showGroup('settings'); setTimeout(() => { const r = document.getElementById('fd-catmerge-row'); if (!r) return; const d = r.closest('details'); if (d) d.open = true;
       r.scrollIntoView({ behavior: 'smooth', block: 'center' }); r.classList.add('fd-flash'); setTimeout(() => r.classList.remove('fd-flash'), 2200); }, 400); });
   const goTo = (where) => {
+    if (String(where).startsWith('budgetcat:')) { showGroup('expenses'); setTimeout(() => document.querySelector('#categories')?.scrollIntoView({ behavior: 'smooth' }), 150); return; }
     if (where === 'feedback') { if (window.FDFeedback) window.FDFeedback(); return; }
     if (where === 'dupes') { showGroup('tx'); dupOpen = true; dash.draw('dupReview'); setTimeout(() => document.querySelector('#fd-dupes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150); return; }
     if (where === 'biztax' || where === 'biztx') { showGroup('business'); setTimeout(() => document.querySelector(where === 'biztax' ? '#biz-tax' : '#biz-tx')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
@@ -2217,7 +2231,7 @@
       if (HDONE[it.id]) { confirmRow(r, it); el.append(r); continue; }
       const t = document.createElement('span'); t.textContent = (it.lvl === 'warn' ? '⚠ ' : '• ') + it.text;
       const acts = document.createElement('span'); acts.className = 'fd-hl-acts';
-      acts.append(rbtn({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show', feedback: 'Send feedback' }[it.go] || 'Open', () => goTo(it.go)));
+      acts.append(rbtn(({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show', feedback: 'Send feedback' }[it.go] || (String(it.go).startsWith('budgetcat:') ? 'Show' : '')) || 'Open', () => goTo(it.go)));
       if (!document.body.classList.contains('fd-readonly')) { const x = rbtn('Dismiss', () => {
         if (!it.acct) { r.remove(); saveDis({ ...DIS, [it.id]: it.sig }); return; }
         HDONE[it.id] = true; confirmRow(r, it); saveDis({ ...DIS, [it.id]: it.sig }); }); // an account alert: offer to stop checking that account
@@ -4306,6 +4320,12 @@
       const t1 = document.createElement('span'); t1.textContent = TR('% higher, and at least $'); const t3 = document.createElement('span'); t3.textContent = TR('more than the pending amount');
       w.append(on, num(tc.pct, '1', 'pct'), t1, num(tc.min, '0.5', 'min'), t3);
       row('Tip and hold check', w, 'For example, at 30% and $2: a $40 pending charge that posts as $55 is flagged ($15 and 37% more); a $4 coffee that posts as $5.50 isn’t (only $1.50 more). Shows in Needs attention. Needs bank sync.'); }
+    { const pa = { pct: 50, ...(s.paceAlert || {}) }; const w = document.createElement('div'); w.className = 'fd-setinline';
+      const on = chk('Tell me when a category is running at least', !pa.off, (v) => { s.paceAlert = { ...pa, ...(s.paceAlert || {}), off: !v }; });
+      const i = document.createElement('input'); i.type = 'number'; i.min = '10'; i.max = '999'; i.step = '5'; i.value = pa.pct; i.className = 'fd-in fd-numsm'; i.addEventListener('input', () => { s.paceAlert = { ...pa, ...(s.paceAlert || {}), pct: Math.max(10, Number(i.value) || 50) }; });
+      const t = document.createElement('span'); t.textContent = TR('% ahead of its usual month');
+      w.append(on, i, t);
+      row('Spending pace alerts', w, 'Compares this month so far with the same point in your last 3 months, in Needs attention, at most once a week per category. Only categories you spend $50 or more on in a usual month, and only when it’s $50 or more ahead.'); }
     { const det = document.createElement('details'); det.className = 'fd-showset'; const sm = document.createElement('summary'); sm.textContent = 'Sections & details to show (untick to hide)'; det.append(sm);
       const NAMES = { overview: 'Overview', accounts: 'Accounts', expenses: 'Expenses', budget: 'Budget', markets: 'Markets', review: 'Year in review' };
       const seen = new Set();
