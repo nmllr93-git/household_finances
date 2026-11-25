@@ -160,7 +160,7 @@
           m.lastBal = bal; added += txns.length;
         }
         // A charge that posted for noticeably more than it was pending (a big tip, a gas station or hotel hold that grew):
-        // same account and store, a pending copy that's now gone, within a week, posted 30%+ (and $2+) higher.
+        // same account and store, a pending copy that's now gone, within a week, posted higher than it was pending.
         const word = (d) => String(d || '').toLowerCase().replace(/^(sq|tst|pos|purchase|debit|card|pp|paypal)\b[\s*#:]*/g, '').replace(/[^a-z]+/g, ' ').trim().split(' ').filter((w) => w.length > 2).slice(0, 2).join(' ');
         const gone = prevPend.filter((p) => !pendNow.some((q) => (p.id && q.id === p.id) || (q.account === p.account && q.amount === p.amount && q.description === p.description)));
         const used = new Set(), flags = Array.isArray(st.flags) ? st.flags : [];
@@ -168,9 +168,10 @@
           if (r.amount <= 0) continue;
           const i = gone.findIndex((p, k) => !used.has(k) && p.account === r.account && p.amount > 0 && word(p.description) && word(p.description) === word(r.description) && Math.abs(Date.parse(p.date) - Date.parse(r.date)) <= 7 * 864e5 && r.amount >= p.amount);
           if (i < 0) continue; used.add(i); const p = gone[i];
-          if (r.amount - p.amount >= 2 && r.amount > p.amount * 1.3) flags.push({ key: (r.id || `${r.account}|${r.date}|${r.amount}`), account: r.account, description: r.description, date: r.date, pending: p.amount, posted: r.amount, at: new Date(now).toISOString() });
+          // every increase is kept; the dashboard shows the ones over the % and $ you set (Settings)
+          if (r.amount - p.amount >= 0.01) flags.push({ key: (r.id || `${r.account}|${r.date}|${r.amount}`), account: r.account, description: r.description, date: r.date, pending: p.amount, posted: r.amount, at: new Date(now).toISOString() });
         }
-        st.flags = flags.slice(-50); st.pending = pendNow;
+        st.flags = flags.slice(-100); st.pending = pendNow;
         st.lastSync = now; st.lastError = ''; st.notes = res.errors;
         await env.save(bookId, st);
         return { added, statements: docs, notes: res.errors };

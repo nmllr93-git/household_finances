@@ -744,3 +744,4 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 .fd-pendbox { margin: 8px 0 12px; } .fd-pendbox > summary { cursor: pointer; }
 .fd-pendtable td { color: var(--color-fg-muted); font-style: italic; } .fd-pendnote { font-style: italic; }
 .fd-flash { animation: fdflash 2s ease-out; } @keyframes fdflash { 0%, 30% { background: color-mix(in srgb, var(--color-accent, #c9773a) 22%, transparent); } 100% { background: transparent; } }
+.fd-setgrid .fd-setinline input.fd-numsm { width: 72px; flex: none; }

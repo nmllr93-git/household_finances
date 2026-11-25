@@ -2171,7 +2171,9 @@
     for (const x of econAlerts()) out.push(x);
     for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: x.year ? TR('{0} costs {1}% more than a year ago: {2} → {3}, about {4} more a year. Worth a call to ask for a better price, or cancelling?').replace('{0}', x.vendor).replace('{1}', x.pct).replace('{2}', money2(x.prev)).replace('{3}', money2(x.last)).replace('{4}', money0(x.extra)) : `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
     for (const r of subRemindersDue()) out.push({ id: 'subrem:' + r.vendor + ':' + r.date, sig: r.date, lvl: 'warn', text: TR(SUB_WHY[r.why] || SUB_WHY.review).replace('{0}', r.vendor) + ' ' + (r.date <= todayISO() ? TR('(today or earlier)') : TR('(on {0})').replace('{0}', r.date)) + (r.note ? ' · ' + r.note : ''), go: 'subscriptions' });
-    try { for (const f of (PEND.book === (window.HF && window.HF.state.bookId) ? PEND.flags : [])) { if (Date.now() - Date.parse(f.at || f.date) > 30 * 864e5) continue;
+    try { const tc = (prefGet('settings', {}) || {}).tipCheck || {}, tPct = Number.isFinite(+tc.pct) ? +tc.pct : 30, tMin = Number.isFinite(+tc.min) ? +tc.min : 2;
+      for (const f of (PEND.book === (window.HF && window.HF.state.bookId) && !tc.off ? PEND.flags : [])) { if (Date.now() - Date.parse(f.at || f.date) > 30 * 864e5) continue;
+        if ((f.posted / f.pending - 1) * 100 < tPct || f.posted - f.pending < tMin) continue;
       out.push({ id: 'tip:' + f.key, sig: String(f.posted), lvl: 'warn', text: TR('{0} posted for {1}, but was {2} while pending (+{3}%), on {4}. A big tip or a hold that grew? Worth checking the receipt.').replace('{0}', f.description).replace('{1}', money2(f.posted)).replace('{2}', money2(f.pending)).replace('{3}', Math.round((f.posted / f.pending - 1) * 100)).replace('{4}', f.account), go: 'tx' }); } } catch (e) {}
     try { const dp = dupPairs(); if (dp.length) out.push({ id: 'dupes', sig: String(dp.length), lvl: 'warn', text: `${dp.length} transaction${dp.length === 1 ? ' looks' : 's look'} like ${dp.length === 1 ? 'a duplicate' : 'duplicates'}: the same purchase from bank sync and from a statement, a few days apart. Review and keep one copy.`, go: 'dupes' }); } catch {}
     try { if (hasBiz()) { const q0 = bizNextDue(), days = q0 ? Math.round((Date.parse(q0.due) - Date.now()) / 864e5) : 99;
@@ -4293,6 +4295,12 @@
     row('Top row tiles', tw);
     row('Amounts', chk('Hide cents (show $1,234 instead of $1,234.56)', !!s.noCents, (v) => { s.noCents = v; }));
     row('Pending charges', chk('Show charges the bank hasn’t posted yet (from bank sync)', !s.hidePending, (v) => { s.hidePending = !v; }), 'Pending charges are never counted in budgets or totals either way; this only hides the Pending list in Transactions and the pending note on accounts.');
+    { const tc = { pct: 30, min: 2, ...(s.tipCheck || {}) }; const w = document.createElement('div'); w.className = 'fd-setinline';
+      const on = chk('Flag charges that post higher than they were pending, by at least', !tc.off, (v) => { s.tipCheck = { ...tc, ...(s.tipCheck || {}), off: !v }; });
+      const num = (v, step, k) => { const i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.step = step; i.value = v; i.className = 'fd-in fd-numsm'; i.addEventListener('input', () => { s.tipCheck = { ...tc, ...(s.tipCheck || {}), [k]: Math.max(0, Number(i.value) || 0) }; }); return i; };
+      const t1 = document.createElement('span'); t1.textContent = TR('% and'); const t2 = document.createElement('span'); t2.textContent = '$';
+      w.append(on, num(tc.pct, '1', 'pct'), t1, t2, num(tc.min, '0.5', 'min'));
+      row('Tip and hold check', w, 'Shows in Needs attention when a charge posts for more than it was pending, like a big tip or a gas station or hotel hold that grew. Default: 30% and $2. Needs bank sync.'); }
     { const det = document.createElement('details'); det.className = 'fd-showset'; const sm = document.createElement('summary'); sm.textContent = 'Sections & details to show (untick to hide)'; det.append(sm);
       const NAMES = { overview: 'Overview', accounts: 'Accounts', expenses: 'Expenses', budget: 'Budget', markets: 'Markets', review: 'Year in review' };
       const seen = new Set();

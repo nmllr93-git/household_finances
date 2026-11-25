@@ -80,7 +80,7 @@ test('SimpleFIN: pending charges are shown but not saved, and a tip that grows 3
   round = 2; state.b.lastTry = 0;
   const r2 = await eng.handle('POST', ['sync'], 'b', body({}));
   assert.equal(r2.body.added, 2); assert.equal(r2.body.pending.length, 0, 'posted charges replace their pending copies');
-  assert.equal(r2.body.flags.length, 1, 'the diner went from 40 to 55 (+37%); the gas station only +5%');
-  assert.equal(r2.body.flags[0].pending, 40); assert.equal(r2.body.flags[0].posted, 55);
-  const d = await eng.handle('POST', [], 'b', body({ dismiss: r2.body.flags[0].key })); assert.equal(d.body.flags.length, 0);
+  assert.equal(r2.body.flags.length, 2, 'both increases are kept; the dashboard filters by the % and $ you set');
+  const big = r2.body.flags.find((f) => f.posted / f.pending - 1 >= 0.3 && f.posted - f.pending >= 2); assert.equal(big.pending, 40); assert.equal(big.posted, 55);
+  const d = await eng.handle('POST', [], 'b', body({ dismiss: big.key })); assert.equal(d.body.flags.length, 1);
 });

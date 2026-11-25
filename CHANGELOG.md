@@ -8,7 +8,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 - Merge categories is easier to find: a Merge categories button in Transactions, and links on Spending by category and Budget, open it in Settings
 - New setting: hide pending charges from bank sync (Settings for this dashboard → Pending charges). They're never counted either way
 - **Pending transactions from bank sync:** charges your bank hasn't posted yet show in a Pending list at the top of Transactions, and as "Pending: $X" under each account. They aren't counted in budgets or totals, and each one leaves the list when it posts, so nothing shows twice
-- **Tip and hold check:** when a charge posts for 30% or more above its pending amount (a big tip, or a gas station or hotel hold that grew), it's flagged in Needs attention
+- **Tip and hold check:** when a charge posts well above its pending amount (a big tip, or a gas station or hotel hold that grew), it's flagged in Needs attention. You choose how much counts (default 30% and $2), or turn it off, in Settings for this dashboard
 - Bank sync settings now explain the timing: SimpleFIN gets new transactions from your banks about once a day, and Larenest checks SimpleFIN about every 6 hours
 
 ## Desktop 1.0.38
