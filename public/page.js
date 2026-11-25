@@ -1756,7 +1756,7 @@
       if (k === 'mortgage') numIn('…of which escrow ($)', 'escrow', 'taxes + insurance, e.g. 420');
       numIn('Extra principal / mo ($, optional)', 'extra', 'e.g. 100');
     }
-    row('Owner', rin(ae.owner, 'e.g. Nate, Joint', (v) => { ae.owner = v; }));
+    row('Owner', rin(ae.owner, 'e.g. Alex, Joint', (v) => { ae.owner = v; }));
     row('Notes', rin(ae.note, 'e.g. emergency fund, promo rate ends June', (v) => { ae.note = v; }));
     shareRows(box, ae, true);
     { const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = ae.active !== false; cb.addEventListener('change', () => { ae.active = cb.checked; });
@@ -3365,7 +3365,7 @@
       box.textContent = ''; box.append(rhead('Invite someone'));
       if (!addrs.length) { box.append(phMsg('To invite someone, first let other devices connect: on the host computer, turn on “Allow other devices” in Host options.')); return; }
       box.append(phMsg('Make a one-time link for a partner or family member. They open it (or scan the QR code) on their phone or computer and choose their own login and password. The link works once and expires after 7 days.'));
-      const r1 = document.createElement('div'); r1.className = 'fd-rb-row'; const nm = document.createElement('input'); nm.className = 'fd-in'; nm.placeholder = 'Their name (optional), e.g. McKenna'; nm.maxLength = 40; r1.append(nm); box.append(r1);
+      const r1 = document.createElement('div'); r1.className = 'fd-rb-row'; const nm = document.createElement('input'); nm.className = 'fd-in'; nm.placeholder = 'Their name (optional), e.g. Sam'; nm.maxLength = 40; r1.append(nm); box.append(r1);
       const pick = {};
       box.append(phMsg('Which dashboards can they open?'));
       for (const b of info.books) {
@@ -3375,7 +3375,7 @@
         r.append(lab, role); box.append(r);
       }
       const r2 = document.createElement('div'); r2.className = 'fd-rb-row'; const lab2 = document.createElement('label'); lab2.className = 'fd-check'; const own = document.createElement('input'); own.type = 'checkbox'; own.checked = true; lab2.append(own, ' Also give them a new dashboard of their own:');
-      const ownName = document.createElement('input'); ownName.className = 'fd-in'; ownName.placeholder = 'e.g. McKenna – Personal'; ownName.maxLength = 40;
+      const ownName = document.createElement('input'); ownName.className = 'fd-in'; ownName.placeholder = 'e.g. Sam – Personal'; ownName.maxLength = 40;
       nm.addEventListener('input', () => { if (!ownName.dataset.touched) ownName.value = nm.value.trim() ? `${nm.value.trim()} – Personal` : ''; }); ownName.addEventListener('input', () => { ownName.dataset.touched = '1'; });
       r2.append(lab2, ownName); box.append(r2);
       const msg = phMsg(''); const out = document.createElement('div');
@@ -3685,11 +3685,11 @@
   };
   // ---- API keys (server-wide; only the server owner can change them) ----
   const APIS = [
-    ['fred', 'FRED (St. Louis Fed)', 'https://fredaccount.stlouisfed.org/apikeys', 'Mortgage and Treasury rates, inflation (CPI) and Iowa City home prices. Powers the refinance, savings-rate and home-value alerts and “After inflation”.'],
+    ['fred', 'FRED (St. Louis Fed)', 'https://fredaccount.stlouisfed.org/apikeys', 'Mortgage and Treasury rates, inflation (CPI) and home prices for your state. Powers the refinance, savings-rate and home-value alerts and “After inflation”.'],
     ['finnhub', 'Finnhub', 'https://finnhub.io/register', 'Live stock prices, company news, earnings dates, 52-week ranges and analyst ratings for your holdings and watchlist. Free plan: 60 calls/minute.'],
     ['fmp', 'Financial Modeling Prep', 'https://site.financialmodelingprep.com/developer/docs', 'Market indexes, commodities (gold, oil), sector performance, top movers, dividend history, price targets and what ETFs hold. Free plan: 250 calls/day.'],
-    ['eia', 'U.S. Energy Information Administration', 'https://www.eia.gov/opendata/register.php', 'Weekly Midwest gas prices and monthly Iowa home electricity prices.'],
-    ['bls', 'Bureau of Labor Statistics', 'https://data.bls.gov/registrationEngine/', 'Midwest inflation by category: groceries, restaurants, energy, gasoline and shelter.'],
+    ['eia', 'U.S. Energy Information Administration', 'https://www.eia.gov/opendata/register.php', 'Weekly gas prices for your region and monthly home electricity prices for your state.'],
+    ['bls', 'Bureau of Labor Statistics', 'https://data.bls.gov/registrationEngine/', 'Inflation by category for your region: groceries, restaurants, energy, gasoline and shelter.'],
   ];
   let KEYS = null;
   // "Test": tries the pasted key with that service, and saves it straight away if it works.
@@ -3717,6 +3717,13 @@
       tr.append(c1, st0, c3); tb.append(tr);
     });
     t.append(tb); const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(t); box.append(sc);
+    { // local prices (gas, electricity, home prices, regional inflation) follow the state chosen here; nothing local until one is chosen
+      const r = document.createElement('div'); r.className = 'fd-rb-row'; const l = document.createElement('span'); l.className = 'fd-rb-lbl'; l.textContent = 'Your state (for local prices)';
+      const sel0 = document.createElement('select'); sel0.className = 'dash-select'; sel0.append(new Option('US averages only', ''));
+      'AL Alabama,AK Alaska,AZ Arizona,AR Arkansas,CA California,CO Colorado,CT Connecticut,DE Delaware,DC Washington D.C.,FL Florida,GA Georgia,HI Hawaii,ID Idaho,IL Illinois,IN Indiana,IA Iowa,KS Kansas,KY Kentucky,LA Louisiana,ME Maine,MD Maryland,MA Massachusetts,MI Michigan,MN Minnesota,MS Mississippi,MO Missouri,MT Montana,NE Nebraska,NV Nevada,NH New Hampshire,NJ New Jersey,NM New Mexico,NY New York,NC North Carolina,ND North Dakota,OH Ohio,OK Oklahoma,OR Oregon,PA Pennsylvania,RI Rhode Island,SC South Carolina,SD South Dakota,TN Tennessee,TX Texas,UT Utah,VT Vermont,VA Virginia,WA Washington,WV West Virginia,WI Wisconsin,WY Wyoming'.split(',').forEach((x) => { const [c, ...n] = x.split(' '); sel0.append(new Option(n.join(' '), c)); }); sel0.value = KEYS.state || ''; sel0.disabled = !KEYS.canEdit;
+      const m0 = document.createElement('span'); m0.className = 'fd-zero';
+      sel0.addEventListener('change', async () => { try { await FDStore.json('POST', '/api/keys', { state: sel0.value }); m0.textContent = '✓ Saved. Local prices refresh on the next update.'; KEYS.state = sel0.value; ecoState = 'idle'; } catch (e) { m0.textContent = 'Couldn’t save: ' + e.message; } });
+      r.append(l, sel0, m0); box.append(r); }
     { const k = document.createElement('p'); k.className = 'fd-note'; k.textContent = 'Everything else works without any key: Treasury and I-bond rates, exchange rates, U.S. holidays and vehicle lookups. The app is fully usable with no keys at all; each key adds extra data. Start with FRED, it adds the most.'; box.append(k); }
     if (KEYS.canEdit) { const msg = document.createElement('span'); msg.className = 'fd-zero'; const sv = rbtn('Save keys', async () => { if (!Object.keys(vals).length) return; sv.disabled = true;
         try { const r = await FDStore.fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(vals) }); if (!r.ok) throw new Error((await r.json()).error); KEYS = null; ecoState = 'idle'; mkState = 'idle'; qWant = ''; dash.draw('settingsView'); }
@@ -4615,7 +4622,7 @@
     for (const x of prefGet('assets', []) || []) {
       if (x.type === 'vehicle' && x.vin && x.vin.length === 17) { const v = vehLoad(x.vin); if (v && v.recalls && v.recalls.length) out.push({ lvl: 'warn', text: `${x.name}: NHTSA lists ${v.recalls.length} recall${v.recalls.length === 1 ? '' : 's'} for the ${v.year} ${v.make} ${v.model} (newest: ${v.recalls[0].component}). Check your VIN at nhtsa.gov/recalls to see if yours is affected.`, go: 'accounts' }); }
       if (x.type === 'home' && x.asOf) { const h = ser('fred', 'hpiIC') || ser('fred', 'hpiUS'), l = eLast(h), p = atOrBefore(h, x.asOf);
-        if (l && p && p[1] && l[0] > p[0]) { const ch = ((l[1] - p[1]) / p[1]) * 100; if (Math.abs(ch) >= 3) out.push({ lvl: 'info', text: `${x.name}: ${h === ser('fred', 'hpiIC') ? 'Iowa City' : 'US'} home prices are ${ch > 0 ? 'up' : 'down'} ${Math.abs(ch).toFixed(1)}% since you valued it (${x.asOf}). At that rate it’s worth about ${money0(Number(x.value) * (1 + ch / 100))}; update the value under Accounts.`, go: 'accounts' }); } }
+        if (l && p && p[1] && l[0] > p[0]) { const ch = ((l[1] - p[1]) / p[1]) * 100; if (Math.abs(ch) >= 3) out.push({ lvl: 'info', text: `${x.name}: ${h === ser('fred', 'hpiIC') && ECO.place ? ECO.place.name : 'US'} home prices are ${ch > 0 ? 'up' : 'down'} ${Math.abs(ch).toFixed(1)}% since you valued it (${x.asOf}). At that rate it’s worth about ${money0(Number(x.value) * (1 + ch / 100))}; update the value under Accounts.`, go: 'accounts' }); } }
     }
     return out;
   };
@@ -4644,8 +4651,8 @@
       const tb = document.createElement('table'); tb.className = 'fd-table'; CAL.slice(0, 14).forEach((c) => { const d = new Date(c.date + 'T12:00:00'); const tr = document.createElement('tr'); tr.append(td(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), 'fd-l'), td(c.name, 'fd-l'), td(c.full, 'fd-l fd-zero')); tb.append(tr); });
       const sc = document.createElement('div'); sc.className = 'fd-scroll'; sc.append(tb); el.append(sc);
       const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Release dates from FRED. Inflation, jobs and Fed announcements are the ones most likely to move markets and loan rates.'; el.append(n); }
-    if (!PART('e-infl')) grp('Inflation (price change over 12 months)', [infl('cpi', 'US, all items'), infl('cpiMW', 'Midwest, all items'), infl('foodHomeMW', 'Groceries'), infl('diningMW', 'Restaurants'), infl('energyMW', 'Energy'), infl('gasMW', 'Gasoline'), infl('shelterMW', 'Shelter')], 'Midwest figures from the Bureau of Labor Statistics. Compare with how your own spending in each category changed.');
-    if (!PART('e-ener')) grp('Energy & housing', [tile2('Midwest gas ($/gal)', ser('eia', 'gas'), (v) => '$' + v.toFixed(2)), tile2('Iowa home electricity', ser('eia', 'elec'), (v) => v.toFixed(1) + '¢/kWh'), infl('hpiIC', 'Iowa City home prices')]);
+    if (!PART('e-infl')) grp('Inflation (price change over 12 months)', [infl('cpi', 'US, all items'), infl('cpiMW', `${ECO.place ? ECO.place.region : 'US'}, all items`), infl('foodHomeMW', 'Groceries'), infl('diningMW', 'Restaurants'), infl('energyMW', 'Energy'), infl('gasMW', 'Gasoline'), infl('shelterMW', 'Shelter')], `${ECO.place ? ECO.place.region : 'US'} figures from the Bureau of Labor Statistics. Compare with how your own spending in each category changed.`);
+    if (!PART('e-ener')) grp('Energy & housing', [tile2(`${ECO.place ? ECO.place.gasArea : 'US'} gas ($/gal)`, ser('eia', 'gas'), (v) => '$' + v.toFixed(2)), tile2(`${ECO.place ? ECO.place.name : 'US'} home electricity`, ser('eia', 'elec'), (v) => v.toFixed(1) + '¢/kWh'), ...(ECO.place ? [infl('hpiIC', `${ECO.place.name} home prices`)] : [infl('hpiUS', 'US home prices')])]);
     const nh = ((ECO.holidays || []).filter((h) => h[0] >= new Date().toISOString().slice(0, 10))[0]); if (nh) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = `Next bank holiday: ${nh[1]} (${nh[0]}). Bills due that day usually post the next business day.`; el.append(p); }
     const foot = document.createElement('div'); foot.className = 'fd-rb-row'; const u = document.createElement('span'); u.className = 'fd-zero'; u.textContent = `Updated ${new Date(ECO.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · refreshes daily`; foot.append(u, rbtn('Refresh', () => { ecoState = 'idle'; loadEcon(true); })); el.append(foot);
     if ((ECO.errors || []).length) { const dt = document.createElement('details'); const sm = document.createElement('summary'); sm.textContent = `Data check: ${ECO.errors.length} item${ECO.errors.length === 1 ? '' : 's'} unavailable`; dt.append(sm); ECO.errors.forEach((e) => { const p = document.createElement('div'); p.className = 'fd-note'; p.textContent = e.replace(/api_key=\w+|registrationkey\W+\w+/g, ''); dt.append(p); }); el.append(dt); }
