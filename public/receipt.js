@@ -67,6 +67,12 @@
     else throw new Error('This device can’t read receipts.');
     return parse(text);
   }
-  const FDReceipt = { available: () => !!(plugin() || bridge()), read, parse };
+  // a PDF receipt (an e-receipt or invoice): its text is already in the file, so any device can read it (pdf.js, bundled)
+  async function readPdf(buffer) {
+    if (!root.FDPdf) throw new Error('This device can’t read PDFs.');
+    const lines = await root.FDPdf.readLines(buffer);
+    return parse(lines.map((l) => l.text).join('\n'));
+  }
+  const FDReceipt = { available: () => !!(plugin() || bridge()), read, readPdf, parse };
   if (typeof module !== 'undefined' && module.exports) module.exports = FDReceipt; else root.FDReceipt = FDReceipt;
 })(typeof window !== 'undefined' ? window : globalThis);

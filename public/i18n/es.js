@@ -434,3 +434,11 @@ window.FDI18n.add({
   'This device can’t read receipts.': 'Este dispositivo no puede leer recibos.', 'That file isn’t a photo this device can read.': 'Ese archivo no es una foto que este dispositivo pueda leer.',
   'Switch server…': 'Cambiar de servidor…',
 });
+window.FDI18n.add({
+  '📷 Scan a receipt (photo or PDF)': '📷 Escanear un recibo (foto o PDF)', '📎 Add a receipt (photo or PDF)': '📎 Agregar un recibo (foto o PDF)',
+  'Photo attached. It’s saved with this entry. (Reading the text of a photo needs the phone app; PDFs are read anywhere.)': 'Foto adjunta. Se guarda con esta entrada. (Leer el texto de una foto requiere la app del teléfono; los PDF se leen en cualquier dispositivo).',
+  '+ Add another receipt': '+ Agregar otro recibo', '+ Add a receipt (photo or PDF)': '+ Agregar un recibo (foto o PDF)', 'Open the PDF': 'Abrir el PDF', 'PDF receipt': 'Recibo en PDF', 'Saving…': 'Guardando…',
+  'That file is too large (3 MB max).': 'Ese archivo es demasiado grande (máx. 3 MB).', 'Couldn’t read that file.': 'No se pudo leer ese archivo.', 'This device can’t read PDFs.': 'Este dispositivo no puede leer PDF.',
+  'Receipts must be a photo (JPEG, PNG or WebP) or a PDF.': 'Los recibos deben ser una foto (JPEG, PNG o WebP) o un PDF.',
+});
+window.FDI18n.add({ 'Filled in the {0} from the receipt. Check them before saving; the receipt is saved with the entry.': 'Se completó {0} a partir del recibo. Revísalo antes de guardar; el recibo se guarda con la entrada.', 'Couldn’t read this receipt. Fill it in by hand; it’s still saved with the entry.': 'No se pudo leer este recibo. Complétalo a mano; igual se guarda con la entrada.' });

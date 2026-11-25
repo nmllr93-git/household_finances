@@ -21,7 +21,7 @@
   'use strict';
   const MAX_IMPORT_ROWS = 5000; // per statement import; bigger files are refused with a clear message, never trimmed
   const COLLECTIONS = ['imports', 'manual', 'edits', 'rules', 'budgets', 'accounts', 'goals', 'holdings', 'prefs', 'shares', 'receipts'];
-  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']; // receipts: photos, or a PDF (e-receipts, invoices)
   const MAX_FILE = 3 * 1024 * 1024; // bytes after decoding
   const SEED_SETS = ['sheet_history', 'sheet_balances', 'sheet_budgets'];
   const str = (v, n) => String(v ?? '').slice(0, n);
@@ -195,8 +195,8 @@
       if (a === 'undo-import' && method === 'POST' && store.removeMany) return undoImport(book, await getBody());
       if (a === 'files' && store.putFile) {
         if (method === 'POST' && !b) { const f = await getBody(5 * 1024 * 1024); const mime = String(f && f.mime || ''), data = String(f && f.data || '').replace(/^data:[^,]*,/, '');
-          if (!IMAGE_TYPES.includes(mime)) return reply(400, { error: 'Receipts must be a JPEG, PNG or WebP photo.' });
-          if (!/^[A-Za-z0-9+/=]+$/.test(data) || data.length * 0.75 > MAX_FILE) return reply(413, { error: 'That photo is too large (3 MB max).' });
+          if (!IMAGE_TYPES.includes(mime)) return reply(400, { error: 'Receipts must be a photo (JPEG, PNG or WebP) or a PDF.' });
+          if (!/^[A-Za-z0-9+/=]+$/.test(data) || data.length * 0.75 > MAX_FILE) return reply(413, { error: 'That file is too large (3 MB max).' });
           const id = store.newId(); await store.putFile({ id, bookId: book.id, mime, data, created: new Date().toISOString(), createdBy: user }); return reply(201, { id }); }
         if (method === 'GET' && b) { const f = await store.getFile(book.id, b); return f ? reply(200, f, { file: true }) : reply(404, { error: 'Not found' }); }
         if (method === 'DELETE' && b) { await store.deleteFile(book.id, b); return reply(200, { ok: true }); }

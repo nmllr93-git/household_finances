@@ -1262,23 +1262,27 @@
   // shrink phone photos before saving: longest side 1600px, JPEG
   const shrink = (file) => new Promise((res, rej) => { const img = new Image(), u = URL.createObjectURL(file); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); res(c.toDataURL('image/jpeg', 0.82)); }; img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('That file isn\u2019t a photo this device can read.')); }; img.src = u; });
+  const readDataUrl = (file) => new Promise((res, rej) => { if (file.size > 3 * 1024 * 1024) return rej(new Error(TR('That file is too large (3 MB max).'))); const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error(TR('Couldn’t read that file.'))); fr.readAsDataURL(file); });
   dash.draw('txReceipt', (el) => {
     el.replaceChildren(); if (!editing) return;
     const mine = rows('receipts').filter((r) => r.txKey === editing.key), ro = document.body.classList.contains('fd-readonly');
     const h = document.createElement('div'); h.className = 'fd-rb-h'; h.textContent = 'Receipt photos'; el.append(h);
     const wrap = document.createElement('div'); wrap.className = 'fd-rcpts'; el.append(wrap);
-    mine.forEach((r) => { const f = document.createElement('figure'); const img = document.createElement('img'); img.alt = r.name || 'Receipt'; img.loading = 'lazy'; fileUrl(r.fileId).then((u) => { img.src = u; }).catch(() => { img.alt = 'Photo not found'; });
+    mine.forEach((r) => { const f = document.createElement('figure'); let img;
+      if (r.mime === 'application/pdf') { img = document.createElement('button'); img.type = 'button'; img.className = 'fd-rcpt-pdf'; img.textContent = '📄 ' + (r.name && r.name !== 'Receipt' ? r.name : 'PDF receipt'); img.title = TR('Open the PDF'); }
+      else { img = document.createElement('img'); img.alt = r.name || 'Receipt'; img.loading = 'lazy'; fileUrl(r.fileId).then((u) => { img.src = u; }).catch(() => { img.alt = 'Photo not found'; }); }
       img.addEventListener('click', () => fileUrl(r.fileId).then((u) => window.open(u, '_blank')).catch(() => {}));
       f.append(img); if (!ro) f.append(rbtn('Remove', async () => { if (!confirm('Remove this receipt photo?')) return; try { const d = await db(); await d.doc('data/household/receipts/' + r.id).delete(); await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files/${encodeURIComponent(r.fileId)}`, { method: 'DELETE' }); } catch (e) { alert('Not removed: ' + e.message); } }));
       wrap.append(f); });
     if (ro) { if (!mine.length) el.append(phMsg('No receipt photos.')); return; }
-    const lab = document.createElement('label'); lab.className = 'fd-btn fd-sm fd-quiet'; lab.textContent = mine.length ? '+ Add another photo' : '+ Add a receipt photo';
-    const fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.setAttribute('capture', 'environment'); fi.hidden = true; lab.append(fi);
+    const lab = document.createElement('label'); lab.className = 'fd-btn fd-sm fd-quiet'; lab.textContent = mine.length ? '+ Add another receipt' : '+ Add a receipt (photo or PDF)';
+    const fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*,application/pdf'; fi.hidden = true; lab.append(fi);
     const msg = phMsg('');
-    fi.addEventListener('change', async () => { const file = fi.files[0]; if (!file) return; msg.className = 'fd-note'; msg.textContent = 'Saving photo…';
-      try { const url = await shrink(file), r = await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mime: 'image/jpeg', data: url.split(',')[1] }) });
+    fi.addEventListener('change', async () => { const file = fi.files[0]; if (!file) return; msg.className = 'fd-note'; msg.textContent = TR('Saving…');
+      try { const pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''); const mime = pdf ? 'application/pdf' : 'image/jpeg';
+        const url = pdf ? await readDataUrl(file) : await shrink(file), r = await FDStore.fetch(`/api/books/${encodeURIComponent(window.HF.state.bookId)}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mime, data: url.split(',')[1] }) });
         const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Not saved');
-        const d = await db(); await d.collection('data/household/receipts').add({ book: book(), txKey: editing.key, fileId: j.id, name: file.name || 'Receipt', mime: 'image/jpeg', size: Math.round(url.length * 0.75) }); msg.textContent = ''; }
+        const d = await db(); await d.collection('data/household/receipts').add({ book: book(), txKey: editing.key, fileId: j.id, name: file.name || 'Receipt', mime, size: Math.round(url.length * 0.75) }); msg.textContent = ''; }
       catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = 'Not saved: ' + e.message; } });
     el.append(lab, msg);
   });
