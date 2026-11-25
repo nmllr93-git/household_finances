@@ -17,7 +17,10 @@ test('other devices: http sign-in is refused and pages redirect to https; ping s
   assert.equal((await get(`http://${lanIp}:${port}/api/ping`)).status, 200);
   const l = await get(`http://${lanIp}:${port}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'alice', password: 'password123' }) });
   assert.equal(l.status, 403); assert.match((await l.json()).https, /^https:/);
-  const pg = await get(`http://${lanIp}:${port}/`); assert.equal(pg.status, 307); assert.match(pg.headers.get('location'), /^https:\/\//);
+  // pages: a tiny page that moves to the https:// address, bringing this device's own settings along
+  const pg = await get(`http://${lanIp}:${port}/`); assert.equal(pg.status, 200); const html = await pg.text();
+  assert.match(html, /location\.replace\(to\)/); assert.match(html, /var to="https:\/\//); assert.match(html, /k!=='fd-lock'/); assert.match(html, /replace\(\/\\\+\/g,'-'\)/);
+  const js = await get(`http://${lanIp}:${port}/app.js`); assert.equal(js.status, 307); assert.match(js.headers.get('location'), /^https:\/\//);
   assert.equal((await httpsJson(lanIp, '/api/login', { username: 'alice', password: 'password123' })).status, 200);
 });
 test('the computer itself can still use http', async () => {

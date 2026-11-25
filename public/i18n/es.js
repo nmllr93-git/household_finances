@@ -385,3 +385,44 @@ window.FDI18n.add({
   'Subscriptions are your Subscriptions category plus known streaming/software services. Recurring bills are other vendors charged at least 3 of the last 12 months at about the same amount. “Per year” is the latest charge × 12 for monthly charges.': 'Las suscripciones son tu categoría Suscripciones más servicios conocidos de streaming o software. Las facturas recurrentes son otros comercios cobrados al menos 3 de los últimos 12 meses por un monto similar. “Por año” es el último cargo × 12 en los cargos mensuales.',
 });
 window.FDI18n.add({ 'No key file at {0}.': 'No hay archivo de claves en {0}.', 'Only the {0} key was found. {1}': 'Solo se encontró la clave de {0}. {1}' });
+window.FDI18n.add({
+  'Logins': 'Usuarios', 'Only you can sign in so far. Use Invite someone to add a partner or family member.': 'Por ahora solo tú puedes iniciar sesión. Usa Invitar a alguien para agregar a tu pareja o a un familiar.',
+  'Everyone else who can sign in to this server. If someone forgets their password, set a new one here and tell them what it is; they can’t see it again afterwards.': 'Todas las demás personas que pueden iniciar sesión en este servidor. Si alguien olvida su contraseña, define una nueva aquí y díselo; después no se puede volver a ver.',
+  'view only': 'solo ver', 'No dashboards': 'Sin tableros', 'New password (8+ characters)': 'Nueva contraseña (8+ caracteres)', 'Save password': 'Guardar contraseña', 'Set new password': 'Definir nueva contraseña', 'Remove': 'Quitar',
+  '✓ New password saved. They’re signed out everywhere and sign in with the new one.': '✓ Nueva contraseña guardada. Su sesión se cerró en todos lados y entra con la nueva.',
+  'Remove the login {0}? They’re signed out and can’t sign in again. Dashboards and their data stay.': '¿Quitar el usuario {0}? Se cierra su sesión y no podrá volver a entrar. Los tableros y sus datos se conservan.',
+  'Passwords need at least 8 characters.': 'Las contraseñas necesitan al menos 8 caracteres.', 'Choose another login. Your own password is changed on the host computer.': 'Elige otro usuario. Tu propia contraseña se cambia en la computadora servidor.',
+});
+window.FDI18n.add({ 'Switch to the https:// address': 'Cambiar a la dirección https://', 'This device’s settings (language, layout, which sections are open) come along. You’ll sign in again, and the browser warns once about your computer’s own certificate.': 'Los ajustes de este dispositivo (idioma, diseño, secciones abiertas) se conservan. Tendrás que iniciar sesión otra vez, y el navegador avisará una vez sobre el certificado propio de tu computadora.' });
+window.FDI18n.add({
+  'Savings rate by month': 'Tasa de ahorro por mes', 'The share of income kept each month, after everyday and one-time spending.': 'La parte del ingreso que se conservó cada mes, después de gastos diarios y únicos.',
+  'Net worth over the year': 'Patrimonio neto durante el año', 'Start': 'Inicio', 'End': 'Fin', 'Change': 'Cambio',
+  'Cash, investments and debts at the end of each month; home and vehicle values aren’t included.': 'Efectivo, inversiones y deudas a fin de cada mes; no incluye el valor de casa ni vehículos.',
+  'Biggest changes vs {0}': 'Mayores cambios frente a {0}', 'Top vendors': 'Principales comercios', 'Spent': 'Gastado', 'Visits': 'Visitas', 'Average': 'Promedio',
+});
+window.FDI18n.add({
+  'Copy settings to another dashboard': 'Copiar ajustes a otro tablero', 'Copy': 'Copiar', 'Copying…': 'Copiando…',
+  'Copy this dashboard’s layout, colors, custom reports and display settings to {0}? Its own data, budgets and people stay as they are.': '¿Copiar el diseño, los colores, los informes personalizados y los ajustes de visualización de este tablero a {0}? Sus datos, presupuestos y personas quedan como están.',
+  '✓ Copied to {0}. Open it to see the result.': '✓ Copiado a {0}. Ábrelo para ver el resultado.', 'Nothing to copy yet: this dashboard still uses the default look.': 'Aún no hay nada que copiar: este tablero usa el aspecto predeterminado.',
+  'Copies the layout (sections and their order), chart colors, custom reports, top-row tiles and display choices. Data, budgets, accounts and the people in a shared dashboard aren’t copied.': 'Copia el diseño (secciones y su orden), colores de gráficos, informes personalizados, mosaicos de la fila superior y opciones de visualización. No se copian datos, presupuestos, cuentas ni las personas de un tablero compartido.',
+});
+window.FDI18n.add({
+  'Reminder: cancel {0}': 'Recordatorio: cancelar {0}', 'Reminder: call {0} about the price': 'Recordatorio: llamar a {0} por el precio', 'Reminder: review {0}': 'Recordatorio: revisar {0}',
+  '(today or earlier)': '(hoy o antes)', '(on {0})': '(el {0})', 'Set in Larenest → Subscriptions': 'Configurado en Larenest → Suscripciones',
+  'Remind me to cancel, call about the price, or review this': 'Recordarme cancelar, llamar por el precio o revisar esto',
+  'Cancel it': 'Cancelarla', 'Call about the price': 'Llamar por el precio', 'Review it': 'Revisarla', 'Note (optional), e.g. trial ends': 'Nota (opcional), p. ej. termina la prueba',
+  'Save reminder': 'Guardar recordatorio', 'Remove reminder': 'Quitar recordatorio', 'Close': 'Cerrar', '{0}% more than a year ago': '{0}% más que hace un año',
+  '{0} costs {1}% more than a year ago: {2} → {3}, about {4} more a year. Worth a call to ask for a better price, or cancelling?': '{0} cuesta {1}% más que hace un año: {2} → {3}, unos {4} más al año. ¿Vale la pena llamar para pedir un mejor precio, o cancelar?',
+  'tomorrow': 'mañana', 'in {0} days': 'en {0} días', '{0} is due {1}': '{0} vence {1}', 'About {0} · Larenest': 'Unos {0} · Larenest',
+});
+window.FDI18n.add({
+  'App lock': 'Bloqueo de la app', 'Unlock Larenest': 'Desbloquear Larenest', 'Larenest is locked': 'Larenest está bloqueado', 'PIN': 'PIN', 'Unlock': 'Desbloquear', 'Use fingerprint or Face ID': 'Usar huella o Face ID',
+  'Forgot the PIN? Use fingerprint or Face ID if it’s on. Otherwise the only way in is to clear the app’s data, which deletes what’s on this phone, so restore a backup file afterwards.': '¿Olvidaste el PIN? Usa la huella o Face ID si están activados. Si no, la única forma de entrar es borrar los datos de la app, lo que elimina lo guardado en este teléfono; luego restaura una copia de seguridad.',
+  'Too many tries. Wait {0} seconds.': 'Demasiados intentos. Espera {0} segundos.', 'That PIN isn’t right.': 'Ese PIN no es correcto.', 'Use 4 to 8 digits.': 'Usa de 4 a 8 dígitos.',
+  'Ask for a PIN (and fingerprint or Face ID, if this phone has it) whenever Larenest opens. It keeps out someone who picks up your phone.': 'Pide un PIN (y huella o Face ID, si el teléfono lo tiene) cada vez que se abre Larenest. Evita que alguien que tome tu teléfono vea tus datos.',
+  'New PIN (4–8 digits)': 'PIN nuevo (4–8 dígitos)', 'Type it again': 'Escríbelo otra vez', 'Turn on': 'Activar', 'The two PINs don’t match.': 'Los dos PIN no coinciden.',
+  'On. Larenest asks for the PIN when it opens.': 'Activado. Larenest pide el PIN al abrirse.', 'Also unlock with fingerprint or Face ID': 'Desbloquear también con huella o Face ID', 'Lock again after': 'Volver a bloquear tras',
+  'Right away': 'De inmediato', '1 minute in the background': '1 minuto en segundo plano', '5 minutes in the background': '5 minutos en segundo plano', '15 minutes in the background': '15 minutos en segundo plano',
+  'Current PIN': 'PIN actual', 'Change PIN': 'Cambiar PIN', '✓ PIN changed.': '✓ PIN cambiado.', 'Type the current PIN to turn the lock off.': 'Escribe el PIN actual para desactivar el bloqueo.',
+  'The lock is a privacy screen. If you forget the PIN and can’t use fingerprint or Face ID, the only way in is to clear the app’s data, so keep a backup file.': 'El bloqueo es una pantalla de privacidad. Si olvidas el PIN y no puedes usar huella o Face ID, la única forma de entrar es borrar los datos de la app, así que guarda una copia de seguridad.',
+});

@@ -610,6 +610,22 @@ async function api(req, res, url) {
     if (req.method === 'GET') return send(res, 200, backupHealth(false, isOwner));
   }
   // addresses other devices can use (for the "Connect a phone" QR code); empty when the server only listens on this computer
+  // The server owner manages other logins from Settings: set a new password, or remove the login
+  if (parts[1] === 'logins') {
+    const owner = ownerName();
+    if (user !== owner) return send(res, 403, { error: `Only ${owner} (who set up this server) can manage logins.` });
+    const name = parts[2] ? decodeURIComponent(parts[2]).toLowerCase() : '';
+    if (req.method === 'GET' && !name) {
+      const bk = new Map(db.prepare('SELECT id, name FROM books').all().map((b) => [b.id, b.name]));
+      return send(res, 200, { owner, logins: db.prepare('SELECT username, created FROM users ORDER BY username').all().filter((u) => u.username !== owner).map((u) => ({ name: u.username, created: u.created,
+        books: db.prepare('SELECT book_id, role FROM members WHERE username = ?').all(u.username).map((m) => ({ name: bk.get(m.book_id) || m.book_id, role: m.role })) })) });
+    }
+    if (!name || name === owner) return send(res, 400, { error: 'Choose another login. Your own password is changed on the host computer.' });
+    if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) return send(res, 404, { error: 'There’s no login called ' + name + '.' });
+    if (req.method === 'POST' && parts[3] === 'password') { const b = await readJson(req); try { resetPassword(name, String(b.password || '')); } catch (e) { return send(res, 400, { error: e.message }); } console.log(`${user} set a new password for ${name}.`); return send(res, 200, { ok: true }); }
+    if (req.method === 'DELETE') { db.prepare('DELETE FROM users WHERE username = ?').run(name); try { db.prepare('UPDATE invites SET created_by = NULL WHERE created_by = ?').run(name); } catch {} console.log(`${user} removed the login ${name}.`); return send(res, 200, { ok: true }); }
+    return send(res, 404, { error: 'Not found' });
+  }
   if (parts[1] === 'invites') {
     if (user !== ownerName()) return send(res, 403, { error: `Only ${ownerName()} (who set up this server) can invite people.` });
     if (req.method === 'GET') { const names = new Map(db.prepare('SELECT id, name FROM books').all().map((b) => [b.id, b.name]));
@@ -727,7 +743,10 @@ function start(opts = {}) {
       if (SELFTLS && !isHttps(req) && !isLoopback(req) && !allowHttp() && url.pathname !== '/api/ping') {
         const to = `https://${String(req.headers.host || '').replace(/[^\w.:\[\]-]/g, '')}${req.url}`;
         if (url.pathname.startsWith('/api/')) return send(res, 403, { error: 'This server only accepts encrypted connections from other devices. Open the https:// address instead.', https: to });
-        res.writeHead(307, { Location: to, 'Cache-Control': 'no-store' }); return res.end(); // pages: go to the encrypted address
+        // pages: go to the encrypted address, bringing this device's own settings along (they're kept per address by the browser)
+        if (req.method !== 'GET' || !/\.html$|\/$/.test(url.pathname)) { res.writeHead(307, { Location: to, 'Cache-Control': 'no-store' }); return res.end(); }
+        const body = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Larenest</title><p style="font-family:sans-serif">Opening the secure address…</p><script>(function(){var to=${JSON.stringify(to).replace(/</g, '\\u003c')};try{var o={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(/^fd-/.test(k)&&k!=='fd-lock')o[k]=localStorage.getItem(k);}if(Object.keys(o).length){to=to.split('#')[0]+'#fdcarry='+btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');}}catch(e){}location.replace(to);})();</script><noscript><a href="${to.replace(/"/g, '&quot;')}">Continue to the secure address</a></noscript>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'" }); return res.end(body);
       }
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');

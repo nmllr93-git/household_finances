@@ -898,6 +898,21 @@
       x.addEventListener('click', () => setNotRec(v, false)); sp.append(x); p.append(sp, i < l.length - 1 ? ' ' : ''); });
     el.append(p);
   });
+  // review / cancel reminders for subscriptions and bills (saved per dashboard; phones also get a notification that morning)
+  const SUB_WHY = { cancel: 'Reminder: cancel {0}', call: 'Reminder: call {0} about the price', review: 'Reminder: review {0}' };
+  const todayISO = () => new Date().toLocaleDateString('en-CA');
+  const subRem = () => prefGetC('subRemind', []);
+  const subRemindersDue = () => { const lim = new Date(Date.now() + 3 * 864e5).toLocaleDateString('en-CA'); return subRem().filter((r) => r.date && r.date <= lim); };
+  const remEditor = (vendor, host) => {
+    const cur = subRem().find((r) => r.vendor === vendor) || { vendor, date: '', why: 'cancel', note: '' };
+    const w = document.createElement('div'); w.className = 'fd-rb-row fd-remed';
+    const why = document.createElement('select'); why.className = 'dash-select'; [['cancel', 'Cancel it'], ['call', 'Call about the price'], ['review', 'Review it']].forEach(([k, l]) => why.append(new Option(l, k))); why.value = cur.why;
+    const d = document.createElement('input'); d.type = 'date'; d.value = cur.date || new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA');
+    const nt = document.createElement('input'); nt.className = 'fd-in'; nt.placeholder = 'Note (optional), e.g. trial ends'; nt.maxLength = 80; nt.value = cur.note || '';
+    const save = rbtn('Save reminder', async () => { const list = subRem().filter((r) => r.vendor !== vendor); list.push({ vendor, date: d.value, why: why.value, note: nt.value.trim() }); await prefSetC('subRemind', list); dash.draw('subsRows'); dash.draw('billNotify'); }, false);
+    const del = rbtn(cur.date ? 'Remove reminder' : 'Close', async () => { if (cur.date) { await prefSetC('subRemind', subRem().filter((r) => r.vendor !== vendor)); dash.draw('billNotify'); } dash.draw('subsRows'); });
+    w.append(why, d, nt, save, del); host.append(w); why.focus();
+  };
   dash.draw('subsRows', (el) => {
     el.replaceChildren();
     if (st('subs') !== 'ok') return;
@@ -909,7 +924,12 @@
       const c = td(kind === 'Subscription' ? 'Subscriptions' : 'Recurring bills'); c.colSpan = 6; h.append(c); el.append(h);
       for (const x of g) {
         const tr = document.createElement('tr'); tr.dataset.key = enc(x.key);
-        const vc = td(x.vendor); if (!document.body.classList.contains('fd-readonly')) vc.append(' ', notRecBtn(x.vendor));
+        const vc = td(x.vendor); if (!document.body.classList.contains('fd-readonly')) { vc.append(' ', notRecBtn(x.vendor));
+          const rm = subRem().find((r) => r.vendor === x.vendor); const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'fd-link fd-rembtn' + (rm ? ' is-on' : ''); bt.textContent = rm ? '🔔 ' + rm.date : '🔔';
+          bt.title = rm ? TR(SUB_WHY[rm.why] || SUB_WHY.review).replace('{0}', x.vendor) : TR('Remind me to cancel, call about the price, or review this'); bt.setAttribute('aria-label', bt.title);
+          bt.addEventListener('click', () => { const nx = tr.nextElementSibling; if (nx && nx.classList.contains('fd-remrow')) { nx.remove(); return; } const r2 = document.createElement('tr'); r2.className = 'fd-remrow'; const c2 = document.createElement('td'); c2.colSpan = 6; r2.append(c2); tr.after(r2); remEditor(x.vendor, c2); });
+          vc.append(' ', bt); }
+        { const pc = priceChanges().find((p) => p.vendor === x.vendor && p.diff > 0); if (pc) { const up = document.createElement('span'); up.className = 'fd-pill fd-bad'; up.textContent = `↑ ${pc.pct}%`; up.title = pc.year ? TR('{0}% more than a year ago').replace('{0}', pc.pct) : `${money2(pc.prev)} → ${money2(pc.last)}`; vc.append(' ', up); } }
         tr.append(vc, td(money2(x.lastCharge)), td(String(x.months)), td(money2(x.avg)), td(money0(x.yearly)));
         const sp = document.createElement('td'); window.FD.sparkline(sp, x.series); tr.append(sp);
         el.append(tr);
@@ -2052,6 +2072,16 @@
       if (Math.abs(diff) < 0.5 || Math.abs(diff) / prev.amount < 0.02 || daysSince(last.date) > 120) continue;
       out.push({ vendor: s.vendor, kind: s.kind, prev: prev.amount, last: last.amount, diff, pct: Math.round((diff / prev.amount) * 100), date: last.date });
     }
+    // slow creep: the latest charge vs the one about a year before (only when the last-vs-previous check didn't already catch it)
+    for (const s of rows('subs').filter((x) => x.book === book())) {
+      if (out.some((o) => o.vendor === s.vendor)) continue;
+      const tx = rows('txns').filter((t) => t.book === book() && t.type === 'expense' && t.vendor === s.vendor && t.date).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      if (tx.length < 3) continue; const last = tx[tx.length - 1]; if (daysSince(last.date) > 120) continue;
+      const lt = Date.parse(String(last.date).slice(0, 10)); const old = tx.filter((t) => { const d = (lt - Date.parse(String(t.date).slice(0, 10))) / 864e5; return d >= 330 && d <= 430; }).pop();
+      if (!old) continue; const diff = Math.round((last.amount - old.amount) * 100) / 100;
+      if (diff < 1 || diff / old.amount < 0.05) continue;
+      out.push({ vendor: s.vendor, kind: s.kind, prev: old.amount, last: last.amount, diff, pct: Math.round((diff / old.amount) * 100), date: last.date, year: true, since: old.date, extra: Math.round(diff * (Math.abs(s.yearly - s.lastCharge * 12) < 1 ? 12 : 1)) });
+    }
     return out.sort((a, b) => String(b.date).localeCompare(String(a.date)));
   };
   dash.draw('priceRows', (el) => {
@@ -2094,7 +2124,8 @@
     const unc = rows('txns').filter((t) => t.book === book() && t.category === 'Uncategorized' && inPer.has(t.month)).length;
     if (unc) out.push({ id: 'uncat', sig: String(unc), lvl: 'info', text: `${unc} transaction${unc === 1 ? '' : 's'} in this range need${unc === 1 ? 's' : ''} a category.`, go: 'needs' });
     for (const x of econAlerts()) out.push(x);
-    for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
+    for (const x of priceChanges()) out.push({ id: 'price:' + x.vendor, sig: x.date, lvl: x.diff > 0 ? 'warn' : 'info', text: x.year ? TR('{0} costs {1}% more than a year ago: {2} → {3}, about {4} more a year. Worth a call to ask for a better price, or cancelling?').replace('{0}', x.vendor).replace('{1}', x.pct).replace('{2}', money2(x.prev)).replace('{3}', money2(x.last)).replace('{4}', money0(x.extra)) : `${x.vendor} ${x.diff > 0 ? 'went up' : 'went down'}: ${money2(x.prev)} → ${money2(x.last)} on ${x.date}.`, go: 'subscriptions' });
+    for (const r of subRemindersDue()) out.push({ id: 'subrem:' + r.vendor + ':' + r.date, sig: r.date, lvl: 'warn', text: TR(SUB_WHY[r.why] || SUB_WHY.review).replace('{0}', r.vendor) + ' ' + (r.date <= todayISO() ? TR('(today or earlier)') : TR('(on {0})').replace('{0}', r.date)) + (r.note ? ' · ' + r.note : ''), go: 'subscriptions' });
     try { const dp = dupPairs(); if (dp.length) out.push({ id: 'dupes', sig: String(dp.length), lvl: 'warn', text: `${dp.length} transaction${dp.length === 1 ? ' looks' : 's look'} like ${dp.length === 1 ? 'a duplicate' : 'duplicates'}: the same purchase from bank sync and from a statement, a few days apart. Review and keep one copy.`, go: 'dupes' }); } catch {}
     try { if (hasBiz()) { const q0 = bizNextDue(), days = q0 ? Math.round((Date.parse(q0.due) - Date.now()) / 864e5) : 99;
       if (q0 && days <= 14) out.push({ id: `biztax:${q0.year}:${q0.q}`, sig: q0.due, lvl: 'warn', text: `Quarterly estimated tax (Q${q0.q} ${q0.year}) is due ${q0.due}${days <= 0 ? ' (today)' : ` (in ${days} day${days === 1 ? '' : 's'})`}. About ${money0(q0.estimate)} set aside from business profit.`, go: 'biztax' });
@@ -2537,7 +2568,7 @@
     if (!ry || !ys.includes(ry)) ry = ys[ys.length - 1];
     const bar = document.createElement('div'); bar.className = 'fd-rb-row';
     const s = document.createElement('select'); s.className = 'dash-select'; ys.slice().reverse().forEach((y) => s.append(new Option(y, y))); s.value = ry;
-    s.addEventListener('change', () => { ry = s.value; rmo = null; ['reviewHead', 'reviewMonths', 'reviewSnap', 'reviewCats'].forEach((d) => dash.draw(d)); });
+    s.addEventListener('change', () => { ry = s.value; rmo = null; ['reviewHead', 'reviewExtra', 'reviewMonths', 'reviewSnap', 'reviewCats'].forEach((d) => dash.draw(d)); });
     const lab = document.createElement('span'); lab.textContent = 'Year'; bar.append(lab, s);
     const y = rStats(rTx(ry + '-')), py = rStats(rTx(String(+ry - 1) + '-'));
     const months = [...new Set(rTx(ry + '-').map((t) => t.month))].sort();
@@ -2561,6 +2592,38 @@
       if (a0 && a1 && a1[0] > a0[0] && py.spend) { const infl = ((a1[1] - a0[1]) / a0[1]) * 100, sp = ((y.spend - py.spend) / py.spend) * 100, real = sp - infl;
         g.append(tile('After inflation', `${real >= 0 ? '+' : '−'}${Math.abs(real).toFixed(1)}%`, `spending ${sp >= 0 ? '+' : '−'}${Math.abs(sp).toFixed(1)}% vs prices ${infl >= 0 ? '+' : '−'}${Math.abs(infl).toFixed(1)}%`, real > 0 ? 'fd-bad' : 'fd-good')); } }
     el.append(bar, g, hideBar());
+  });
+  // year in review extras: savings rate month by month, net worth over the year, biggest changes vs last year, top vendors
+  dash.draw('reviewExtra', (el) => {
+    if (st('txns') !== 'ok') return;
+    el.replaceChildren(); if (!ry) return;
+    const y = rStats(rTx(ry + '-')), py = rStats(rTx(String(+ry - 1) + '-'));
+    const wrap = document.createElement('div'); wrap.className = 'fd-grid2 fd-yx';
+    // savings rate by month
+    const sr = document.createElement('div'); const h1 = document.createElement('p'); h1.className = 'fd-rb-h'; h1.textContent = 'Savings rate by month'; sr.append(h1);
+    const bars = document.createElement('div'); bars.className = 'fd-srbars';
+    let any = false;
+    for (let i = 1; i <= 12; i++) { const m = `${ry}-${pad2(i)}`, s = rStats(rTx(m)); const c = document.createElement('div'); c.className = 'fd-srbar';
+      const b = document.createElement('span'); const lab = document.createElement('small'); lab.textContent = mName(m, 'narrow');
+      if (s.rate != null && s.n) { any = true; const r = Math.max(-100, Math.min(100, s.rate)); b.style.height = Math.max(2, Math.abs(r) * 1.1) + 'px'; b.className = r >= 0 ? 'up' : 'down'; c.title = `${mName(m)}: ${s.rate}%`; const v = document.createElement('small'); v.textContent = s.rate + '%'; c.append(v); }
+      c.append(b, lab); bars.append(c); }
+    if (any) { sr.append(bars); const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'The share of income kept each month, after everyday and one-time spending.'; sr.append(n); wrap.append(sr); }
+    // net worth over the year
+    { const by = {}; rows('balance_totals').filter((r) => r.book === book() && String(r.month).startsWith(ry) && ['deposit', 'investment', 'credit', 'loan', 'mortgage'].includes(r.kind)).forEach((r) => { by[r.month] = (by[r.month] || 0) + (['credit', 'loan', 'mortgage'].includes(r.kind) ? -Math.abs(r.total) : r.total); });
+      const ms = Object.keys(by).sort();
+      if (ms.length >= 2) { const a = by[ms[0]], z = by[ms[ms.length - 1]], d = z - a;
+        const box = document.createElement('div'); const h = document.createElement('p'); h.className = 'fd-rb-h'; h.textContent = 'Net worth over the year'; box.append(h);
+        const g = document.createElement('div'); g.className = 'fd-rtiles'; g.append(tile('Start', money0(a), mName(ms[0], 'short')), tile('End', money0(z), mName(ms[ms.length - 1], 'short')), tile('Change', (d >= 0 ? '+' : '−') + money0(Math.abs(d)), a ? `${d >= 0 ? '+' : '−'}${Math.abs(Math.round((d / Math.abs(a)) * 100))}%` : '', d >= 0 ? 'fd-good' : 'fd-bad'));
+        box.append(g); const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Cash, investments and debts at the end of each month; home and vehicle values aren’t included.'; box.append(n); wrap.append(box); } }
+    // biggest changes vs last year (categories), when there is a last year to compare
+    if (py.n) { const keys = new Set([...Object.keys(y.cats), ...Object.keys(py.cats)]);
+      const ch = [...keys].map((k) => [k, (y.cats[k] || 0) - (py.cats[k] || 0)]).filter(([, d]) => Math.abs(d) >= 50).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
+      if (ch.length) wrap.append(miniTable(TR('Biggest changes vs {0}').replace('{0}', String(+ry - 1)), ch.map(([k, d]) => [[k, ''], money0(y.cats[k] || 0), [(d >= 0 ? '+' : '−') + money0(Math.abs(d)), d > 0 ? 'fd-bad' : 'fd-good']]), ['Category', ry, 'Change'])); }
+    // top vendors with visits and average
+    { const vis = {}; for (const t of rTx(ry + '-')) if (t.type === 'expense' && !/^transfers?$/i.test(t.vendor)) vis[t.vendor] = (vis[t.vendor] || 0) + 1;
+      const top = y.topVend.slice(0, 6); if (top.length) wrap.append(miniTable('Top vendors', top.map(([v, a]) => [[v, ''], money0(a), String(vis[v] || 0), money0(a / Math.max(1, vis[v] || 1))]), ['Vendor', 'Spent', 'Visits', 'Average'])); }
+    el.append(wrap);
+    el.querySelectorAll('.fd-table td.fd-l').forEach((c) => c.setAttribute('translate', 'no'));
   });
   dash.draw('reviewMonths', (el) => {
     if (st('txns') !== 'ok') return;
@@ -3404,6 +3467,37 @@
     draw();
   };
 
+  // ⚙ Settings → Logins (server owner): everyone else who can sign in; set a new password or remove them
+  const loginsBox = async (host) => {
+    if (window.FD_LOCAL || host.querySelector('.fd-loginsbox')) return;
+    const tok = {}; host.__lg = tok;
+    let info; try { info = await FDStore.json('GET', '/api/logins'); } catch (e) { return; } // not the owner: no box
+    if (host.__lg !== tok || host.querySelector('.fd-loginsbox')) return;
+    const box = document.createElement('div'); box.className = 'fd-rb fd-apis fd-loginsbox'; host.append(box);
+    const draw = () => {
+      box.textContent = ''; box.append(rhead('Logins'));
+      if (!info.logins.length) { box.append(phMsg('Only you can sign in so far. Use Invite someone to add a partner or family member.')); return; }
+      box.append(phMsg('Everyone else who can sign in to this server. If someone forgets their password, set a new one here and tell them what it is; they can’t see it again afterwards.'));
+      for (const l of info.logins) {
+        const r = document.createElement('div'); r.className = 'fd-rb-row fd-loginrow'; const t = document.createElement('div'); t.className = 'fd-rb-lbl';
+        const b = document.createElement('b'); b.textContent = l.name; b.setAttribute('translate', 'no');
+        const sm = document.createElement('small'); sm.className = 'fd-zero'; sm.textContent = ' ' + (l.books.length ? l.books.map((x) => x.name + (x.role === 'view' ? ' (' + TR('view only') + ')' : '')).join(', ') : TR('No dashboards'));
+        t.append(b, sm); r.append(t);
+        const msg = phMsg('');
+        const pw = document.createElement('input'); pw.className = 'fd-in'; pw.type = 'password'; pw.autocomplete = 'new-password'; pw.placeholder = 'New password (8+ characters)'; pw.hidden = true;
+        const save = rbtn('Save password', async () => { msg.className = 'fd-note'; msg.textContent = '';
+          try { await FDStore.json('POST', '/api/logins/' + encodeURIComponent(l.name) + '/password', { password: pw.value }); pw.value = ''; pw.hidden = save.hidden = true; msg.className = 'fd-note fd-good'; msg.textContent = TR('✓ New password saved. They’re signed out everywhere and sign in with the new one.'); }
+          catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false); save.hidden = true;
+        const set = rbtn('Set new password', () => { pw.hidden = save.hidden = false; pw.focus(); });
+        const rm = rbtn('Remove', async () => { if (!confirm(TR('Remove the login {0}? They’re signed out and can’t sign in again. Dashboards and their data stay.').replace('{0}', l.name))) return;
+          try { await FDStore.json('DELETE', '/api/logins/' + encodeURIComponent(l.name)); info = await FDStore.json('GET', '/api/logins'); draw(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } });
+        r.append(set, rm); box.append(r);
+        const r2 = document.createElement('div'); r2.className = 'fd-rb-row'; r2.append(pw, save); box.append(r2, msg);
+      }
+    };
+    draw();
+  };
+
   // ⚙ Settings → Connect a phone: a QR code of this server's address (scan it in the phone app, or with the phone's camera to open it in the browser)
   const connectBox = async (host) => {
     if (window.FD_LOCAL || !window.FDQR || host.querySelector('.fd-qrbox')) return;
@@ -3497,6 +3591,7 @@
   const phMsg = (t, cls) => { const p = document.createElement('p'); p.className = 'fd-note' + (cls ? ' ' + cls : ''); p.textContent = t; return p; };
   const billsAhead = (days) => { const end = Date.now() + days * 864e5, out = [];
     rows('subs').filter((x) => x.book === book()).forEach((x) => { const n = nextDue(x); if (!n) return; const d = new Date(n.date); for (let g = 0; g < 6 && d.getTime() <= end; g++) { out.push({ name: x.vendor, amount: money0(x.lastCharge), due: new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).toISOString() }); d.setUTCMonth(d.getUTCMonth() + (n.monthly ? 1 : 12)); } });
+    subRem().forEach((r) => { if (!r.date) return; const [y, m, d] = r.date.split('-').map(Number); out.push({ name: r.vendor, title: TR(SUB_WHY[r.why] || SUB_WHY.review).replace('{0}', r.vendor), body: r.note || TR('Set in Larenest → Subscriptions'), due: new Date(y, m - 1, d).toISOString(), remind: true }); });
     return out; };
   // keep each dashboard's upcoming bills on the phone, then schedule reminders for all of them together
   const rescheduleBills = async () => {
@@ -3553,6 +3648,29 @@
       [cb, db2, hr].forEach((x) => x.addEventListener('change', save));
       r.append(lab, db2, hr); box.append(r, msg, phMsg('Bills come from Subscriptions & recurring bills in each dashboard. Reminders are set on this phone only.'));
     }
+    // app lock
+    if (window.FDAppLock) { const A = window.FDAppLock; box.append(rhead('App lock'));
+      const lk = document.createElement('div'); box.append(lk);
+      const drawLock = async () => { lk.textContent = ''; const msg = phMsg('');
+        if (!A.on()) {
+          lk.append(phMsg('Ask for a PIN (and fingerprint or Face ID, if this phone has it) whenever Larenest opens. It keeps out someone who picks up your phone.'));
+          const r = document.createElement('div'); r.className = 'fd-rb-row'; const p1 = document.createElement('input'); p1.type = 'password'; p1.inputMode = 'numeric'; p1.maxLength = 8; p1.placeholder = 'New PIN (4–8 digits)'; p1.className = 'fd-in';
+          const p2 = p1.cloneNode(); p2.placeholder = 'Type it again';
+          r.append(p1, p2, rbtn('Turn on', async () => { if (p1.value !== p2.value) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('The two PINs don’t match.'); return; }
+            try { await A.setPin(p1.value, { bio: await A.bioAvailable(), after: 1 }); drawLock(); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }, false));
+          lk.append(r, msg); return; }
+        const c = A.config(); lk.append(phMsg('On. Larenest asks for the PIN when it opens.'));
+        if (await A.bioAvailable()) { const l = document.createElement('label'); l.className = 'fd-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = c.bio; cb.addEventListener('change', () => A.set({ bio: cb.checked })); l.append(cb, ' ' + TR('Also unlock with fingerprint or Face ID')); lk.append(l); }
+        const r = document.createElement('div'); r.className = 'fd-rb-row'; const lab = document.createElement('label'); lab.className = 'fd-field fd-narrow'; lab.textContent = TR('Lock again after') + ' ';
+        const sl = document.createElement('select'); sl.className = 'dash-select'; [[0, 'Right away'], [1, '1 minute in the background'], [5, '5 minutes in the background'], [15, '15 minutes in the background']].forEach(([v, t]) => sl.append(new Option(t, v))); sl.value = String(c.after);
+        sl.addEventListener('change', () => A.set({ after: Number(sl.value) })); lab.append(sl); r.append(lab); lk.append(r);
+        const r2 = document.createElement('div'); r2.className = 'fd-rb-row'; const cur = document.createElement('input'); cur.type = 'password'; cur.inputMode = 'numeric'; cur.maxLength = 8; cur.placeholder = 'Current PIN'; cur.className = 'fd-in';
+        const nw = cur.cloneNode(); nw.placeholder = 'New PIN (4–8 digits)';
+        r2.append(cur, nw, rbtn('Change PIN', async () => { if (!(await A.check(cur.value))) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('That PIN isn’t right.'); return; } try { await A.setPin(nw.value); msg.className = 'fd-note fd-good'; msg.textContent = TR('✓ PIN changed.'); cur.value = nw.value = ''; } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; } }),
+          rbtn('Turn off', async () => { if (!(await A.check(cur.value))) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Type the current PIN to turn the lock off.'); return; } A.off(); drawLock(); }));
+        lk.append(r2, msg, phMsg('The lock is a privacy screen. If you forget the PIN and can’t use fingerprint or Face ID, the only way in is to clear the app’s data, so keep a backup file.'));
+      };
+      drawLock(); }
     // backups
     box.append(rhead('Backups'));
     const last = await L.getKV('lastExport'), snaps = await L.backups();
@@ -4087,6 +4205,26 @@
     { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = document.body.classList.contains('fd-brand');
       i.addEventListener('change', () => { document.body.classList.toggle('fd-brand', i.checked); try { localStorage.setItem('fd-brand', i.checked ? '1' : '0'); } catch {} });
       l.append(i, ' Show the Larenest logo and colors (this device only)'); row('Larenest look', l); }
+    { const others = (window.FD_BOOKS || []).filter((b) => b.id !== window.HF.state.bookId);
+      if (others.length && !document.body.classList.contains('fd-readonly')) {
+        const w = document.createElement('div'); const ts = document.createElement('select'); ts.className = 'dash-select'; others.forEach((b) => ts.append(new Option(b.name, b.id))); ts.setAttribute('translate', 'no');
+        const msg = phMsg('');
+        const KEYS = ['layout', 'colors', 'customs', 'reports', 'fcDays', 'fcLow', 'healthMuted'];
+        const go = rbtn('Copy', async () => {
+          const to = ts.value, nm = ts.options[ts.selectedIndex].text; if (!confirm(TR('Copy this dashboard’s layout, colors, custom reports and display settings to {0}? Its own data, budgets and people stay as they are.').replace('{0}', nm))) return;
+          go.disabled = true; msg.className = 'fd-note'; msg.textContent = TR('Copying…');
+          try {
+            const there = await window.HF.api('GET', `/api/books/${encodeURIComponent(to)}/data`); const old = (there.prefs || []);
+            const put = async (key, val) => { await window.HF.api('POST', `/api/books/${encodeURIComponent(to)}/prefs`, { book: to, key, value: JSON.stringify(val) }); for (const o of old.filter((x) => x.key === key)) await window.HF.api('DELETE', `/api/books/${encodeURIComponent(to)}/prefs/${encodeURIComponent(o.id)}`); };
+            let n = 0; for (const k of KEYS) { const r = prefRows(k).pop(); if (r) { await put(k, JSON.parse(r.value)); n++; } }
+            const mine = prefGet('settings', null); if (mine) { const tset = (() => { const r = old.filter((x) => x.key === 'settings').pop(); try { return r ? JSON.parse(r.value) : {}; } catch { return {}; } })();
+              const keep = { type: tset.type, people: tset.people }; const merged = { ...mine }; delete merged.type; delete merged.people; Object.assign(merged, Object.fromEntries(Object.entries(keep).filter(([, v]) => v !== undefined))); await put('settings', merged); n++; }
+            msg.className = 'fd-note fd-good'; msg.textContent = n ? TR('✓ Copied to {0}. Open it to see the result.').replace('{0}', nm) : TR('Nothing to copy yet: this dashboard still uses the default look.');
+          } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; }
+          go.disabled = false;
+        }, false);
+        const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(ts, go); w.append(r, phMsg('Copies the layout (sections and their order), chart colors, custom reports, top-row tiles and display choices. Data, budgets, accounts and the people in a shared dashboard aren’t copied.'), msg);
+        row('Copy settings to another dashboard', w); } }
     { const sw = document.querySelector('.fd-account .fd-switch'); // only inside the desktop or phone app
       if (sw) { const w = document.createElement('div'); w.append(rbtn('Switch server…', () => sw.click(), false), phMsg('Connect this app to a different computer, or use it on this phone only.')); row('Server', w); } }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
@@ -4123,7 +4261,7 @@
     encBox(el).catch(() => {});
     bizBox(el);
     connectBox(el).catch(() => {});
-    inviteBox(el).catch(() => {});
+    inviteBox(el).catch(() => {}).then(() => loginsBox(el)).catch(() => {});
     if (!el.querySelector('.fd-helpbox')) { const h = document.createElement('div'); h.className = 'fd-rb fd-helpbox'; h.append(rhead('Help & feedback'));
       const r = document.createElement('div'); r.className = 'fd-rb-row'; const dmsg = phMsg('');
       r.append(rbtn('Take the tour again', () => window.FDTour && window.FDTour(), false), rbtn('Send feedback', () => window.FDFeedback && window.FDFeedback(), false),

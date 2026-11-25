@@ -44,4 +44,9 @@ if (rx) x = x.replace('</application>', rx + '    </application>');
 if (!x.includes('POST_NOTIFICATIONS')) x = x.replace('<application', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application');
 if (!x.includes('RECEIVE_BOOT_COMPLETED')) x = x.replace('<application', '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <application');
 fs.writeFileSync(man, x);
+// libraries for the app lock (fingerprint / face) and receipt scanning (on-device text recognition)
+const gradle = path.join(M, 'android', 'app', 'build.gradle'); let g = fs.readFileSync(gradle, 'utf8');
+const deps = ['androidx.biometric:biometric:1.1.0', 'com.google.mlkit:text-recognition:16.0.1'];
+for (const d of deps) if (!g.includes(d.split(':').slice(0, 2).join(':'))) g = g.replace(/\ndependencies\s*\{/, (m) => `${m}\n    implementation "${d}"`);
+fs.writeFileSync(gradle, g);
 console.log('Android project configured');

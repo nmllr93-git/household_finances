@@ -104,6 +104,12 @@ window.FDConnSecurity = () => {
     : ts ? ['ok', 'You’re connected through Tailscale, so this connection is encrypted from this device all the way to your computer.']
     : ['warn', 'This connection isn’t encrypted (http://). Use the https:// address or the Larenest app instead; see below.'];
   const h = document.createElement('div'); h.className = 'fd-connsec-now fd-cs-' + now[0]; h.textContent = (now[0] === 'ok' ? '🔒 ' : '⚠ ') + now[1]; w.append(h);
+  if (!window.FD_LOCAL && location.protocol === 'http:' && !ts && !/^(localhost|127\.0\.0\.1|\[?::1\]?)$/.test(host)) {
+    const sw = document.createElement('button'); sw.type = 'button'; sw.className = 'fd-btn fd-sm'; sw.textContent = 'Switch to the https:// address';
+    sw.addEventListener('click', () => { const u = 'https://' + location.host + location.pathname + location.search; location.href = window.FDCarryLink ? window.FDCarryLink(u) : u; });
+    const nt = document.createElement('p'); nt.className = 'fd-note'; nt.textContent = 'This device’s settings (language, layout, which sections are open) come along. You’ll sign in again, and the browser warns once about your computer’s own certificate.';
+    w.append(sw, nt);
+  }
   const rows = [
     ['Larenest phone & PC apps', 'Encrypted (HTTPS)', 'The apps connect with HTTPS using your computer’s own certificate. Scanning the QR code tells the app exactly which certificate to trust, so it’s encrypted end to end, even on plain home Wi-Fi, at no cost.'],
     ['A web browser, https:// address', 'Encrypted, one-time warning', 'Also encrypted. The browser warns once (“not secure”) because the certificate is your computer’s own rather than from a public authority. With Tailscale HTTPS turned on, the Tailscale address has no warning at all.'],

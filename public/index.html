@@ -387,6 +387,7 @@
   <section id="review">
     <h2>Year in review</h2>
     <div data-draw="reviewHead" data-source="txns subs"></div>
+    <div data-draw="reviewExtra" data-source="txns balance_totals"></div>
     <div data-draw="reviewMonths" data-source="txns"></div>
     <div data-draw="reviewSnap" data-source="txns balance_totals"></div>
     <div class="fd-scroll" data-draw="reviewCats" data-source="txns"></div>
@@ -589,6 +590,10 @@
         <input type="hidden" name="book" value="">
         <h3>Add income or an expense by hand</h3>
         <p class="fd-note">For money that never shows up on a statement, like a family member paying you back for a phone line.</p>
+        <div class="fd-row fd-scanrow">
+          <label class="fd-btn fd-sm fd-quiet fd-scanbtn"><span class="fd-scan-l">📷 Scan a receipt</span><input type="file" accept="image/*" capture="environment" hidden data-receipt></label>
+          <span class="fd-note fd-scanmsg" aria-live="polite"></span>
+        </div>
         <div class="fd-row">
           <label class="fd-field">Type<select class="dash-select" name="type"><option value="expense">Expense</option><option value="income">Income</option></select></label>
           <label class="fd-field">Date<input type="date" name="date"></label>
@@ -665,6 +670,7 @@
 <script src="vendor/d3.min.js"></script>
 <script src="store.js"></script>
 <script src="local.js"></script>
+<script src="applock.js"></script>
 <script src="sample.js"></script>
 <script src="vendor/qr/qr.js"></script>
 <script src="runtime.js"></script>
@@ -676,6 +682,7 @@
 <script src="tour.js"></script>
 <script src="showpw.js"></script>
 <script src="pdfstatement.js"></script>
+<script src="receipt.js"></script>
 <script src="import.js"></script>
 <script src="app.js"></script>
 </main>

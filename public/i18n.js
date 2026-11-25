@@ -4,6 +4,14 @@
 //   2. the page watcher below             – any text node or placeholder/title/aria-label whose whole text matches
 // Anything inside translate="no" (account names, vendors, categories you typed, amounts) is left alone.
 // Money, dates and numbers keep US formatting: the app is still about US accounts in US dollars.
+// Settings carried over from the http:// address (Settings → Security → Switch to https://): this device's own choices, never data or sign-ins
+(function () { try { const m = /[#&]fdcarry=([A-Za-z0-9_-]+)/.exec(location.hash); if (!m) return;
+  const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
+  for (const [k, v] of Object.entries(o || {})) if (/^fd-/.test(k) && k !== 'fd-lock' && typeof v === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, v);
+  history.replaceState(null, '', location.pathname + location.search + location.hash.replace(/[#&]?fdcarry=[A-Za-z0-9_-]+/, '').replace(/^#$/, ''));
+} catch (e) {} })();
+window.FDCarryLink = (url) => { try { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^fd-/.test(k) && k !== 'fd-lock') o[k] = localStorage.getItem(k); }
+  const b = btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); return url + '#fdcarry=' + b; } catch (e) { return url; } };
 (function () {
   'use strict';
   const LANGS = { en: 'English', es: 'Español (beta)' };

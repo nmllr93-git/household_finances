@@ -441,6 +441,33 @@
   }));
 
   const MAN = ['fd-man-ok', 'fd-man-err', 'fd-man-miss'];
+  // Scan a receipt (manual entry form): fill in the store, date and total from a photo, and keep the photo with the entry.
+  // Reading the text needs the phone app; elsewhere the button just attaches the photo.
+  const shrinkPhoto = (file) => new Promise((res, rej) => { const img = new Image(), u = URL.createObjectURL(file); img.onload = () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); res(c.toDataURL('image/jpeg', 0.85)); }; img.onerror = () => { URL.revokeObjectURL(u); rej(new Error(T('That file isn’t a photo this device can read.'))); }; img.src = u; });
+  const T = (x) => (window.FDI18n ? window.FDI18n.tr(x) : x);
+  document.querySelectorAll('#fd-manual-form').forEach((form) => {
+    const fi = form.querySelector('input[data-receipt]'), msg = form.querySelector('.fd-scanmsg'), lab = form.querySelector('.fd-scan-l'); if (!fi) return;
+    const canRead = () => !!(window.FDReceipt && window.FDReceipt.available());
+    const setLabel = () => { if (lab) lab.textContent = canRead() ? T('📷 Scan a receipt') : T('📎 Attach a receipt photo'); };
+    setLabel(); setTimeout(setLabel, 1500);
+    fi.addEventListener('change', async () => {
+      const file = fi.files[0]; fi.value = ''; if (!file) return;
+      msg.className = 'fd-note fd-scanmsg'; msg.textContent = T('Reading the receipt…');
+      try {
+        const url = await shrinkPhoto(file); form.__receipt = url;
+        if (!canRead()) { msg.textContent = T('Photo attached. It’s saved with this entry.'); return; }
+        const r = await window.FDReceipt.read(url.split(',')[1]);
+        const got = [];
+        if (r.total != null) { form.elements.amount.value = r.total.toFixed(2); got.push(T('total')); }
+        if (r.date) { form.elements.date.value = r.date; got.push(T('date')); }
+        if (r.vendor && !form.elements.vendor.value) { form.elements.vendor.value = r.vendor; got.push(T('store')); }
+        form.elements.type.value = 'expense';
+        msg.textContent = got.length ? T('Filled in the {0} from the receipt. Check them before saving; the photo is saved with the entry.').replace('{0}', got.join(', ')) : T('Couldn’t read this receipt. Fill it in by hand; the photo is still saved with the entry.');
+      } catch (e) { msg.className = 'fd-note fd-scanmsg fd-bad'; msg.textContent = e.message; }
+    });
+  });
+
   document.querySelectorAll('#fd-manual-form').forEach((form) => form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const fd = new FormData(form);
@@ -452,7 +479,13 @@
     try {
       const db = await claude.use('db');
       if (!db) throw new Error('no db');
-      await db.collection('data/household/manual').add(doc);
+      const added = await db.collection('data/household/manual').add(doc);
+      const photo = form.__receipt; form.__receipt = null;
+      if (photo && added && added.id) { try { // keep the receipt photo with the new entry
+        const r = await FDStore.fetch(`/api/books/${encodeURIComponent(doc.book)}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mime: 'image/jpeg', data: photo.split(',')[1] }) });
+        const j = await r.json().catch(() => ({})); if (r.ok && j.id) await db.collection('data/household/receipts').add({ book: doc.book, txKey: 'm:' + added.id, fileId: j.id, name: 'Receipt', mime: 'image/jpeg', size: Math.round(photo.length * 0.75) });
+      } catch (e) {} }
+      const sm = form.querySelector('.fd-scanmsg'); if (sm) sm.textContent = '';
       show(MAN, 'fd-man-ok'); form.reset();
     } catch { show(MAN, 'fd-man-err'); }
   }));

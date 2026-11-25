@@ -10,6 +10,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WidgetPlugin.class); // home-screen widget (phone-only pages, which have Capacitor)
+        registerPlugin(BiometricPlugin.class); // fingerprint / face unlock for the app lock
+        registerPlugin(OcrPlugin.class); // receipt scanning
         super.onCreate(savedInstanceState);
         // Pages served by your computer don't get Capacitor's bridge, so give every page in this app a tiny,
         // widget-only connection: it can save the widgets' summary and set their refresh schedule, nothing else.
@@ -22,6 +24,9 @@ public class MainActivity extends BridgeActivity {
                 WidgetRender.renderAll(ctx);
                 Alerts.check(ctx);
             }
+            // receipt scanning for pages served by your computer: the photo's text, read on this phone (runs on the bridge's own thread)
+            @JavascriptInterface
+            public String ocr(String b64) { try { return OcrPlugin.readText(b64); } catch (Exception e) { return ""; } }
             @JavascriptInterface
             public void schedule(int minutes) { WidgetStore.schedule(ctx, Math.max(0, Math.min(1440, minutes))); }
             // phone alerts need the notification permission (Android 13+); returns true when allowed
