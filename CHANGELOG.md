@@ -3,7 +3,19 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.35
+- **Logins (server owner):** see everyone else who can sign in, set a new password for someone who forgot theirs, or remove a login, from ⚙ Settings in any browser
+- **Moving to the https:// address keeps this device's settings** (language, layout, open sections); the old http:// address now carries them over automatically
+- **Year in review:** savings rate by month, net worth over the year, biggest category changes vs last year, and top vendors with visits and average spend
+- **Copy settings to another dashboard:** layout, chart colors, custom reports, top-row tiles and display choices (⚙ Settings)
+- **Subscriptions:** catches slow price creep (a charge that costs 5%+ more than a year ago, with the extra per year), marks rising ones ↑, and 🔔 reminders to cancel, call about the price or review a subscription on a date you pick (Needs attention, and a phone notification when bill reminders are on)
+- **App lock (phone-only mode):** a PIN, plus fingerprint or Face ID, whenever the app opens or after time in the background
+- **Scan a receipt:** in Add income or an expense by hand, take a photo and the phone fills in the store, date and total; the photo is kept with the entry. Reading the text happens on the phone (Android and iPhone apps)
+- **iPhone home-screen widget:** this month's budget and the next bills
+- Spanish (beta): the summary line, custom reports, debt and retirement notes, backups, email and Plaid setup, bank download steps and "How the numbers are worked out" are now translated
+- Phones: the "Warn me below" box on the cash forecast no longer stretches tall
+
+## Android 1.6.15
 - **Logins (server owner):** see everyone else who can sign in, set a new password for someone who forgot theirs, or remove a login, from ⚙ Settings in any browser
 - **Moving to the https:// address keeps this device's settings** (language, layout, open sections); the old http:// address now carries them over automatically
 - **Year in review:** savings rate by month, net worth over the year, biggest category changes vs last year, and top vendors with visits and average spend
