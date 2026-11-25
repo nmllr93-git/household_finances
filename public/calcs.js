@@ -111,15 +111,14 @@ dash.calc('all_txns', {
       [/\bqt \d|quiktrip/i, 'QuikTrip'], [/\bbp\b|^bp#/i, 'BP'],
       [/menards/i, 'Menards'], [/^ace\b|ace hardware/i, 'Ace Hardware'], [/lowe'?s/i, "Lowe's"],
       [/home depot/i, 'Home Depot'], [/steam|valve/i, 'Steam'], [/t-?mobile/i, 'T-Mobile'],
-      [/\bimon\b/i, 'ImOn'], [/midamerican/i, 'MidAmerican Energy'], [/city of\*?\s?iowa city/i, 'City of Iowa City'],
-      [/animal clinic|^vet$/i, 'Animal Clinic'], [/petsmart/i, 'PetSmart'], [/big grove/i, 'Big Grove Brewery'],
-      [/kinde?re?d coffee/i, 'Kindred Coffee'], [/bread worthy/i, 'Bread Worthy'], [/daydrink/i, 'DayDrink'],
-      [/doordash/i, 'DoorDash'], [/\btrees\b/i, 'Trees'], [/^atm\b/i, 'ATM cash'], [/golf/i, 'Golf'],
+      [/midamerican/i, 'MidAmerican Energy'],
+      [/animal clinic|^vet$/i, 'Animal Clinic'], [/petsmart/i, 'PetSmart'],
+      [/doordash/i, 'DoorDash'], [/^atm\b/i, 'ATM cash'], [/golf/i, 'Golf'],
       [/dollar.?general/i, 'Dollar General'], [/paper ?statement fee/i, 'Bank fees'], [/overage fee/i, 'Overage fees'],
-      [/1800flowers|flowerama/i, '1-800-Flowers'], [/uihc|univ.*iowa.*hosp/i, 'UIHC'],
-      [/wilson'?s (cider|orchard)/i, "Wilson's Orchard"], [/vacation transfer|personal transfer|^transfer\b/i, 'Transfers'],
+      [/1800flowers|flowerama/i, '1-800-Flowers'],
+      [/vacation transfer|personal transfer|^transfer\b/i, 'Transfers'],
     ];
-    const CITIES = /\s+(iowa city|coralville|north liberty|cedar rapids|des moines|lawrenceburg|gatlinburg|cosby|lexington|chapel hill|black mountain|wendell|williamsburg|edwards|peoria|austin|newton)\b.*$/i;
+    const CITIES = /\s+[A-Za-z][A-Za-z .]{2,20}\s+(AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b.*$/;
     const clean = (d) => {
       let s = String(d || '').trim();
       for (const [re, name] of RULES) if (re.test(s)) return name;

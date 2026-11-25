@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Removed local business names from the built-in vendor cleanup; city names are now stripped by state code instead of a fixed list.
 - **Local prices follow your state:** choose it under ⚙ Settings → Data sources. Home prices, home electricity, gas prices and inflation by category then use your state and region, and without one they show US figures. Previously these were fixed to one area
 - Removed example names and setup notes left over from the developer's own data in hints and help text
 
