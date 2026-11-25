@@ -2175,6 +2175,10 @@
       for (const f of (PEND.book === (window.HF && window.HF.state.bookId) && !tc.off ? PEND.flags : [])) { if (Date.now() - Date.parse(f.at || f.date) > 30 * 864e5) continue;
         if ((f.posted / f.pending - 1) * 100 < tPct || f.posted - f.pending < tMin) continue;
       out.push({ id: 'tip:' + f.key, sig: String(f.posted), lvl: 'warn', text: TR('{0} posted for {1}, but was {2} while pending (+{3}%), on {4}. A big tip or a hold that grew? Worth checking the receipt.').replace('{0}', f.description).replace('{1}', money2(f.posted)).replace('{2}', money2(f.pending)).replace('{3}', Math.round((f.posted / f.pending - 1) * 100)).replace('{4}', f.account), go: 'tx' }); } } catch (e) {}
+    // a gentle feedback nudge after a week of use (and once more after six weeks); dismissing it is remembered like any other item
+    try { let first = Number(localStorage.getItem('fd-first-use')) || 0; if (!first) { first = Date.now(); localStorage.setItem('fd-first-use', String(first)); }
+      const days = (Date.now() - first) / 864e5, k = days >= 42 ? '42d' : days >= 7 ? '7d' : '';
+      if (k && window.FDFeedback && !(window.FDSample && window.FDSample.active())) out.push({ id: 'feedback:' + k, sig: k, lvl: 'info', text: TR('How’s Larenest going? A couple of lines on what works, what’s missing or what confused you makes a real difference. Send feedback opens an email to us; nothing is sent without you.'), go: 'feedback' }); } catch (e) {}
     try { const dp = dupPairs(); if (dp.length) out.push({ id: 'dupes', sig: String(dp.length), lvl: 'warn', text: `${dp.length} transaction${dp.length === 1 ? ' looks' : 's look'} like ${dp.length === 1 ? 'a duplicate' : 'duplicates'}: the same purchase from bank sync and from a statement, a few days apart. Review and keep one copy.`, go: 'dupes' }); } catch {}
     try { if (hasBiz()) { const q0 = bizNextDue(), days = q0 ? Math.round((Date.parse(q0.due) - Date.now()) / 864e5) : 99;
       if (q0 && days <= 14) out.push({ id: `biztax:${q0.year}:${q0.q}`, sig: q0.due, lvl: 'warn', text: `Quarterly estimated tax (Q${q0.q} ${q0.year}) is due ${q0.due}${days <= 0 ? ' (today)' : ` (in ${days} day${days === 1 ? '' : 's'})`}. About ${money0(q0.estimate)} set aside from business profit.`, go: 'biztax' });
@@ -2186,6 +2190,7 @@
     showGroup('settings'); setTimeout(() => { const r = document.getElementById('fd-catmerge-row'); if (!r) return; const d = r.closest('details'); if (d) d.open = true;
       r.scrollIntoView({ behavior: 'smooth', block: 'center' }); r.classList.add('fd-flash'); setTimeout(() => r.classList.remove('fd-flash'), 2200); }, 400); });
   const goTo = (where) => {
+    if (where === 'feedback') { if (window.FDFeedback) window.FDFeedback(); return; }
     if (where === 'dupes') { showGroup('tx'); dupOpen = true; dash.draw('dupReview'); setTimeout(() => document.querySelector('#fd-dupes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150); return; }
     if (where === 'biztax' || where === 'biztx') { showGroup('business'); setTimeout(() => document.querySelector(where === 'biztax' ? '#biz-tax' : '#biz-tx')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
     if (where === 'needs') { showGroup('tx'); q('fd-tneeds').forEach((c) => { c.checked = true; c.dispatchEvent(new Event('change')); }); setTimeout(() => document.querySelector('#transactions')?.scrollIntoView({ behavior: 'smooth' }), 100); return; }
@@ -2212,7 +2217,7 @@
       if (HDONE[it.id]) { confirmRow(r, it); el.append(r); continue; }
       const t = document.createElement('span'); t.textContent = (it.lvl === 'warn' ? '⚠ ' : '• ') + it.text;
       const acts = document.createElement('span'); acts.className = 'fd-hl-acts';
-      acts.append(rbtn({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show' }[it.go] || 'Open', () => goTo(it.go)));
+      acts.append(rbtn({ import: 'Import', accounts: 'Open', needs: 'Show', subscriptions: 'Show', feedback: 'Send feedback' }[it.go] || 'Open', () => goTo(it.go)));
       if (!document.body.classList.contains('fd-readonly')) { const x = rbtn('Dismiss', () => {
         if (!it.acct) { r.remove(); saveDis({ ...DIS, [it.id]: it.sig }); return; }
         HDONE[it.id] = true; confirmRow(r, it); saveDis({ ...DIS, [it.id]: it.sig }); }); // an account alert: offer to stop checking that account
