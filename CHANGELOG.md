@@ -6,6 +6,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 ## Unreleased
 - Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
 - Settings: removed a stray "Show" button next to the Logins box
+- Business: editing a business transaction (for example to add a receipt) now returns you to Business transactions, at the same spot, after you save or cancel
 
 ## Desktop 1.0.36
 - **Receipts can be PDFs** (e-receipts and invoices): attach them to transactions and manual entries; a PDF receipt fills in the store, date and total on any device

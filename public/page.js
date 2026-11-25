@@ -1229,8 +1229,12 @@
 
   // ---- transaction editor (a fixed form; scripts only set its values) ----
   let editing = null;
+  // when the editor was opened from another tab (Business → Edit), closing it goes back there, to the same row
+  let editBack = null;
+  const editDone = () => { const b = editBack; editBack = null; if (!b) return; showGroup(b.group); setTimeout(() => { const s = document.getElementById(b.anchor); if (s) s.scrollIntoView({ block: 'start' }); if (b.y != null) window.scrollTo(0, b.y); }, 250); };
   const form = () => document.querySelector('#fd-tx-form');
   const openEditor = (t) => {
+    editBack = null;
     const base = t.splitOf ? rows('txns').filter((x) => x.splitOf === t.splitOf) : [t];
     const total = base.reduce((s, x) => s + x.amount, 0);
     editing = { key: t.splitOf || t.key, total: Math.round(total * 100) / 100, t };
@@ -1308,10 +1312,10 @@
   q('fd-tx-form').forEach((f) => {
     f.addEventListener('input', () => dash.draw('splitLeft'));
     f.elements.split.addEventListener('change', () => { q('fd-splits').forEach((d) => { d.hidden = !f.elements.split.checked; }); dash.draw('splitLeft'); });
-    q('fd-tx-cancel').forEach((b) => b.addEventListener('click', () => { f.hidden = true; editing = null; }));
+    q('fd-tx-cancel').forEach((b) => b.addEventListener('click', () => { f.hidden = true; editing = null; editDone(); }));
     q('fd-tx-reset').forEach((b) => b.addEventListener('click', async () => {
       if (!editing) return;
-      try { const d = await db(); for (const e of rows('edits').filter((e) => e.txKey === editing.key)) await d.doc('data/household/edits/' + e.id).delete(); f.hidden = true; editing = null; }
+      try { const d = await db(); for (const e of rows('edits').filter((e) => e.txKey === editing.key)) await d.doc('data/household/edits/' + e.id).delete(); f.hidden = true; editing = null; editDone(); }
       catch { show(['fd-tx-ok', 'fd-tx-err', 'fd-tx-miss'], 'fd-tx-err'); }
     }));
     q('fd-tx-ignore').forEach((b) => b.addEventListener('click', async () => {
@@ -1326,7 +1330,7 @@
         } else {
           await d.collection('data/household/edits').add({ book: book(), txKey: editing.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() });
         }
-        show(ids, 'fd-tx-ok'); setTimeout(() => { f.hidden = true; editing = null; }, 600);
+        show(ids, 'fd-tx-ok'); setTimeout(() => { f.hidden = true; editing = null; editDone(); }, 600);
       } catch { show(ids, 'fd-tx-err'); }
     }));
     f.addEventListener('submit', async (ev) => {
@@ -1349,7 +1353,7 @@
         } else {
           await d.collection('data/household/edits').add({ book: book(), txKey: editing.key, ...change, splits, createdAt: new Date().toISOString() });
         }
-        show(ids, 'fd-tx-ok'); setTimeout(() => { f.hidden = true; editing = null; }, 900);
+        show(ids, 'fd-tx-ok'); setTimeout(() => { f.hidden = true; editing = null; editDone(); }, 900);
       } catch { show(ids, 'fd-tx-err'); }
     });
   });
@@ -4019,7 +4023,7 @@
       const tr = document.createElement('tr'); const cells = [x.date || x.month, x.vendor, x.biz + ((x.bizPct || 100) < 100 ? ` · ${x.bizPct}%` : '') + (x.byAccount ? ' · by account' : ''), x.line === 'income' ? 'Income' : `${x.line} · ${lineName(x.line)}`, (x.line === 'income' ? '+' : '') + money2(x.share)];
       cells.forEach((v, i) => { const td = document.createElement('td'); td.textContent = v; if (i === 1 || i === 2) td.translate = false; if (i === 4) td.className = 'fd-r' + (x.line === 'income' ? ' fd-good' : ''); tr.append(td); });
       const act = document.createElement('td'); act.className = 'fd-nowrap'; if (miss.has(x.splitOf || x.key)) { const w = document.createElement('span'); w.className = 'fd-bad'; w.textContent = '⚠ receipt '; w.title = 'No receipt photo yet'; act.append(w); } else if (rcptKeys().has(x.splitOf || x.key)) { const w = document.createElement('span'); w.textContent = '📎 '; w.title = 'Receipt photo saved'; act.append(w); }
-      act.append(rbtn('Edit', () => { const full = rows('txns').find((y) => y.key === x.key) || x; showGroup('tx'); setTimeout(() => openEditor(full), 200); })); tr.append(act); t.append(tr);
+      act.append(rbtn('Edit', () => { const full = rows('txns').find((y) => y.key === x.key) || x; const y0 = window.scrollY; showGroup('tx'); setTimeout(() => { openEditor(full); editBack = { group: 'business', anchor: 'biz-tx', y: y0 }; }, 200); })); tr.append(act); t.append(tr);
     }
     const wrap = document.createElement('div'); wrap.className = 'fd-tablewrap'; wrap.append(t); el.append(wrap);
     if (r.list.length > bizTxMore) el.append(rbtn(`Show more (${r.list.length - bizTxMore} left)`, () => { bizTxMore += 100; dash.draw('bizTx'); }));
