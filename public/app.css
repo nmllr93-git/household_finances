@@ -745,3 +745,5 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 .fd-pendtable td { color: var(--color-fg-muted); font-style: italic; } .fd-pendnote { font-style: italic; }
 .fd-flash { animation: fdflash 2s ease-out; } @keyframes fdflash { 0%, 30% { background: color-mix(in srgb, var(--color-accent, #c9773a) 22%, transparent); } 100% { background: transparent; } }
 .fd-setgrid .fd-setinline input.fd-numsm { width: 72px; flex: none; }
+.fd-setgrid .fd-setinline input.fd-numsm { width: 64px; padding-left: 8px; padding-right: 4px; text-align: right; }
+.fd-setgrid .fd-setinline input.fd-in.fd-numsm { width: 58px; min-width: 0; max-width: 58px; box-sizing: border-box; }
