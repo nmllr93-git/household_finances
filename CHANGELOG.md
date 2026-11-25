@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Fixed: possible duplicates weren't found when a statement and bank sync used different names for the same (merged) account, such as "Hills Bank Checking" and "Hills Bank"
 - Bank sync: the first sync now brings in up to 90 days of history (was 60), where the bank provides it
 - Settings: every group (This dashboard, Bank & data connections, People & devices and so on) can be folded; what you fold is remembered on that device
 - Settings: removed a stray "Show" button next to the Logins box

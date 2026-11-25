@@ -1362,7 +1362,12 @@
   const dupOrigin = () => { const src = {}; rows('imports').forEach((b) => { src[b.id] = b.source === 'sync' ? 'sync' : 'file'; });
     return (k) => { k = String(k || ''); if (k.startsWith('m:')) return 'manual'; const m = /^i:([^:]+):/.exec(k); return m ? src[m[1]] || 'file' : null; }; };
   const dupPairs = () => { if (!window.FDLikelyDupes || st('txns', 'imports') !== 'ok') return []; const okL = prefGet('dupOk', []) || [];
-    return window.FDLikelyDupes(rows('txns').filter((t) => t.book === book()), dupOrigin(), { ok: new Set(Array.isArray(okL) ? okL : []) }); };
+    // compare accounts by the account they belong to: a merged account's other names (a statement's "Hills Bank Checking"
+    // and bank sync's "Hills Bank") are the same account here, as on the Accounts list
+    const canon = new Map(); for (const a of rows('accounts').filter((x) => x.book === book())) { const to = keyA(a.name); [a.name, a.match, ...(a.aliases || [])].filter(Boolean).forEach((x) => canon.set(keyA(x), to)); }
+    const same = (src) => canon.get(keyA(src)) || keyA(src);
+    return window.FDLikelyDupes(rows('txns').filter((t) => t.book === book()).map((t) => ({ ...t, source: same(t.source) })), dupOrigin(), { ok: new Set(Array.isArray(okL) ? okL : []) })
+      .map((p) => ({ ...p, sync: rows('txns').find((x) => x.key === p.sync.key) || p.sync, other: rows('txns').find((x) => x.key === p.other.key) || p.other })); };
   const dupIgnore = async (t) => { const d = await db(); if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
     else await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); };
   let dupOpen = false;
