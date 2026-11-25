@@ -3,7 +3,14 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Desktop 1.0.36
+- **Receipts can be PDFs** (e-receipts and invoices): attach them to transactions and manual entries; a PDF receipt fills in the store, date and total on any device
+- Fixed: adding a JPG or PNG receipt photo was refused (and saved photos didn't show) when using the dashboard from the PC server
+- Fixed: a receipt added in Add income or an expense by hand wasn't kept with the entry
+- Host options: spacing next to Connect a phone
+- Phones: the Business tab's download buttons are an even, full-width stack
+
+## Android 1.6.16
 - **Receipts can be PDFs** (e-receipts and invoices): attach them to transactions and manual entries; a PDF receipt fills in the store, date and total on any device
 - Fixed: adding a JPG or PNG receipt photo was refused (and saved photos didn't show) when using the dashboard from the PC server
 - Fixed: a receipt added in Add income or an expense by hand wasn't kept with the entry
