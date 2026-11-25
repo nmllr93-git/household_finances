@@ -4160,14 +4160,16 @@
   dash.draw('settingsView', (el) => {
     if (st('prefs') !== 'ok') return;
     el.replaceChildren(); setGroups(el); if (sDraft && sDraft._book !== book()) sDraft = null; const s = sDraft || (sDraft = { ...SET(), _book: book() });
-    const box = document.createElement('div'); box.className = 'fd-rb';
-    const row = (label, node, note) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const l = document.createElement('span'); l.className = 'fd-rb-lbl'; l.textContent = label; r.append(l, node); if (note) { const n = document.createElement('span'); n.className = 'fd-zero'; n.textContent = note; r.append(n); } box.append(r); };
+    const box = document.createElement('div'); box.className = 'fd-rb fd-setgrid';
+    // two columns: the label, then the control with its explanation underneath in small text
+    const row = (label, node, note) => { const r = document.createElement('div'); r.className = 'fd-rb-row'; const l = document.createElement('span'); l.className = 'fd-rb-lbl'; l.textContent = label;
+      const c = document.createElement('div'); c.className = 'fd-setctl'; c.append(node); if (note) { const n = document.createElement('p'); n.className = 'fd-note fd-setnote'; n.textContent = note; c.append(n); } r.append(l, c); box.append(r); return r; };
     const sel = (opts, val, on) => { const x = document.createElement('select'); x.className = 'dash-select'; opts.forEach(([v, t]) => x.append(new Option(t, v))); x.value = val; x.addEventListener('change', () => on(x.value)); return x; };
     box.append(rhead(`Settings for the ${book()} dashboard`));
     if (prefGet('gsDismissed', false)) row('Getting started list', rbtn('Show it again', () => { prefSet('gsDismissed', false).then(() => { try { localStorage.removeItem('fd-gs-hide-' + book()); } catch (e) {} dash.draw('gettingStarted'); dash.draw('settingsView'); }); }));
     if (window.FDApp && FDApp.checkUpdates) { const w = document.createElement('span'); w.className = 'fd-updrow'; const v = document.createElement('span'); v.className = 'fd-zero';
       FDApp.version?.().then((x) => { v.textContent = 'Version ' + x; }).catch(() => {});
-      w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), ' ', v); row('Desktop app', w, 'Checks automatically every few hours, and after the computer wakes up. This only updates the app on this computer.'); }
+      w.append(rbtn('Check for updates', () => FDApp.checkUpdates()), v); row('Desktop app', w, 'Checks automatically every few hours, and after the computer wakes up. This only updates the app on this computer.'); }
     else if (window.FDApp && FDApp.desktop) row('Desktop app', phMsg('To check for updates, use the Larenest icon in the taskbar tray (or the Help menu) → Check for updates. Newer versions also have a button here.'));
     if (window.FDI18n) row('Language', sel(Object.entries(FDI18n.langs), FDI18n.lang, (v) => FDI18n.set(v)), FDI18n.lang === 'es' ? 'Spanish is in beta: a few screens are still in English. Tell us what reads oddly with Send feedback.' : 'For this device. Amounts and dates stay in US format.');
     row('Dashboard type', sel([['personal', 'Personal (one person)'], ['shared', 'Shared (two or more people)']], s.type, (v) => { s.type = v; dash.draw('settingsView'); }));
@@ -4188,7 +4190,7 @@
     row('Default date range', sel(rngs, s.range, (v) => { s.range = v; }));
     { const w = document.createElement('div'); w.className = 'fd-vtog'; [[false, 'Full'], [true, 'Simple']].forEach(([v, lab]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = lab; b.className = SIMPLE === v ? 'is-on' : '';
         b.addEventListener('click', () => { SIMPLE = v; try { localStorage.setItem('fd-simple', v ? '1' : '0'); } catch {} w.querySelectorAll('button').forEach((x) => x.classList.toggle('is-on', x === b)); showGroup(NP.group || 'all'); }); w.append(b); });
-      const n = document.createElement('span'); n.className = 'fd-zero'; n.style.cssText = 'display:block;font-size:13px;margin-top:4px'; n.textContent = 'Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'; const c = document.createElement('div'); c.append(w, n); row('View', c); }
+      row('View', w, 'Simple hides Markets, Planning, Year in review and the deeper spending and investment sections. This device only.'); }
     if (widgetApi()) { const w = document.createElement('div'); const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = wHide();
       const stt = document.createElement('div'); stt.className = 'fd-zero';
       const run = async () => { stt.textContent = 'Updating the widget…'; const ok = await pushWidget(true); stt.textContent = ok ? '✓ Widget updated with this dashboard.' : !widgetApi() ? 'The widget can’t be reached from here. Update the Larenest phone app to the newest version.' : st('budget_totals', 'subs') !== 'ok' ? 'Still loading this dashboard; try again in a moment.' : 'Couldn’t update the widget: ' + wState; };
@@ -4237,10 +4239,10 @@
           } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = e.message; }
           go.disabled = false;
         }, false);
-        const r = document.createElement('div'); r.className = 'fd-rb-row'; r.append(ts, go); w.append(r, phMsg('Copies the layout (sections and their order), chart colors, custom reports, top-row tiles and display choices. Data, budgets, accounts and the people in a shared dashboard aren’t copied.'), msg);
-        row('Copy settings to another dashboard', w); } }
+        const r = document.createElement('div'); r.className = 'fd-setinline'; r.append(ts, go); w.append(r, msg);
+        row('Copy settings to another dashboard', w, 'Copies the layout (sections and their order), chart colors, custom reports, top-row tiles and display choices. Data, budgets, accounts and the people in a shared dashboard aren’t copied.'); } }
     { const sw = document.querySelector('.fd-account .fd-switch'); // only inside the desktop or phone app
-      if (sw) { const w = document.createElement('div'); w.append(rbtn('Switch server…', () => sw.click(), false), phMsg('Connect this app to a different computer, or use it on this phone only.')); row('Server', w); } }
+      if (sw) row('Server', rbtn('Switch server…', () => sw.click(), false), 'Connect this app to a different computer, or use it on this phone only.'); }
     row('Calendar weeks start on', sel([['mon', 'Monday'], ['sun', 'Sunday']], s.weekStart, (v) => { s.weekStart = v; }));
     const chk = (label, on, set) => { const l = document.createElement('label'); l.className = 'fd-check'; const i = document.createElement('input'); i.type = 'checkbox'; i.checked = on; i.addEventListener('change', () => set(i.checked)); l.append(i, ' ' + label); return l; };
     const tw = document.createElement('div'); tw.className = 'fd-chkgrid';

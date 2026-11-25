@@ -720,3 +720,16 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 /* transaction editor: a little room between one box and the next field's label */
 #fd-tx-form > .fd-field, #fd-tx-form > .fd-row, #fd-tx-form > .fd-check { margin-bottom: 10px; }
 #fd-tx-form .fd-field { gap: 4px; }
+/* Settings for this dashboard: label | control, with the explanation under the control in small text */
+.fd-setgrid > .fd-rb-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); align-items: start; gap: 4px 16px; padding: 6px 0; margin: 0; }
+.fd-setgrid > .fd-rb-row > .fd-rb-lbl { padding-top: 7px; font-size: 13px; color: var(--color-fg-muted); }
+.fd-setgrid .fd-setctl { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.fd-setgrid .fd-setctl > .fd-setnote, .fd-setgrid .fd-setctl > .fd-note { margin: 0; font-size: 12.5px; color: var(--color-fg-muted); line-height: 1.4; max-width: 70ch; }
+.fd-setgrid .fd-setctl select.dash-select, .fd-setgrid .fd-setctl .dash-select { font-size: 14px; min-height: 34px; padding-top: 4px; padding-bottom: 4px; }
+.fd-setgrid .fd-setinline, .fd-setgrid .fd-updrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fd-setgrid .fd-updrow .fd-zero { font-size: 13px; }
+.fd-setgrid .fd-setctl .fd-check { margin: 6px 0 0; }
+@media (max-width: 600px) { .fd-setgrid > .fd-rb-row { grid-template-columns: 1fr; gap: 4px; } .fd-setgrid > .fd-rb-row > .fd-rb-lbl { padding-top: 0; font-weight: 600; color: var(--color-fg); } }
+.fd-setgrid > .fd-rb-row:not(:has(> .fd-rb-lbl)) { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; }
+.fd-setgrid > .fd-rb-row:not(:has(> .fd-rb-lbl)) > .fd-btn { width: auto; }
+.fd-setgrid > .fd-rb-row:empty { display: none; }
