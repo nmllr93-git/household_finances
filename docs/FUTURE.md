@@ -26,4 +26,9 @@ Keep the focus on US accounts and US dollars, but let the app's wording appear i
 - Everyone using the app before Pro launches gets a free Pro key.
 - Draft split between free and Pro: [PRO-TIERS.md](PRO-TIERS.md).
 
+## Next up (picked up next session)
+- Android: turn on R8 code shrinking and resource shrinking for release builds (Play Console "DEX code optimization: Low"). Add keep rules for our plugins (Biometric, Ocr, widgets) and the page bridge (LarenestWidgetNative). Save mapping.txt next to the .aab on each release (Play's "no deobfuscation file" warning) and set ndk debugSymbolLevel 'SYMBOL_TABLE' (Play's "no debug symbols" warning; ML Kit's own native code may still warn). Check with the Android build check, then test the widget, fingerprint unlock and receipt scanning on a phone.
+- iPhone: test build 28 (1.6.14) on a real phone: Face ID unlock, receipt scanning, Budget & bills widget. Give it to the external group once build 27's beta review is approved.
+- Mac build of 1.0.35 once Android and PC testing looks good.
+
 ## Smaller items
