@@ -733,3 +733,10 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 .fd-setgrid > .fd-rb-row:not(:has(> .fd-rb-lbl)) { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; }
 .fd-setgrid > .fd-rb-row:not(:has(> .fd-rb-lbl)) > .fd-btn { width: auto; }
 .fd-setgrid > .fd-rb-row:empty { display: none; }
+/* settings rows: a faint line between options, a little padding, a narrower label column */
+.fd-setgrid > .fd-rb-row { grid-template-columns: 190px minmax(0, 1fr); padding: 10px 8px; border-top: 1px solid color-mix(in srgb, var(--color-border-line) 55%, transparent); }
+.fd-setgrid > .fd-rb-h + .fd-rb-row { border-top: 0; }
+.fd-setgrid > .fd-rb-row:hover { background: color-mix(in srgb, var(--color-fg) 3%, transparent); }
+.fd-setgrid > .fd-rb-row:not(:has(> .fd-rb-lbl)) { border-top: 0; padding-left: 0; }
+@media (max-width: 600px) { .fd-setgrid > .fd-rb-row { grid-template-columns: 1fr; padding: 10px 0; } }
+.fd-setgrid > .fd-rb-row { width: 100%; box-sizing: border-box; max-width: none; }
