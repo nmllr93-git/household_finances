@@ -5,6 +5,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
 - **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once
+- **Move from Mint, Monarch, YNAB or Empower:** import their transaction export as is. Larenest recognises the file, splits it by account and keeps each transaction's category, tags and notes
 
 ## Android 1.6.20
 - Fixed: Scan QR code on the Android app could do nothing when tapped. It now opens Google's own scanner screen (no camera permission needed)

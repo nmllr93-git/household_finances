@@ -399,7 +399,7 @@
       S.text = String(rd.result || ''); S.fileName = f.name;
       if (/<OFX>|OFXHEADER/i.test(S.text.slice(0, 4000))) { readOfx(S.text); return; }
       S.grid = parseCSV(S.text); S.sign = 'auto'; S.ofx = false;
-      S.dates = 'auto'; detect(); applyMap(); refresh(); fillBalance();
+      S.dates = 'auto'; detect(); applyMap(); refresh(); fillBalance(); detectApp(); dash.draw('appImport');
     };
     rd.readAsText(f);
   }));
@@ -434,6 +434,69 @@
   }
 
   let impMsg = '';
+  // Exports from other budgeting apps hold every account in one file, with categories, so they get their own path.
+  const APPS = [
+    { id: 'mint', name: 'Mint', need: ['date', 'description', 'amount', 'transaction type', 'account name'], acct: 'account name', desc: 'description', cat: 'category', tags: 'labels', note: 'notes',
+      amt: (r, g) => { const a = num(g(r, 'amount')); return /credit/i.test(g(r, 'transaction type')) ? -Math.abs(a) : Math.abs(a); } },
+    { id: 'monarch', name: 'Monarch', need: ['date', 'merchant', 'account', 'amount', 'original statement'], acct: 'account', desc: 'merchant', cat: 'category', tags: 'tags', note: 'notes', amt: (r, g) => -num(g(r, 'amount')) },
+    { id: 'ynab', name: 'YNAB', need: ['account', 'date', 'payee', 'outflow', 'inflow'], acct: 'account', desc: 'payee', cat: 'category', tags: 'flag', note: 'memo', amt: (r, g) => num(g(r, 'outflow')) - num(g(r, 'inflow')) },
+    { id: 'empower', name: 'Empower', need: ['date', 'account', 'description', 'category', 'amount'], acct: 'account', desc: 'description', cat: 'category', tags: 'tags', note: '', amt: (r, g) => -num(g(r, 'amount')) },
+  ];
+  function num(x) { const t = String(x || '').replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1'); const v = parseFloat(t); return isFinite(v) ? v : 0; }
+  let APP = null, APPMSG = '';
+  function detectApp() {
+    APP = null; APPMSG = ''; if (S.pdf || S.ofx || !S.grid.length) return;
+    const hr = S.grid[0].map((h) => String(h).toLowerCase().replace(/^﻿/, '').trim());
+    const app = APPS.find((a) => a.need.every((n) => hr.includes(n))); if (!app) return;
+    const ix = (n) => hr.indexOf(n), g = (r, n) => (n && ix(n) >= 0 ? String(r[ix(n)] || '').trim() : '');
+    const byAcct = new Map();
+    for (const r of S.grid.slice(1)) {
+      const date = toDate(g(r, 'date')), amount = Math.round(app.amt(r, g) * 100) / 100; if (!date || !amount) continue;
+      const acct = (g(r, app.acct) || 'Imported').slice(0, 60);
+      const tags = g(r, app.tags).split(/[,|;]/).map((x) => x.trim()).filter(Boolean);
+      const t = { date, description: g(r, app.desc) || g(r, 'original description') || g(r, 'original statement'), amount };
+      const cat = g(r, app.cat); if (cat) t.category = cat.slice(0, 40);
+      if (tags.length) t.tags = tags.slice(0, 5); const note = g(r, app.note); if (note) t.note = note.slice(0, 200);
+      if (!byAcct.has(acct)) byAcct.set(acct, []); byAcct.get(acct).push(t);
+    }
+    if (byAcct.size) APP = { app, byAcct };
+  }
+  const kindOf = (name) => /card|credit|visa|amex|mastercard|discover/i.test(name) ? 'credit:' : /loan|auto/i.test(name) ? 'loan:' : /mortgage/i.test(name) ? 'mortgage:' : /401k|ira\b|roth|brokerage|invest|hsa/i.test(name) ? 'investment:' : 'deposit:checking';
+  dash.draw('appImport', (el) => {
+    el.replaceChildren(); if (!APP) { if (APPMSG) { const m = document.createElement('p'); m.className = 'fd-msg ok'; m.textContent = APPMSG; el.append(m); } return; }
+    const n = [...APP.byAcct.values()].reduce((a, l) => a + l.length, 0);
+    const box = document.createElement('div'); box.className = 'fd-card fd-appimp';
+    const h = document.createElement('p'); h.innerHTML = `<b>This looks like a ${APP.app.name} export.</b> ${n.toLocaleString()} transactions across ${APP.byAcct.size} account${APP.byAcct.size === 1 ? '' : 's'}, with their categories${APP.app.tags ? ' and tags' : ''}. Each account is saved separately; rows already in that account are skipped.`;
+    const ul = document.createElement('ul'); ul.className = 'fd-appimp-list';
+    for (const [a, l] of APP.byAcct) { const li = document.createElement('li'); li.textContent = `${a}: ${l.length.toLocaleString()}`; ul.append(li); }
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-btn'; b.textContent = `Import all ${APP.byAcct.size} accounts`;
+    const msg = document.createElement('p'); msg.className = 'fd-note';
+    b.addEventListener('click', async () => {
+      b.disabled = true; const form = document.querySelector('#fd-import-form'), book = new FormData(form).get('book');
+      try {
+        const db = await claude.use('db'); if (!db) throw new Error('no db');
+        const isDup = window.FDDupeChecker ? window.FDDupeChecker() : null, imp = dash.data('imports').status === 'ok' ? dash.data('imports').data || [] : [];
+        let saved = 0, skipped = 0;
+        for (const [acct, list] of APP.byAcct) {
+          let fresh = list;
+          if (isDup) { for (const bt of imp) { if (bt.book !== book || keyN(bt.accountName || '') !== keyN(acct)) continue; let l = bt.txns; if (typeof l === 'string') { try { l = JSON.parse(l); } catch { l = []; } } for (const t of l || []) isDup({ ...bt, book: 'x' }, t, Number(t.amount)); }
+            const me = { id: '__new__' + acct, book: 'x', accountName: acct }; fresh = list.filter((t) => !isDup(me, t, t.amount)); }
+          skipped += list.length - fresh.length;
+          for (let i = 0; i < fresh.length; i += 4000) {
+            const txns = fresh.slice(i, i + 4000), dates = txns.map((x) => x.date).sort(), k = kindOf(acct);
+            const doc = { book, accountKind: k.split(':')[0], accountType: k.split(':')[1] || '', accountName: acct, owner: '', fileName: S.fileName.slice(0, 80), importedAt: new Date().toISOString(),
+              rowCount: txns.length, dateFrom: dates[0], dateTo: dates[dates.length - 1], balance: null, balanceMonth: dates[dates.length - 1].slice(0, 7), txns, source: 'app:' + APP.app.id, fileRows: list.length, skipped: 0 };
+            await db.collection('data/household/imports').add(doc); await regAcct(db, doc); saved += txns.length;
+            msg.textContent = `Saving… ${saved.toLocaleString()} so far`;
+          }
+        }
+        APPMSG = msg.textContent = `✓ Saved ${saved.toLocaleString()} transactions${skipped ? ` (${skipped.toLocaleString()} already here were skipped)` : ''}. Check account types under Accounts: names with “card” were set as credit cards, the rest as checking.`;
+        APP = null; S.grid = []; S.parsed = []; form.reset(); dash.draw('importPreview');
+        if (window.__fdQueueSaved) window.__fdQueueSaved();
+      } catch (e) { msg.textContent = 'Save error: ' + String((e && e.message) || e); b.disabled = false; }
+    });
+    box.append(h, ul, b, msg); el.append(box);
+  });
   dash.draw('impDebug', (el) => { el.textContent = impMsg; });
   document.querySelectorAll('#fd-import-form').forEach((form) => form.addEventListener('submit', (ev) => ev.preventDefault()));
   document.querySelectorAll('#fd-import-form').forEach((form) => form.querySelector('#fd-import-save').addEventListener('click', async (ev) => {

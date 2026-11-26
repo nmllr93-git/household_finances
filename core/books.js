@@ -88,11 +88,11 @@
     }
     // never cut a statement short: too many rows is refused (before anything is saved) with the count, see MAX_IMPORT_ROWS
     if (Array.isArray(d.txns) && d.txns.length > MAX_IMPORT_ROWS) throw Object.assign(new Error(`This statement has ${d.txns.length.toLocaleString('en-US')} transactions; one import can hold up to ${MAX_IMPORT_ROWS.toLocaleString('en-US')}. Download a shorter date range (a year at a time, say) and import each one.`), { status: 413, rows: d.txns.length });
-    const txns = Array.isArray(d.txns) ? d.txns.map((t) => ({ date: str(t.date, 10), description: str(t.description, 120), amount: num(t.amount), ...(t && t.id ? { id: str(t.id, 80) } : {}) })) : []; // id: the bank's own transaction id, when the file or sync has one
+    const txns = Array.isArray(d.txns) ? d.txns.map((t) => ({ date: str(t.date, 10), description: str(t.description, 120), amount: num(t.amount), ...(t && t.id ? { id: str(t.id, 80) } : {}), ...(t && t.category ? { category: str(t.category, 40) } : {}), ...(t && Array.isArray(t.tags) && t.tags.length ? { tags: t.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) } : {}), ...(t && t.note ? { note: str(t.note, 200) } : {}) })) : []; // id: the bank's own transaction id, when the file or sync has one
     return { book: label, accountKind: ['deposit', 'credit', 'investment', 'mortgage', 'loan'].includes(d.accountKind) ? d.accountKind : 'deposit',
       accountName: str(d.accountName, 60), owner: str(d.owner, 30), fileName: str(d.fileName, 80), importedAt: new Date().toISOString(),
       rowCount: txns.length, dateFrom: str(d.dateFrom, 10), dateTo: str(d.dateTo, 10), balance: num(d.balance), balanceMonth: str(d.balanceMonth, 7), asOf: str(d.asOf, 10), accountType: str(d.accountType, 20), txns,
-      source: ['csv', 'ofx', 'pdf', 'sync', 'manual'].includes(d.source) ? d.source : '', fileRows: num(d.fileRows), skipped: num(d.skipped), reconcile: cleanRecon(d.reconcile) };
+      source: (['csv', 'ofx', 'pdf', 'sync', 'manual'].includes(d.source) || /^app:(mint|monarch|ynab|empower)$/.test(d.source)) ? d.source : '', fileRows: num(d.fileRows), skipped: num(d.skipped), reconcile: cleanRecon(d.reconcile) };
   }
 
   const parse = (r) => { let j = {}; try { j = JSON.parse(r.json); } catch (e) {} return { id: r.id, ...j }; };

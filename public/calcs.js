@@ -148,13 +148,13 @@ dash.calc('all_txns', {
         if (isDuplicate(b, t, amt)) return;
         const kindAcct = b.accountKind;
         let type;
-        if (kindAcct === 'investment' || kindAcct === 'mortgage' || kindAcct === 'loan' || TRANSFER.test(t.description || '')) type = 'transfer';
+        if (kindAcct === 'investment' || kindAcct === 'mortgage' || kindAcct === 'loan' || TRANSFER.test(t.description || '') || /^(transfer|credit card payment|balance adjustments?)$|^transfer\b/i.test(t.category || '') || /^transfer : /i.test(t.description || '')) type = 'transfer';
         else if (amt > 0) type = 'expense';
         else type = kindAcct === 'credit' ? 'expense' : 'income';
         const month = String(t.date).slice(0, 7);
         if (type === 'expense' || type === 'income') { const km = `${b.book}|${month}`, d0 = importedMonths.get(km); if (!d0 || String(t.date) < d0) importedMonths.set(km, String(t.date)); }
         imp.push({ key: `i:${b.id}:${j}`, book: b.book, month, date: t.date, amount: type === 'income' ? -amt : amt, description: t.description || '',
-          type, source: b.accountName || b.fileName || 'Statement', acctKind: kindAcct });
+          type, source: b.accountName || b.fileName || 'Statement', acctKind: kindAcct, ...(t.category ? { appCat: t.category } : {}), ...(t.tags ? { tags: t.tags } : {}), ...(t.note ? { note: t.note } : {}) });
       });
     }
     // Vendor -> usual category, learned from the sheets
@@ -193,7 +193,7 @@ dash.calc('all_txns', {
     for (const r of imp) {
       if (sheetMonths.has(`${r.book}|${r.month}`) && !replaced.has(`${r.book}|${r.month}`)) continue;
       const vendor = clean(r.description);
-      out.push({ ...r, vendor, category: guess(r.book, vendor, r.description, r.type), oneTime: vendor === 'Home purchase & closing' });
+      out.push({ ...r, vendor, category: r.type === 'transfer' ? 'Transfer' : r.appCat && r.type === 'expense' ? r.appCat : guess(r.book, vendor, r.description, r.type), oneTime: vendor === 'Home purchase & closing' });
     }
     for (const r of manualRows || []) {
       const amt = Number(r.amount);

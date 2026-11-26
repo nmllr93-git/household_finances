@@ -541,6 +541,7 @@
         <div class="fd-row">
           <label class="fd-field">Statement files (CSV, PDF, OFX or QFX). Pick or drop several at once.<input type="file" name="file" multiple accept=".csv,.txt,text/csv,.pdf,application/pdf,.ofx,.qfx,application/x-ofx"></label>
         </div>
+        <div data-draw="appImport" data-source="imports"></div>
         <div data-draw="importPreview"></div>
         <div data-draw="pdfPick"></div>
         <div class="fd-row">
@@ -557,6 +558,7 @@
           </div>
           <div data-draw="impRecon"></div>
         </details>
+
         <button class="fd-btn" type="button" id="fd-import-save" disabled>Save import</button>
         <p class="fd-note fd-bad" data-draw="impDebug"></p>
         <p class="fd-msg ok" id="fd-imp-ok" hidden>Saved. The dashboard now includes this statement.</p>
