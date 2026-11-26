@@ -1121,7 +1121,7 @@
     });
   });
   dash.draw('catList', (dl) => {
-    const base = ['Groceries', 'Dining', 'Travel', 'Hobbies', 'Gifts', 'Health/medical', 'Rent / Mortgage', 'Subscriptions', 'Utilities', 'Phone', 'Insurance', 'Home Improvement', 'Debt', 'Other', 'Paycheck', 'Bonus', 'Interest', 'Reimbursement'];
+    const base = ['Groceries', 'Dining', 'Travel', 'Hobbies', 'Gifts', 'Donations', 'Health/medical', 'Rent / Mortgage', 'Subscriptions', 'Utilities', 'Phone', 'Insurance', 'Home Improvement', 'Debt', 'Other', 'Paycheck', 'Bonus', 'Interest', 'Reimbursement'];
     // one entry per category: names you use win over the built-in suggestions, merged names point to what they were merged into,
     // and spellings that differ only in capitals or spacing show once (Health/Medical, not also Health/medical)
     const merged = prefGet('catMerge', {}) || {}, used = rows('txns').filter((t) => t.book === book()).map((t) => t.category).filter((c) => c && c !== 'Uncategorized' && c !== 'Transfer');
@@ -3268,7 +3268,7 @@
   });
 
   // ================= Taxes: yearly summary of tax-relevant spending and income =================
-  const TAX_GROUPS = [['Charitable giving', /charit|donat|church|tithe|nonprofit|goodwill|red cross|united way/i], ['Medical & dental', /medical|health|doctor|dental|dentist|vision|optom|pharm|hospital|clinic|copay|prescription|therapy|chiropract/i],
+  const TAX_GROUPS = [['Charitable giving', /^donations$|charit|donat|church|tithe|nonprofit|goodwill|red cross|united way/i], ['Medical & dental', /medical|health|doctor|dental|dentist|vision|optom|pharm|hospital|clinic|copay|prescription|therapy|chiropract/i],
     ['HSA / FSA', /\bhsa\b|\bfsa\b|health savings|flexible spending/i], ['Mortgage & property tax', /mortgage|property tax|real estate tax|escrow/i], ['Education', /tuition|education|school|college|student|529|book store|textbook/i],
     ['Childcare', /child ?care|daycare|day care|preschool|babysit|nanny/i], ['Business & work expenses', /business|office supply|work expense|professional dues|union dues/i], ['Energy-efficient home', /solar|heat pump|insulation|ev charger/i]];
   let taxYear = null;

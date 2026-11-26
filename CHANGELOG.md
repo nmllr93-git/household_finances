@@ -7,6 +7,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 - **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once
 - **Move from Mint, Monarch, YNAB or Empower:** import their transaction export as is. Larenest recognises the file, splits it by account and keeps each transaction's category, tags and notes
 - **Investment returns:** under Investment accounts, each account's gain for the period with the money you put in taken out, found on statements or bank transfers, or entered as a monthly amount for paycheck 401(k) deposits
+- **Donations category:** gifts to charities, churches and nonprofits are filed under Donations automatically, and the Taxes summary counts them as charitable giving
 
 ## Android 1.6.20
 - Fixed: Scan QR code on the Android app could do nothing when tapped. It now opens Google's own scanner screen (no camera permission needed)

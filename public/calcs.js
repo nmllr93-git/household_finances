@@ -173,6 +173,7 @@ dash.calc('all_txns', {
       if (type === 'income') return /payroll|direct dep|salary|paycheck|\bcsi\b/i.test(desc) ? 'Paycheck' : /interest/i.test(desc) ? 'Interest' : 'Other';
       const k = top(catVotes[`${book}|${vendor}`]) || top(catVotes[`*|${vendor}`]);
       if (k) return k;
+      if (/charit|donat|church|tithe|nonprofit|non-profit|foundation|ministr|red cross|united way|salvation army|gofundme|food bank|humane society/i.test(desc)) return 'Donations';
       if (/grocer|market|foods?\b|supermarket/i.test(desc)) return 'Groceries';
       if (/fuel|gas|oil|petro|station|parking|airline|hotel|uber|lyft/i.test(desc)) return 'Travel';
       if (/cafe|coffee|pizza|brew|grill|taco|restaurant|kitchen|bar\b|pub\b|diner|burger/i.test(desc)) return 'Dining';
@@ -554,7 +555,7 @@ dash.calc('subs', {
       const paid = Object.values(o.recent).filter((x) => x > 0);
       let kind = null;
       if (o.sub) kind = 'Subscription';
-      else if (paid.length >= 3 && !['Groceries', 'Dining', 'Travel', 'Hobbies', 'Gifts', 'Home Improvement'].includes(o.cat)) {
+      else if (paid.length >= 3 && !['Groceries', 'Dining', 'Travel', 'Hobbies', 'Gifts', 'Donations', 'Home Improvement'].includes(o.cat)) {
         const med = [...paid].sort((a, b) => a - b)[Math.floor(paid.length / 2)];
         if (paid.filter((x) => Math.abs(x - med) <= med * 0.2).length >= 3) kind = 'Recurring bill';
       }

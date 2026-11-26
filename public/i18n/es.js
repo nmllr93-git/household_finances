@@ -472,4 +472,5 @@ window.FDI18n.add({ 'Select': 'Seleccionar', '{0} selected': '{0} seleccionadas'
   'Choose something to change first.': 'Primero elige algo para cambiar.', '✓ Changed {0} transactions.': '✓ Se cambiaron {0} transacciones.', 'Hide selected': 'Ocultar seleccionadas', 'Clear selection': 'Quitar selección',
   'Returns, not counting money you added': 'Rendimiento, sin contar el dinero que aportaste', 'You added': 'Aportaste', 'Investment return': 'Rendimiento de la inversión', 'Start': 'Inicio', 'End': 'Fin', '$ a month': '$ al mes',
   'Leaving Mint, Monarch, YNAB or Empower? Drop in their export as is.': '¿Dejas Mint, Monarch, YNAB o Empower? Sube su exportación tal cual.',
+  'Donations': 'Donaciones',
   'Hide {0} transactions? They stop counting anywhere; you can bring them back from Ignored transactions.': '¿Ocultar {0} transacciones? Dejan de contar en todas partes; puedes recuperarlas en Transacciones ignoradas.', '✓ Hid {0} transactions.': '✓ Se ocultaron {0} transacciones.', 'Select all shown': 'Seleccionar todas las mostradas' });
