@@ -829,6 +829,67 @@
         ...(kinds.includes('investment') ? sharedIn().filter((d) => d.kind === 'investment' && d.history && shIncl(d).inv).map((d) => ({ name: `${d.name} (${d.owner || d.srcLabel})`, points: per.map((m) => { const h = d.history.find((x) => x[0] === m.month); return { label: m.label, v: h ? h[1] : null, note: 'shared' }; }) })) : [])] });
   };
   dash.draw('investChart', (el) => balLines(el, ['investment'], emptyIn('investment balances')));
+  // Return on each investment account over the period: change in balance minus money you put in (or plus money you took out).
+  const INV_SKIP = /dividend|reinvest|interest|\bbuy\b|bought|\bsell\b|sold|fee|gain|capital|split|exchange|rebalanc|market value|change in value/i;
+  const INV_IN = /contribution|deposit|transfer|ach|payroll|employer|match|rollover|withdraw|distribution|from |to /i;
+  dash.draw('investReturns', (el) => {
+    el.replaceChildren();
+    if (st('balances', 'period', 'txns') !== 'ok') return;
+    const per = period(); if (!per.length) return;
+    const m0 = per[0].month, m1 = per[per.length - 1].month;
+    const b = rows('balances').filter((r) => r.book === book() && r.kind === 'investment');
+    const accts = [...new Set(b.map((r) => r.label))]; if (!accts.length) return;
+    const tx = rows('txns').filter((t) => t.book === book());
+    const out = [];
+    for (const a of accts) {
+      const h = b.filter((r) => r.label === a && r.balance != null).sort((x, y) => (x.month < y.month ? -1 : 1));
+      const start = [...h].reverse().find((r) => r.month < m0) || h.find((r) => r.month >= m0 && r.month <= m1);
+      const end = [...h].reverse().find((r) => r.month <= m1);
+      if (!start || !end || end.month <= start.month) continue;
+      const inWin = (t) => t.month > start.month && t.month <= end.month;
+      // money in or out seen on the account's own statements
+      let own = tx.filter((t) => t.source === a && inWin(t) && !INV_SKIP.test(t.description || '') && INV_IN.test(t.description || '')), src = 'its statements';
+      let net = own.reduce((s, t) => s - Number(t.amount), 0);
+      if (!own.length) { // else: transfers out of your bank accounts that name this account
+        const words = a.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !/account|invest|brokerage|individual|joint/.test(w));
+        own = tx.filter((t) => t.type === 'transfer' && t.acctKind === 'deposit' && inWin(t) && words.some((w) => (t.description || '').toLowerCase().includes(w)));
+        net = own.reduce((s, t) => s + Number(t.amount), 0); src = own.length ? 'your bank transfers' : '';
+      }
+      const mo = Number((prefGet('invContrib', {}) || {})[`${book()}|${a}`]) || 0, months = (+end.month.slice(0, 4) - +start.month.slice(0, 4)) * 12 + (+end.month.slice(5) - +start.month.slice(5));
+      if (!own.length && mo) { net = mo * months; src = 'monthly'; }
+      const gain = end.balance - start.balance - net, base = start.balance + net / 2;
+      out.push({ a, start, end, net, gain, pct: base > 0 ? (gain / base) * 100 : null, n: own.length, src, mo, months });
+    }
+    if (!out.length) return;
+    const lbl = (m) => { const [y, mo] = m.split('-'); return new Date(+y, +mo - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }); };
+    const t = document.createElement('table'); t.className = 'fd-table fd-invret';
+    const hr = document.createElement('tr'); ['Account', 'Start', 'End', 'You added', 'Investment return', ''].forEach((c) => { const th = document.createElement('th'); th.textContent = c; hr.append(th); });
+    const th = document.createElement('thead'); th.append(hr); const tb = document.createElement('tbody');
+    const td = (txt, cls) => { const c = document.createElement('td'); c.textContent = txt; if (cls) c.className = cls; return c; };
+    let S0 = 0, S1 = 0, SN = 0, SG = 0;
+    for (const r of out) {
+      S0 += r.start.balance; S1 += r.end.balance; SN += r.net; SG += r.gain;
+      const tr = document.createElement('tr');
+      tr.append(td(r.a), td(`${money0(r.start.balance)} · ${lbl(r.start.month)}`), td(`${money0(r.end.balance)} · ${lbl(r.end.month)}`),
+        (() => { if (r.src && r.src !== 'monthly') return td(`${r.net < 0 ? '−' : ''}${money0(Math.abs(r.net))}`);
+          // nothing on statements (paycheck 401(k) deposits never show at the bank): let them say what goes in each month
+          const c = td(r.src ? `${money0(r.net)} ` : '', ''), i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.step = '1'; i.className = 'fd-inpS'; i.placeholder = '$ a month';
+          i.value = r.mo || ''; i.setAttribute('aria-label', `What you add to ${r.a} each month`); i.title = 'Nothing found on statements. Enter what you add each month, paycheck deductions included.';
+          i.addEventListener('change', () => { const m = { ...(prefGet('invContrib', {}) || {}) }, k = `${book()}|${r.a}`, v = Math.max(0, Number(i.value) || 0); if (v) m[k] = v; else delete m[k]; prefSet('invContrib', m); });
+          const sm = document.createElement('span'); sm.className = 'fd-muted'; sm.textContent = '/mo'; c.append(i, sm); return c; })(),
+        td(`${r.gain < 0 ? '−' : '+'}${money0(Math.abs(r.gain))}`, r.gain >= 0 ? 'fd-good' : 'fd-bad'),
+        td(r.pct == null ? '' : `${r.pct >= 0 ? '+' : '−'}${Math.abs(r.pct).toFixed(1)}%`, r.gain >= 0 ? 'fd-good' : 'fd-bad'));
+      tr.title = r.src === 'monthly' ? `${money0(r.mo)} a month × ${r.months} months` : r.src ? `${r.n} deposit or withdrawal${r.n === 1 ? '' : 's'} found in ${r.src}` : 'No deposits found, so the whole change counts as return';
+      tb.append(tr);
+    }
+    if (out.length > 1) { const tr = document.createElement('tr'); tr.className = 'fd-total'; const p = S0 + SN / 2 > 0 ? (SG / (S0 + SN / 2)) * 100 : null;
+      tr.append(td('Total'), td(money0(S0)), td(money0(S1)), td(`${SN < 0 ? '−' : ''}${money0(Math.abs(SN))}`), td(`${SG < 0 ? '−' : '+'}${money0(Math.abs(SG))}`, SG >= 0 ? 'fd-good' : 'fd-bad'), td(p == null ? '' : `${p >= 0 ? '+' : '−'}${Math.abs(p).toFixed(1)}%`, SG >= 0 ? 'fd-good' : 'fd-bad')); tb.append(tr); }
+    t.append(th, tb);
+    const h = document.createElement('h3'); h.textContent = 'Returns, not counting money you added';
+    const n = document.createElement('p'); n.className = 'fd-note'; n.textContent = 'Investment return = end balance − start balance − what you put in (plus what you took out). Deposits come from the account’s statements, or from bank transfers that name it. The % is an estimate that treats deposits as made mid-period. When nothing shows on statements (paycheck 401(k) deposits, say), enter what you add each month.';
+    const w = document.createElement('div'); w.className = 'fd-tablewrap'; w.append(t);
+    el.append(h, w, n);
+  });
   dash.draw('loanChart', (el) => balLines(el, ['mortgage', 'loan'], emptyIn('mortgage or loan balances')));
   dash.draw('depositChart', (el) => {
     const s = st('balance_totals', 'period'); if (s !== 'ok') return placeholder(el, s);

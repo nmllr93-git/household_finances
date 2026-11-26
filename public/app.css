@@ -750,3 +750,8 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 .fd-bulkbar { position: sticky; top: 52px; z-index: 5; background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.08); }
 .fd-bulkfields { flex-wrap: wrap; gap: 10px; } .fd-bulkfields .fd-field { min-width: 150px; flex: 1 1 150px; }
 .fd-selcol { width: 28px; text-align: center; } tr.is-sel td { background: color-mix(in srgb, var(--color-accent, #c9773a) 10%, transparent); }
+.fd-invret { margin-top: 6px; } .fd-invret td:not(:first-child), .fd-invret th:not(:first-child) { text-align: right; white-space: nowrap; }
+.fd-invret td.fd-muted { color: var(--color-text-secondary, #6b7a75); font-style: italic; }
+.fd-invret tr.fd-total td { font-weight: 600; border-top: 2px solid var(--color-border-line); }
+#investments h3 { margin: 18px 0 4px; font-size: 16px; }
+.fd-invret .fd-inpS { width: 84px; padding: 3px 6px; font: inherit; text-align: right; } .fd-invret td span.fd-muted { margin-left: 3px; font-style: normal; }
