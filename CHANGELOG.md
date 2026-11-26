@@ -3,7 +3,13 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Android 1.6.21
+- **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once
+- **Move from Mint, Monarch, YNAB or Empower:** import their transaction export as is. Larenest recognises the file, splits it by account and keeps each transaction's category, tags and notes
+- **Investment returns:** under Investment accounts, each account's gain for the period with the money you put in taken out, found on statements or bank transfers, or entered as a monthly amount for paycheck 401(k) deposits
+- **Donations category:** gifts to charities, churches and nonprofits are filed under Donations automatically, and the Taxes summary counts them as charitable giving
+
+## Desktop 1.0.40
 - **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once
 - **Move from Mint, Monarch, YNAB or Empower:** import their transaction export as is. Larenest recognises the file, splits it by account and keeps each transaction's category, tags and notes
 - **Investment returns:** under Investment accounts, each account's gain for the period with the money you put in taken out, found on statements or bank transfers, or entered as a monthly amount for paycheck 401(k) deposits

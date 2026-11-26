@@ -270,6 +270,7 @@ A suggested order for a new household:
    - Pick the tab to open on, the default date range and the first day of the week. Click **Save settings**.
 3. **Add your accounts:** go to the **Import** tab.
    - **Import a transactions file** for checking, savings and credit cards. Choose the account (or **+** to add one, with its type), then pick a CSV, PDF, OFX or QFX file from your bank's website. Check the preview (purchases should show as *Out*) and click **Save import**.
+   - **Switching from Mint, Monarch, YNAB or Empower?** Drop their transactions export in as is. Larenest recognises it, splits it by account and keeps each transaction's category, tags and notes.
    - **Record a statement balance** for investment, retirement and mortgage accounts. Pick the account, then enter the ending balance and date.
 4. **Fix categories:** in **Transactions**, tick **Needs a category** and edit each one. To save time, tick *"Do this for every transaction whose description contains…"* to make a **rule** that also applies to past and future imports.
 5. **Set budgets:** in **Budget**, use **Set a monthly budget** (category, amount, starting month, optional rollover).
@@ -323,12 +324,13 @@ In **Transactions → Rules**, click **+ New rule**.
 - **Possible duplicates:** when bank sync and a statement (or a typed entry) both have the same purchase a few days apart, a box at the top of Transactions lets you keep one copy.
 - **⚙ Columns** shows, hides and reorders columns. Drag a header edge to resize it.
 - **Allow editing** lets you edit vendor, category and type right in the rows.
+- **Select** adds a checkbox to each row. Tick several, then set their category, add a tag, change the type or one-time, or hide them, all at once.
 - **Export CSV** downloads what's currently listed.
 
 ### Tiles for each tab
 Every tab has its own row of tiles at the top. Click a tile to jump to the section behind it.
 - **Everything** and **Overview:** the original five cards.
-- **Accounts:** net worth, checking & savings, investments, credit cards owed, loans & mortgage.
+- **Accounts:** net worth, checking & savings, investments (with each account's return, not counting money you added), credit cards owed, loans & mortgage.
 - **Expenses:** spent this month (against your usual month), average spending, top category, subscriptions, unusual this month.
 - **Budget:** the budget ring, budget left, categories over budget, spent this month.
 - **Planning:** lowest cash ahead, where cash ends up, next payday, next bill, savings rate. They follow the forecast's **Look ahead** setting.
