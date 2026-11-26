@@ -3,6 +3,9 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- iPhone app: the Scan QR code button now shows on the Connect screen (the app's own add-ons, like QR reading, receipt scanning and Face ID lock, could load too late for the page to see them)
+
 ## Android 1.6.21
 - **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once
 - **Move from Mint, Monarch, YNAB or Empower:** import their transaction export as is. Larenest recognises the file, splits it by account and keeps each transaction's category, tags and notes
