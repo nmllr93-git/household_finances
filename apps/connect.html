@@ -136,7 +136,9 @@
   $('f').addEventListener('submit', (e) => { e.preventDefault(); go($('u').value); });
   // Scan the QR code shown on the host computer (uses the phone's camera; nothing leaves the phone)
   (function () {
-    const P = (window.Capacitor && window.Capacitor.Plugins) || {};
+    const C = window.Capacitor, P = Object.assign({}, (C && C.Plugins) || {});
+    // App-local iOS plugins register after the page's plugin list is built, so ask for them by name too
+    if (C && C.registerPlugin && C.getPlatform && C.getPlatform() === 'ios' && !P.Ocr) { try { P.Ocr = C.registerPlugin('Ocr'); } catch (e) {} }
     const found = (val) => { if (!/^https?:\/\//i.test(val || '')) { $('msg').textContent = 'That QR code isn\u2019t a Larenest address. Scan the one in Larenest \u2192 Host options on your computer.'; return; } $('u').value = val; go(val); };
     // Android app: Google's scanner screen (no camera permission needed)
     if (P.QrScan) { $('scan').hidden = false; $('scan').addEventListener('click', async () => {

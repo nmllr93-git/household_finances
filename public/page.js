@@ -2160,6 +2160,7 @@
   const widgetApi = () => { if (window.LarenestWidgetNative && window.LarenestWidgetNative.update) return { update: (o) => Promise.resolve(window.LarenestWidgetNative.update(o.data)) }; // Android app, any page
     const C = window.Capacitor; if (!C || (C.getPlatform && !['android', 'ios'].includes(C.getPlatform()))) return null; // iPhone: the Budget & bills widget
     if (C.Plugins && C.Plugins.LarenestWidget && C.Plugins.LarenestWidget.update) return C.Plugins.LarenestWidget;
+    if (C.registerPlugin && C.getPlatform && C.getPlatform() === 'ios') { try { return (window.__lnWidget = window.__lnWidget || C.registerPlugin('LarenestWidget')); } catch (e) {} }
     if (typeof C.nativePromise === 'function') return { update: (o) => C.nativePromise('LarenestWidget', 'update', o) };
     return null; };
   let wState = '';

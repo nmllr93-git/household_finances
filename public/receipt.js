@@ -58,7 +58,9 @@
   }
 
   // the phone's own text recognition: the app plugin (phone-only mode), or the Android app's bridge (pages from your computer)
-  const plugin = () => (root.Capacitor && root.Capacitor.Plugins && root.Capacitor.Plugins.Ocr) || null;
+  let ocrP = null;
+  const plugin = () => { const C = root.Capacitor; if (!C) return null; if (C.Plugins && C.Plugins.Ocr) return C.Plugins.Ocr;
+    if (!ocrP && C.registerPlugin && C.getPlatform && C.getPlatform() === 'ios') { try { ocrP = C.registerPlugin('Ocr'); } catch (e) {} } return ocrP; };
   const bridge = () => (root.LarenestWidgetNative && typeof root.LarenestWidgetNative.ocr === 'function' ? root.LarenestWidgetNative : null);
   async function read(b64) {
     let text = '';

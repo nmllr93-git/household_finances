@@ -9,7 +9,9 @@
   const KEY = 'fd-lock';
   const cfg = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } };
   const save = (c) => { try { if (c) localStorage.setItem(KEY, JSON.stringify(c)); else localStorage.removeItem(KEY); } catch (e) {} };
-  const bio = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Biometric) || null;
+  let bioP = null;
+  const bio = () => { const C = window.Capacitor; if (!C) return null; if (C.Plugins && C.Plugins.Biometric) return C.Plugins.Biometric;
+    if (!bioP && C.registerPlugin && C.getPlatform && C.getPlatform() === 'ios') { try { bioP = C.registerPlugin('Biometric'); } catch (e) {} } return bioP; };
   const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
   async function hashPin(pin, salt, iter) {
     const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
