@@ -1089,8 +1089,45 @@
   const DEF = ['date', 'vendor', 'category', 'amount', 'source'];
   const cols = () => { const c = (Array.isArray(TP.cols) ? TP.cols : DEF).filter((k) => COLS[k]); return c.length ? c : DEF; };
   let ro = null;
+  // ---- select several transactions and change them together ----
+  let BULKMSG = ''; const SEL = new Set(); const selOn = () => !!(document.querySelector('#fd-tsel') || {}).checked;
+  q('fd-tsel').forEach((c) => c.addEventListener('change', () => { if (!c.checked) SEL.clear(); dash.draw('txHead'); dash.draw('txRows'); dash.draw('txBulk'); }));
+  dash.draw('txBulk', (el) => {
+    el.replaceChildren(); if (!selOn()) return;
+    const bar = document.createElement('div'); bar.className = 'fd-bulkbar';
+    const n = document.createElement('b'); n.textContent = SEL.size ? TR('{0} selected').replace('{0}', SEL.size) : TR('Tick transactions below, or the box in the header to select all shown.'); bar.append(n);
+    if (!SEL.size && BULKMSG) { const m = phMsg(BULKMSG); m.className = 'fd-note fd-good'; bar.append(m); }
+    if (SEL.size) {
+      const field = (lab, inp) => { const l = document.createElement('label'); l.className = 'fd-field'; l.append(TR(lab), inp); return l; };
+      const cat = document.createElement('input'); cat.className = 'fd-in'; cat.setAttribute('list', 'fd-cats'); cat.placeholder = TR('Leave as is');
+      const tag = document.createElement('input'); tag.className = 'fd-in'; tag.placeholder = TR('e.g. Colorado trip');
+      const typ = document.createElement('select'); typ.className = 'dash-select'; [['', 'Leave as is'], ['expense', 'Expense'], ['income', 'Income'], ['transfer', 'Transfer (not spending)']].forEach(([v, l]) => typ.append(new Option(TR(l), v)));
+      const one = document.createElement('select'); one.className = 'dash-select'; [['', 'Leave as is'], ['yes', 'Yes'], ['no', 'No']].forEach(([v, l]) => one.append(new Option(TR(l), v)));
+      const msg = phMsg('');
+      const picked = () => rows('txns').filter((t) => t.book === book() && SEL.has(t.key) && !t.splitOf);
+      const apply = rbtn('Apply to selected', async () => {
+        const c = cat.value.trim().slice(0, 40), tg = parseTags(tag.value), ty = typ.value, ot = one.value;
+        if (!c && !tg.length && !ty && !ot) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Choose something to change first.'); return; }
+        apply.disabled = true; msg.className = 'fd-note'; msg.textContent = TR('Saving…'); let k = 0;
+        for (const t of picked()) { const ex = {}; if (c) ex.category = c; if (ty) ex.type = ty; if (ot) ex.oneTime = ot === 'yes'; if (tg.length) ex.tags = [...new Set([...(t.tags || []), ...tg])].slice(0, 5);
+          await quickSave(t, ex); k++; }
+        SEL.clear(); apply.disabled = false; BULKMSG = TR('✓ Changed {0} transactions.').replace('{0}', k); dash.draw('txHead'); dash.draw('txBulk');
+      }, false);
+      const hide = rbtn('Hide selected', async () => { if (!confirm(TR('Hide {0} transactions? They stop counting anywhere; you can bring them back from Ignored transactions.').replace('{0}', SEL.size))) return;
+        const d = await db(); let k = 0; for (const t of picked()) { if (String(t.key).startsWith('m:')) continue; await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); k++; }
+        SEL.clear(); BULKMSG = TR('✓ Hid {0} transactions.').replace('{0}', k); dash.draw('txHead'); dash.draw('txBulk'); });
+      const clr = rbtn('Clear selection', () => { SEL.clear(); dash.draw('txHead'); dash.draw('txRows'); dash.draw('txBulk'); });
+      const row = document.createElement('div'); row.className = 'fd-row fd-bulkfields'; row.append(field('Category', cat), field('Add tag', tag), field('Type', typ), field('One-time', one));
+      const acts = document.createElement('div'); acts.className = 'fd-setinline'; acts.append(apply, hide, clr);
+      bar.append(row, acts, msg);
+    }
+    el.append(bar);
+  });
   dash.draw('txHead', (tr) => {
     tr.replaceChildren();
+    if (selOn()) { const th = document.createElement('th'); th.className = 'fd-selcol'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('aria-label', 'Select all shown');
+      const shown = () => txMatches().slice(0, tLimit).filter((t) => !t.splitOf); cb.checked = shown().length > 0 && shown().every((t) => SEL.has(t.key));
+      cb.addEventListener('change', () => { shown().forEach((t) => (cb.checked ? SEL.add(t.key) : SEL.delete(t.key))); dash.draw('txRows'); dash.draw('txBulk'); }); th.append(cb); tr.append(th); }
     for (const k of cols()) {
       const th = document.createElement('th'); th.dataset.field = k; th.dataset.col = k; th.textContent = COLS[k].label;
       th.className = (COLS[k].l ? 'fd-l ' : '') + 'c-' + k;
@@ -1176,6 +1213,8 @@
     el.replaceChildren();
     for (const t of txMatches().slice(0, tLimit)) {
       const tr = document.createElement('tr'); tr.dataset.key = enc(t.key);
+      if (selOn()) { const c = document.createElement('td'); c.className = 'fd-selcol'; if (!t.splitOf) { const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = SEL.has(t.key); cb.setAttribute('aria-label', 'Select ' + t.vendor);
+        cb.addEventListener('change', () => { BULKMSG = ''; cb.checked ? SEL.add(t.key) : SEL.delete(t.key); tr.classList.toggle('is-sel', cb.checked); dash.draw('txBulk'); }); c.append(cb); if (cb.checked) tr.classList.add('is-sel'); } tr.append(c); }
       const v = td(t.vendor); if (rcptKeys().has(t.splitOf || t.key)) { const r = document.createElement('span'); r.textContent = '📎 '; r.title = 'Has a receipt photo'; v.prepend(r); } if (t.edited || t.rule) { const b = document.createElement('span'); b.className = 'fd-pill'; b.textContent = t.edited ? 'edited' : 'rule'; v.append(' ', b); }
       const amt = td((t.type === 'income' ? '+' : '') + money2(t.amount), t.type === 'income' ? 'fd-good' : t.type === 'transfer' ? 'fd-zero' : '');
       const cat = td(t.category + (t.oneTime ? ' · one-time' : '') + (t.type === 'transfer' ? '' : t.type === 'income' ? ' · income' : ''), 'fd-l' + (t.category === 'Uncategorized' ? ' fd-warn' : ''));

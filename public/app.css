@@ -747,3 +747,6 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 .fd-setgrid .fd-setinline input.fd-numsm { width: 72px; flex: none; }
 .fd-setgrid .fd-setinline input.fd-numsm { width: 64px; padding-left: 8px; padding-right: 4px; text-align: right; }
 .fd-setgrid .fd-setinline input.fd-in.fd-numsm { width: 58px; min-width: 0; max-width: 58px; box-sizing: border-box; }
+.fd-bulkbar { position: sticky; top: 52px; z-index: 5; background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.fd-bulkfields { flex-wrap: wrap; gap: 10px; } .fd-bulkfields .fd-field { min-width: 150px; flex: 1 1 150px; }
+.fd-selcol { width: 28px; text-align: center; } tr.is-sel td { background: color-mix(in srgb, var(--color-accent, #c9773a) 10%, transparent); }

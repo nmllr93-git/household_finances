@@ -3,6 +3,9 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once
+
 ## Android 1.6.20
 - Fixed: Scan QR code on the Android app could do nothing when tapped. It now opens Google's own scanner screen (no camera permission needed)
 - iPhone app: Scan QR code now works too: take a photo of the code on your computer's screen and the app reads it

@@ -411,6 +411,7 @@
         <select class="dash-select" id="fd-ttype"><option value="">Everything</option><option value="expense">Expenses</option><option value="income">Income</option><option value="transfer">Transfers</option></select>
       </label>
       <label class="fd-check"><input type="checkbox" id="fd-tneeds"> Needs a category (<span data-draw="txNeeds">0</span>)</label>
+      <label class="fd-check"><input type="checkbox" id="fd-tsel"> Select</label>
       <label class="fd-check"><input type="checkbox" id="fd-tedit"> Allow editing</label>
       <button type="button" class="fd-btn fd-quiet fd-sm" data-go-merge>Merge categories</button>
       <button type="button" class="fd-btn fd-quiet fd-sm" id="fd-colbtn" aria-haspopup="dialog" aria-expanded="false">⚙ Columns</button>
@@ -463,6 +464,7 @@
     </form>
 
     <div data-draw="pendingRows" data-source="prefs"></div>
+    <div data-draw="txBulk" data-source="txns"></div>
     <div class="fd-scroll">
       <table class="fd-table" data-source="txns" data-row-key="key">
         <thead><tr data-draw="txHead"></tr></thead>
