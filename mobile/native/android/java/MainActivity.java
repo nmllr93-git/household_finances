@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WidgetPlugin.class); // home-screen widget (phone-only pages, which have Capacitor)
         registerPlugin(BiometricPlugin.class); // fingerprint / face unlock for the app lock
         registerPlugin(OcrPlugin.class); // receipt scanning
+        registerPlugin(QrPlugin.class); // scan the computer's QR code
         super.onCreate(savedInstanceState);
         // Pages served by your computer don't get Capacitor's bridge, so give every page in this app a tiny,
         // widget-only connection: it can save the widgets' summary and set their refresh schedule, nothing else.

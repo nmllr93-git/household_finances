@@ -3,6 +3,10 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- Fixed: Scan QR code on the Android app could do nothing when tapped. It now opens Google's own scanner screen (no camera permission needed)
+- iPhone app: Scan QR code now works too: take a photo of the code on your computer's screen and the app reads it
+
 ## Desktop 1.0.39
 - **Spending pace alerts:** a heads-up in Needs attention when a category is running well ahead of its usual month (compared with the same point in your last 3 months), at most once a week per category. Set how far ahead counts (default 50%), or turn it off, in Settings for this dashboard
 - Accessibility: every form field now has a name screen readers can read out (33 settings and editor fields didn't), messages like "Saved" are announced, and the page language follows the app language. Checked at large text sizes on a phone-sized screen with no sideways scrolling

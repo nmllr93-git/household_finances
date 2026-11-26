@@ -43,10 +43,12 @@ if (!x.includes('.WidgetConfigActivity')) rx += `    <activity android:name=".Wi
 if (rx) x = x.replace('</application>', rx + '    </application>');
 if (!x.includes('POST_NOTIFICATIONS')) x = x.replace('<application', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application');
 if (!x.includes('RECEIVE_BOOT_COMPLETED')) x = x.replace('<application', '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <application');
+// download Google's QR scanner screen with the app instead of on the first scan
+if (!x.includes('com.google.mlkit.vision.DEPENDENCIES')) x = x.replace('</application>', '    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />\n    </application>');
 fs.writeFileSync(man, x);
 // libraries for the app lock (fingerprint / face) and receipt scanning (on-device text recognition)
 const gradle = path.join(M, 'android', 'app', 'build.gradle'); let g = fs.readFileSync(gradle, 'utf8');
-const deps = ['androidx.biometric:biometric:1.1.0', 'com.google.mlkit:text-recognition:16.0.1'];
+const deps = ['androidx.biometric:biometric:1.1.0', 'com.google.mlkit:text-recognition:16.0.1', 'com.google.android.gms:play-services-code-scanner:16.1.0'];
 for (const d of deps) if (!g.includes(d.split(':').slice(0, 2).join(':'))) g = g.replace(/\ndependencies\s*\{/, (m) => `${m}\n    implementation "${d}"`);
 fs.writeFileSync(gradle, g);
 console.log('Android project configured');

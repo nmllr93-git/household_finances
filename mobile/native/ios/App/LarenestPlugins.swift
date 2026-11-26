@@ -35,7 +35,17 @@ public class BiometricPlugin: CAPPlugin, CAPBridgedPlugin {
 public class OcrPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "OcrPlugin"
     public let jsName = "Ocr"
-    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "read", returnType: CAPPluginReturnPromise)]
+    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "read", returnType: CAPPluginReturnPromise), CAPPluginMethod(name: "readQr", returnType: CAPPluginReturnPromise)]
+    // the QR code the computer shows, from a photo of it (Apple's Vision, on the phone)
+    @objc func readQr(_ call: CAPPluginCall) {
+        guard let s = call.getString("data"), let d = Data(base64Encoded: s, options: .ignoreUnknownCharacters), let img = UIImage(data: d), let cg = img.cgImage else { call.resolve(["value": ""]); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let req = VNDetectBarcodesRequest(); req.symbologies = [.qr]
+            do { try VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:]).perform([req])
+                call.resolve(["value": (req.results ?? []).compactMap { $0.payloadStringValue }.first ?? ""])
+            } catch { call.resolve(["value": ""]) }
+        }
+    }
     @objc func read(_ call: CAPPluginCall) {
         guard let s = call.getString("data"), s.count < 12_000_000, let d = Data(base64Encoded: s, options: .ignoreUnknownCharacters),
               let img = UIImage(data: d), let cg = img.cgImage else { call.resolve(["text": ""]); return }

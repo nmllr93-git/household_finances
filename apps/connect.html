@@ -136,6 +136,21 @@
   $('f').addEventListener('submit', (e) => { e.preventDefault(); go($('u').value); });
   // Scan the QR code shown on the host computer (uses the phone's camera; nothing leaves the phone)
   (function () {
+    const P = (window.Capacitor && window.Capacitor.Plugins) || {};
+    const found = (val) => { if (!/^https?:\/\//i.test(val || '')) { $('msg').textContent = 'That QR code isn\u2019t a Larenest address. Scan the one in Larenest \u2192 Host options on your computer.'; return; } $('u').value = val; go(val); };
+    // Android app: Google's scanner screen (no camera permission needed)
+    if (P.QrScan) { $('scan').hidden = false; $('scan').addEventListener('click', async () => {
+      $('msg').textContent = 'Opening the scanner\u2026';
+      try { const r = await P.QrScan.scan(); $('msg').textContent = ''; if (r && r.value) found(r.value); }
+      catch (e) { $('msg').textContent = 'The scanner couldn\u2019t open (' + ((e && e.message) || e) + '). Type the address instead; it\u2019s shown under the QR code on your computer.'; } }); return; }
+    // iPhone app: take a photo of the QR code; Apple's Vision reads it on the phone
+    if (P.Ocr && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios') { $('scan').hidden = false;
+      const fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.setAttribute('capture', 'environment'); fi.hidden = true; document.body.append(fi);
+      $('scan').addEventListener('click', () => fi.click());
+      fi.addEventListener('change', () => { const f = fi.files[0]; fi.value = ''; if (!f) return; $('msg').textContent = 'Reading the QR code\u2026';
+        const rd = new FileReader(); rd.onload = async () => { try { const r = await P.Ocr.readQr({ data: String(rd.result).split(',')[1] }); $('msg').textContent = ''; if (r && r.value) found(r.value); else $('msg').textContent = 'No QR code found in that photo. Try again closer, or type the address instead.'; } catch (e) { $('msg').textContent = 'Couldn\u2019t read the photo. Type the address instead.'; } };
+        rd.readAsDataURL(f); });
+      return; }
     if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     $('scan').hidden = false; let stream = null, live = false;
     const stop = () => { live = false; if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; $('scanbox').hidden = true; $('scan').hidden = false; };
@@ -143,7 +158,8 @@
     $('scan').addEventListener('click', async () => {
       try {
         const det = new BarcodeDetector({ formats: ['qr_code'] });
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        $('msg').textContent = 'Opening the camera\u2026';
+        stream = await Promise.race([navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 15000))]); $('msg').textContent = '';
         const v = $('cam'); v.srcObject = stream; await v.play(); $('scanbox').hidden = false; $('scan').hidden = true; live = true;
         const tick = async () => { if (!live) return; try { const c = await det.detect(v); const hit = c.find((x) => /^https?:\/\//i.test(x.rawValue || '')); if (hit) { stop(); $('u').value = hit.rawValue; go(hit.rawValue); return; } } catch (e) {} setTimeout(tick, 250); };
         tick();
