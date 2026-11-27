@@ -1,7 +1,7 @@
 {
   "name": "household-finances-desktop",
   "productName": "Larenest",
-  "version": "1.0.40",
+  "version": "1.0.41",
   "description": "Larenest for Windows, Mac and Linux: runs your finance server and dashboard in one app.",
   "main": "main.js",
   "private": true,

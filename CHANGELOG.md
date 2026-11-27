@@ -3,9 +3,14 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Android 1.6.24
 - Fixed: an investment account that hasn't had a new statement yet this month now stays in the Investments tile and chart totals (using its last known balance), instead of dropping out until its next update
 - The "shared" badge now shows → for an account or asset you're sharing out to another dashboard and ← for one shared in from another, in blue and orange, instead of the same ⇄ for both
+
+## Desktop 1.0.41
+- Fixed: an investment account that hasn't had a new statement yet this month now stays in the Investments tile and chart totals (using its last known balance), instead of dropping out until its next update
+- The "shared" badge now shows → for an account or asset you're sharing out to another dashboard and ← for one shared in from another, in blue and orange, instead of the same ⇄ for both
+- Phones connecting to a computer running Larenest: the section menus at the top no longer push the ⚙ button off the edge of the screen, spread across the full width instead of bunching up on the left, and the investment returns table scrolls sideways instead of running off the screen (already in Android 1.6.22/1.6.23; this brings the computer-hosted pages up to the same fix)
 
 ## Android 1.6.23
 - Phones: the section menus at the top spread across the full width instead of bunching up on the left
