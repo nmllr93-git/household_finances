@@ -9,7 +9,7 @@
   :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#1f2a37; --mut:#5b6675; --card:#fff; --line:#d8dde3; --acc:#1f5f8b; --bad:#b3261e; --ok:#1e7a46; }
   @media (prefers-color-scheme: dark) { :root { --bg:#12171d; --fg:#e6e9ed; --mut:#9aa4b0; --card:#1b222b; --line:#2c3540; --acc:#6fb0e0; --bad:#f08a80; --ok:#6fcf97; } }
   * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding:20px; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding:max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
   main { width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px; }
   img { width:56px; height:56px; border-radius:12px; display:block; margin-bottom:12px; }
   h1 { font-size:1.3rem; margin:0 0 4px; }
@@ -22,11 +22,14 @@
   li button { margin:0; text-align:left; background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:500; }
   #msg { margin-top:12px; min-height:1.3em; font-size:.92rem; } .bad { color:var(--bad); } .ok { color:var(--ok); }
   small { display:block; margin-top:16px; color:var(--mut); }
+html.reopening main > :not(#opening) { display:none; } #opening { text-align:center; } #opening .addr { font-weight:600; color:var(--fg); word-break:break-all; }
+  .spin { width:28px; height:28px; margin:6px auto 14px; border:3px solid var(--line); border-top-color:var(--acc); border-radius:50%; animation:sp 1s linear infinite; } @keyframes sp { to { transform:rotate(360deg); } }
 #scanbox{margin:12px 0}#scanbox video{width:100%;max-width:360px;border-radius:12px;background:#000;display:block;margin-bottom:8px}
 </style>
 </head>
 <body>
 <main>
+  <div id="opening" hidden><div class="spin" aria-hidden="true"></div><p>Opening <span class="addr" id="openAddr"></span>…</p><p id="openSlow" hidden>This is taking longer than usual. If your phone just switched Wi‑Fi or networks, go back and connect again.</p><button type="button" class="q" id="openBack">Back to connect screen</button></div>
   <img src="icons/icon-192.png" alt="">
   <h1>Connect to your server</h1>
   <p>Enter the address of the computer running Larenest. You'll sign in on the next screen.</p>
@@ -75,6 +78,13 @@
   window.__fdFind = find;
   const norm = (v) => { v = String(v || '').trim().replace(/\/+$/, ''); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'http://' + v; if (!/:\d+$/.test(v.replace(/^https?:\/\//, '')) && !/^https:/i.test(v)) v += ':8080'; return v; };
   const say = (t, c) => { msg.textContent = t; msg.className = c || ''; };
+  // While the server's page loads, show where we're going and a way back (a stuck load used to leave a blank screen).
+  let slowT = 0;
+  window.__fdOpening = (u) => { const o = $('opening'); $('openAddr').textContent = String(u).replace(/^https?:\/\//, ''); o.hidden = false; document.documentElement.classList.add('reopening');
+    clearTimeout(slowT); slowT = setTimeout(() => { $('openSlow').hidden = false; }, 10000); };
+  $('openBack').addEventListener('click', () => { try { window.stop(); } catch (e) {} clearTimeout(slowT); $('opening').hidden = true; $('openSlow').hidden = true; document.documentElement.classList.remove('reopening');
+    try { history.replaceState(null, '', location.pathname + '?pick=1'); } catch (e) {} say(''); });
+  const homeQ = () => (window.Capacitor ? '/?app=phone&home=' + encodeURIComponent(location.origin) : '/');
   // Connection problem detector: turn a failed connection into likely causes and fixes, in plain words
   function diagnose(u, took, timedOut) {
     let h = ''; try { h = new URL(u).hostname; } catch (e) {}
@@ -125,7 +135,7 @@
       if (j.app !== 'household-finances') { say("Something answered at that address, but it isn't Larenest. Check the port.", 'bad'); return; }
       save(u); remember(u, j); say('Connected. Opening…', 'ok');
       try { if (window.Capacitor) localStorage.setItem('fd-mode', 'remote'); } catch (e) {}
-      if (window.FDApp && FDApp.openHost) FDApp.openHost(u); else location.href = u + (window.Capacitor ? '/?app=phone' : '/');
+      if (window.FDApp && FDApp.openHost) FDApp.openHost(u); else { window.__fdOpening(u); location.href = u + homeQ(); }
     } catch (e) {
       clearTimeout(t); const took = Date.now() - t0;
       if (/^https:/i.test(u) && await ping(u.replace(/^https:/i, 'http:'), 3000)) { $('u').value = u.replace(/^https:\/\//i, ''); return go(u.replace(/^https:/i, 'http:')); }
@@ -174,6 +184,7 @@
   if (window.FDApp && FDApp.setupAgain && location.protocol === 'file:') { const b = document.createElement('button'); b.type = 'button'; b.className = 'q'; b.textContent = 'Run this computer as the server instead'; b.addEventListener('click', () => FDApp.setupAgain()); document.querySelector('main').append(b); }
   window.__fdGoHost = (h) => { say('Switching to an encrypted connection…'); go(h); };
   if (window.__fdUpgrade) window.__fdGoHost(window.__fdUpgrade);
+  if (window.__fdOpenPending) window.__fdOpening(window.__fdOpenPending);
   const r = list(); if (r.length) { $('u').value = r[0].replace(/^https?:\/\//, '');
     r.forEach((u) => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = u.replace(/^https?:\/\//, ''); b.addEventListener('click', () => go(u)); li.append(b); $('recent').append(li); }); }
 })();

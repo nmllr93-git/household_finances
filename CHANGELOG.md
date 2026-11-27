@@ -5,6 +5,8 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
 - iPhone app: the Scan QR code button now shows on the Connect screen (the app's own add-ons, like QR reading, receipt scanning and Face ID lock, could load too late for the page to see them)
+- Phone apps: while your server's page loads, the app shows where it's going and a Back to connect screen button. If the connection drops mid-load (say the phone switches networks), you get the connect screen with what went wrong instead of a blank screen that stayed blank after reopening
+- iPhone app: the connect screen no longer sits under the clock and battery, and Switch server now goes back to the connect screen
 
 ## Android 1.6.21
 - **Bulk edit in Transactions:** tick Select, choose transactions (or all shown), then set their category, add a tag, change the type or one-time, or hide them, all at once

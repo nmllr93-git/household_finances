@@ -79,12 +79,12 @@
 (function () {
   try {
     const q = new URLSearchParams(location.search);
-    if (q.get('app') === 'phone') { localStorage.setItem('fd-inapp', 'phone'); history.replaceState(null, '', location.pathname + location.hash); }
+    if (q.get('app') === 'phone') { localStorage.setItem('fd-inapp', 'phone'); const hm = q.get('home'); if (/^(https|capacitor):\/\/localhost$/.test(hm || '')) localStorage.setItem('fd-apphome', hm); history.replaceState(null, '', location.pathname + location.hash); }
     const phone = localStorage.getItem('fd-inapp') === 'phone', desk = !!(window.FDApp && window.FDApp.setupAgain);
     if (!phone && !desk) return;
     const box = document.querySelector('.fd-account'); if (!box) return;
     const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-link fd-switch'; b.textContent = 'Switch server';
-    b.addEventListener('click', () => { if (desk) window.FDApp.setupAgain(); else location.href = 'https://localhost/?pick=1'; });
+    b.addEventListener('click', () => { if (desk) window.FDApp.setupAgain(); else location.href = (localStorage.getItem('fd-apphome') || (/iPhone|iPad|iPod/.test(navigator.userAgent) ? 'capacitor://localhost' : 'https://localhost')) + '/start.html?pick=1'; });
     box.append(' · ', b);
   } catch (e) {}
 })();
