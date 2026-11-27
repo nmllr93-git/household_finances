@@ -3,7 +3,11 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Android 1.6.25
+- Save receipts before their transactions arrive, correct the scanned details and tip, and review or attach waiting receipts; confident single matches attach automatically
+- Fixed: when resolving a possible duplicate transaction (bank sync vs. a statement or hand-typed entry), a receipt photo on the copy being dropped now moves to the copy that stays, instead of being orphaned
+
+## Desktop 1.0.42
 - Save receipts before their transactions arrive, correct the scanned details and tip, and review or attach waiting receipts; confident single matches attach automatically
 - Fixed: when resolving a possible duplicate transaction (bank sync vs. a statement or hand-typed entry), a receipt photo on the copy being dropped now moves to the copy that stays, instead of being orphaned
 

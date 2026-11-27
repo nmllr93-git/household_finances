@@ -1,6 +1,6 @@
 # Larenest handoff
 
-Written 2026-11-27 at the end of a very long chat. Read this first in a new session, then read `docs/ARCHITECTURE.md` when you need to touch code. Nothing here is a secret. Never add credentials, keys, tokens, passwords or personal ID numbers to this file, the repo, memory or a message.
+Updated 2026-11-27 for the receipt-inbox release. Read this first in a new session, then read `docs/ARCHITECTURE.md` when you need to touch code. Nothing here is a secret. Never add credentials, keys, tokens, passwords or personal ID numbers to this file, the repo, memory or a message.
 
 ## 1. What Larenest is
 
@@ -9,8 +9,8 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 - Owner: Nathan Miller, solo developer, Iowa City area. Self-employed, so business (Schedule C) features are planned.
 - Source repo: `nmllr93-git/household_finances` (default branch `main`, working copy `/home/claude/household-finance` in cloud sessions).
 - Public repo and website: `nmllr93-git/household_finances-releases` (installers, README, `docs/` served as larenest.app, including /privacy, /testers, /linux, /download).
-- Versions at time of writing: Desktop **1.0.40**, Android **1.6.22**, iPhone TestFlight kept at **1.6.14** (see Apple rules below).
-- Changelog: `CHANGELOG.md` has `## Unreleased` on top, then `## Android x` / `## Desktop y` headings.
+- Release being prepared: Desktop **1.0.42**, Android **1.6.25**, iPhone TestFlight **1.6.14** (see Apple rules below). Previous releases were Desktop 1.0.41 and Android 1.6.24. Check Actions and the public releases page for completion; preparation alone does not mean builds or uploads succeeded.
+- Changelog: `CHANGELOG.md` uses `## Unreleased` for pending work, then `## Android x` / `## Desktop y` headings.
 
 ## 2. Standing rules (the user's own words, keep verbatim in spirit)
 
@@ -30,7 +30,7 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 Do this only when the user says to release. Read the Unreleased changelog first and ask the Apple question.
 
 1. Bump versions: `package.json` and `desktop/package.json` (Desktop), `mobile/package.json` (Android). Rename `## Unreleased` to `## Android x.y.z` and/or `## Desktop x.y.z` with the same bullets under each.
-2. Bump `CACHE` in `public/sw.js` (currently `hf-v149`) whenever `public/` assets changed.
+2. Bump `CACHE` in `public/sw.js` whenever `public/` assets changed. Receipt inbox bumped it to `hf-v153`.
 3. Run `npm test` (must show `# fail 0`).
 4. Commit, `git push origin main`, then **`git push origin main:release`**. That starts the Android, Desktop (Windows/Linux), Docker and release-notes workflows and publishes to the public releases repo.
 5. Mac: `gh workflow run "Desktop release" --ref main -f mac_publish=true`. Run it after the release exists to avoid a collision.
@@ -71,6 +71,8 @@ Data conventions worth remembering:
 - Per-book prefs live in `data/household/prefs`. The `settings` object includes `hidePending`, `tipCheck{pct,min,off}`, `paceAlert{pct,off}`, `catMerge`, and `invContrib` (monthly investment contributions by `book|account`).
 - Edits go to `data/household/edits` keyed by `txKey`. `quickSave(t, extra, btn)` saves a full edit.
 - The `all_txns` calc takes a `prefs` input and applies `catMerges(prefRows)`.
+- Receipt inbox: `receipts` documents with an empty `txKey` are waiting. They store editable vendor, date, total, tip and whether the tip is already included. Auto-attachment requires one unambiguous expense match with exact cents, a conservative vendor match, and a transaction dated from the receipt date through three days later. The date window is not an import deadline: receipts remain available indefinitely, including for manual attachment after a later statement import. A two-week reminder does not delete them.
+- Matching runs when the dashboard loads, after imports or manual sync, and on a 60-second refresh while the dashboard is open with waiting receipts; it is not a headless background job. Receipt edits and attachment use compare-and-set; discard removes a file only if no other receipt references it. Host SQLite and phone-only IndexedDB both implement these operations.
 - Needs-attention items are `{id, sig, lvl, text, go}`; `goTo` handles `'tx'`, `'feedback'`, `'budgetcat:'`.
 - App-export imports (Mint, Monarch, YNAB, Empower) are detected in `import.js` (`detectApp`), saved per account with `source: 'app:<id>'`, and keep each row's category, tags and note (whitelisted in `core/books.js`).
 - Types for transactions are only Expense, Income and Transfer. Donations is a category, auto-guessed in `calcs.js`.
@@ -79,19 +81,23 @@ Data conventions worth remembering:
 
 Released as Desktop 1.0.40 / Android 1.6.21 / 1.6.22: bulk edit in Transactions, import from Mint/Monarch/YNAB/Empower, investment returns net of contributions (with a monthly-amount box for paycheck 401(k)), Donations category, iPhone plugin lookup fix (Scan QR code button, receipt reading, Face ID), "Opening…" screen with a Back button plus an error page instead of a blank screen when the server load fails, safe-area padding and a working Switch server on iPhone, large-phone menu and table overflow fixes. Earlier this session: pending transactions with tip check, spending pace alerts, merge categories, CSV import improvements, accessibility pass, QR scanning on Android (confirmed working), privacy policy and Play Data safety updated.
 
-**Committed and pushed but not released:** section menus at the top of the phone dashboard now spread across the full width (CHANGELOG Unreleased).
+**Receipt inbox, committed as `c8bd380`:** standalone photo/PDF capture with OCR and editable details; explicit tip-in-total choice; conservative auto-matching; and a waiting panel with editing, search/manual attachment and discard. Includes Spanish strings, responsive styling and tests. The earlier duplicate-resolution fix moves receipt photos and metadata to the retained transaction. Release versions are prepared above; verify the workflows before treating them as published.
+
+The full regression suite passed 132 tests before release preparation. Browser checks covered capture, validation, matching, manual attachment, discard, refresh and phone-only storage. Screenshots were shown and approved before pushing. Camera and native OCR have not been tested on a physical Android or iPhone; verify them after installing the new builds.
+
+Desktop 1.0.41 / Android 1.6.24 included last-known investment balances and directional sharing badges. Desktop 1.0.41 also brought the full-width phone navigation fix to phones connected to a PC host.
 
 ## 7. Open items and things not verified
 
-- **Real-device checks still owed:** the 1.6.22 iPhone build (Scan QR code button, Opening screen, Switch server, large-iPhone layout) has not been confirmed on a phone. A tester with an iPhone Pro Max reported the layout running off the edge; a screenshot is pending.
+- **Real-device checks still owed:** test the new receipt capture, OCR and matching on Android and iPhone. The iPhone Scan QR code button, Opening screen, Switch server and large-iPhone layout also need confirmation; a tester reported layout overflow and a screenshot was pending.
 - **Phone-switching-networks hang** (user's iPhone froze on a blank screen after the phone likely switched between two ISPs): fixed by the Opening screen and error page, but not reproduced on a device.
 - **Windows flagged the Play Store bundle zip** as malware. Most likely a false positive. Waiting for the user's Defender threat name and `Get-FileHash` result; GitHub's recorded SHA-256 for that artifact was `ECB2003C7D05F77FD82886257788DA61EC268FFC501B5709A1D91CE5A3DA0425` (Android 1.6.21 bundle).
 - **Site comparison table:** add an "Import from other apps" row only after checking which of Monarch, YNAB, Copilot, Rocket Money and Actual import other apps' exports (a dash would read as "No"). Left out on purpose for now.
 - **Android R8** code shrinking on its own branch (Play Console "DEX code optimization: Low"); add keep rules for Biometric, Ocr, QrScan, widgets and the `LarenestWidgetNative` page bridge, and save `mapping.txt`.
 - **One-week timeline report:** a scheduled reminder fires Nov 28, 10am (America/Chicago). Check the user's scheduled tasks for its exact text.
 - **Windows code signing:** user was setting up Azure Artifact Signing under a "Larenest" Azure subscription (as of Nov 25). Status unknown; ask.
-- **Google Play:** plan is an early beta, then a closed test with 12 testers. Play reviewer notes and Data safety are up to date as of the last release. Ask for current status.
-- **Apple:** paid developer account; Apple builds are expensive, so the user holds them until the business features ship. They did ask for Apple builds this week; always ask.
+- **Google Play:** closed testing was active as of Nov 27. Testers need the dedicated opt-in link; the public listing alone does not enroll them. The Android workflow keeps the signed Play bundle as an Actions artifact; it does not upload it to Play automatically.
+- **Apple:** Apple builds are expensive; always ask at each release. The user confirmed Mac and iPhone for this receipt release; the iOS workflow uploads to TestFlight with version 1.6.14. Confirm the upload and processing status rather than assuming success.
 - Longer backlog: `docs/FUTURE.md` (languages, other countries, Pro tier, smaller items), `docs/PRO-TIERS.md` (draft free vs Pro; one-time license key movable between devices, no company account, free Pro key for early users), `docs/REVIEW-HANDOFF.md` (review findings R1–R6 done; performance items E1–E4 open).
 
 ## 8. How to work with this user

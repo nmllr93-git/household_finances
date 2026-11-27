@@ -2,16 +2,16 @@
 
 Ideas we've talked about, roughly in the order we'd likely do them. Nothing here is promised or scheduled.
 
-## Receipt inbox: save a receipt without waiting for the transaction (implemented, not yet released)
+## Receipt inbox: save a receipt without waiting for the transaction (implemented; release prepared)
 
-**The problem.** Today the only way to save a receipt photo right away is to attach it to a manually-typed transaction. When the real bank-sync transaction posts later, the dashboard flags the pair as a possible duplicate (see `Section 5` of `handoff.md` and the 2026-11-27 fix, commit `da9c399`, that moves the receipt onto whichever side survives). That works, but it means every receipt-while-shopping still creates a throwaway transaction and a manual review step. Nobody wants to carry a paper receipt around for three days waiting for it to post — the goal is: snap it, toss it, walk away, and have it find its own transaction later with no extra typing.
+**The problem.** Previously, saving a receipt photo right away meant attaching it to a manually-typed transaction. When the real bank-sync transaction posts later, the dashboard flags the pair as a possible duplicate (see `Section 5` of `handoff.md` and the 2026-11-27 fix, commit `da9c399`, that moves the receipt onto whichever side survives). That works, but it means every receipt-while-shopping still creates a throwaway transaction and a manual review step. Nobody wants to carry a paper receipt around for three days waiting for it to post — the goal is: snap it, toss it, walk away, and have it find its own transaction later with no extra typing.
 
 **The fix: receipts can exist with no transaction attached yet**, and get matched to one automatically when it posts (or picked manually if nothing matches).
 
 ### Data model
 - `core/books.js`'s `receipts` doc allows an empty `txKey`; a compare-and-set endpoint safely edits or attaches the same receipt without replacing it.
 - Receipt docs store `vendor`, `total`, optional `tip`, `date`, and `tipIncluded` so matching can use the corrected details without counting a tip twice.
-- `IMAGE_TYPES`/`cleanDoc` in `core/books.js` needs the new fields added to the `receipts` branch of `cleanDoc` (same `str`/`num` helpers already used elsewhere in that file).
+- `cleanDoc` in `core/books.js` validates the receipt fields for host and phone-only storage.
 
 ### Capture flow (standalone, not inside "add a transaction")
 - A new entry point — "Snap a receipt" — separate from the manual-transaction form. Runs the existing OCR (`public/receipt.js` `read()`/`parse()`), same as today.
@@ -33,8 +33,9 @@ Ideas we've talked about, roughly in the order we'd likely do them. Nothing here
 - Vendor/total/tip stay editable from this list too, in case a mistake is caught after the fact and the transaction still hasn't shown up.
 - A way to discard a receipt that was never going to post (return, cash purchase not tracked, duplicate photo).
 - Something never posting shouldn't sit there forever unexplained — show a quiet "still waiting after 2 weeks" note rather than silently deleting it.
+- Waiting receipts do not expire. The matching window compares transaction and receipt dates, not the date a statement is imported.
 
-### Suggested build order (two slices)
+### Implemented build order (two slices)
 1. **Tip detection + editable capture form + standalone saving.** Useful on its own even before any matching exists — `findTip` in `receipt.js`, the new receipt-doc fields in `core/books.js`, and the "Snap a receipt" entry point with the editable vendor/total/tip form. No dependency on slice 2.
 2. **The matcher + the waiting-list panel.** Builds on slice 1's data. This is where the `total + tip` matching amount and the single-confident-match rule live.
 
@@ -68,7 +69,7 @@ Keep the focus on US accounts and US dollars, but let the app's wording appear i
 
 ## Next up (picked up next session)
 - Android: turn on R8 code shrinking and resource shrinking for release builds (Play Console "DEX code optimization: Low"). Add keep rules for our plugins (Biometric, Ocr, widgets) and the page bridge (LarenestWidgetNative). Save mapping.txt next to the .aab on each release (Play's "no deobfuscation file" warning) and set ndk debugSymbolLevel 'SYMBOL_TABLE' (Play's "no debug symbols" warning; ML Kit's own native code may still warn). Do it on its own branch (not main): have the Android build check also make a shrunk release-style APK as a download, install that on a phone and test the widget, fingerprint unlock and receipt scanning, then merge into main only once it works.
-- iPhone: test build 28 (1.6.14) on a real phone: Face ID unlock, receipt scanning, Budget & bills widget. Give it to the external group once build 27's beta review is approved.
-- Mac build of 1.0.35 once Android and PC testing looks good.
+- iPhone: test Face ID unlock, receipt scanning and the Budget & bills widget on a real phone, including the new receipt inbox.
+- Mac: the user requested a build for the receipt-inbox release; check Actions and the public releases page for its status.
 
 ## Smaller items
