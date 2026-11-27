@@ -9,7 +9,7 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 - Owner: Nathan Miller, solo developer, Iowa City area. Self-employed, so business (Schedule C) features are planned.
 - Source repo: `nmllr93-git/household_finances` (default branch `main`, working copy `/home/claude/household-finance` in cloud sessions).
 - Public repo and website: `nmllr93-git/household_finances-releases` (installers, README, `docs/` served as larenest.app, including /privacy, /testers, /linux, /download).
-- Release being prepared: Desktop **1.0.42**, Android **1.6.25**, iPhone TestFlight **1.6.14** (see Apple rules below). Previous releases were Desktop 1.0.41 and Android 1.6.24. Check Actions and the public releases page for completion; preparation alone does not mean builds or uploads succeeded.
+- Latest release: Desktop **1.0.42**, Android **1.6.25**, iPhone TestFlight **1.6.14** build 36 (see Apple rules below). Windows, Linux, Mac, Android APK and Docker builds completed; iOS uploaded successfully, but Apple processing and tester availability were not checked. Previous releases were Desktop 1.0.41 and Android 1.6.24.
 - Changelog: `CHANGELOG.md` uses `## Unreleased` for pending work, then `## Android x` / `## Desktop y` headings.
 
 ## 2. Standing rules (the user's own words, keep verbatim in spirit)
@@ -81,7 +81,7 @@ Data conventions worth remembering:
 
 Released as Desktop 1.0.40 / Android 1.6.21 / 1.6.22: bulk edit in Transactions, import from Mint/Monarch/YNAB/Empower, investment returns net of contributions (with a monthly-amount box for paycheck 401(k)), Donations category, iPhone plugin lookup fix (Scan QR code button, receipt reading, Face ID), "Opening…" screen with a Back button plus an error page instead of a blank screen when the server load fails, safe-area padding and a working Switch server on iPhone, large-phone menu and table overflow fixes. Earlier this session: pending transactions with tip check, spending pace alerts, merge categories, CSV import improvements, accessibility pass, QR scanning on Android (confirmed working), privacy policy and Play Data safety updated.
 
-**Receipt inbox, committed as `c8bd380`:** standalone photo/PDF capture with OCR and editable details; explicit tip-in-total choice; conservative auto-matching; and a waiting panel with editing, search/manual attachment and discard. Includes Spanish strings, responsive styling and tests. The earlier duplicate-resolution fix moves receipt photos and metadata to the retained transaction. Release versions are prepared above; verify the workflows before treating them as published.
+**Receipt inbox, committed as `c8bd380` and released from `4b67b83`:** standalone photo/PDF capture with OCR and editable details; explicit tip-in-total choice; conservative auto-matching; and a waiting panel with editing, search/manual attachment and discard. Includes Spanish strings, responsive styling and tests. The earlier duplicate-resolution fix moves receipt photos and metadata to the retained transaction.
 
 The full regression suite passed 132 tests before release preparation. Browser checks covered capture, validation, matching, manual attachment, discard, refresh and phone-only storage. Screenshots were shown and approved before pushing. Camera and native OCR have not been tested on a physical Android or iPhone; verify them after installing the new builds.
 
@@ -97,7 +97,7 @@ Desktop 1.0.41 / Android 1.6.24 included last-known investment balances and dire
 - **One-week timeline report:** a scheduled reminder fires Nov 28, 10am (America/Chicago). Check the user's scheduled tasks for its exact text.
 - **Windows code signing:** user was setting up Azure Artifact Signing under a "Larenest" Azure subscription (as of Nov 25). Status unknown; ask.
 - **Google Play:** closed testing was active as of Nov 27. Testers need the dedicated opt-in link; the public listing alone does not enroll them. The Android workflow keeps the signed Play bundle as an Actions artifact; it does not upload it to Play automatically.
-- **Apple:** Apple builds are expensive; always ask at each release. The user confirmed Mac and iPhone for this receipt release; the iOS workflow uploads to TestFlight with version 1.6.14. Confirm the upload and processing status rather than assuming success.
+- **Apple:** Apple builds are expensive; always ask at each release. The user confirmed Mac and iPhone for this receipt release; iOS 1.6.14 build 36 uploaded successfully. Confirm Apple processing and tester availability rather than assuming they are complete.
 - Longer backlog: `docs/FUTURE.md` (languages, other countries, Pro tier, smaller items), `docs/PRO-TIERS.md` (draft free vs Pro; one-time license key movable between devices, no company account, free Pro key for early users), `docs/REVIEW-HANDOFF.md` (review findings R1–R6 done; performance items E1–E4 open).
 
 ## 8. How to work with this user

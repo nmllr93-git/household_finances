@@ -2,7 +2,7 @@
 
 Ideas we've talked about, roughly in the order we'd likely do them. Nothing here is promised or scheduled.
 
-## Receipt inbox: save a receipt without waiting for the transaction (implemented; release prepared)
+## Receipt inbox: save a receipt without waiting for the transaction (released)
 
 **The problem.** Previously, saving a receipt photo right away meant attaching it to a manually-typed transaction. When the real bank-sync transaction posts later, the dashboard flags the pair as a possible duplicate (see `Section 5` of `handoff.md` and the 2026-11-27 fix, commit `da9c399`, that moves the receipt onto whichever side survives). That works, but it means every receipt-while-shopping still creates a throwaway transaction and a manual review step. Nobody wants to carry a paper receipt around for three days waiting for it to post — the goal is: snap it, toss it, walk away, and have it find its own transaction later with no extra typing.
 
@@ -70,6 +70,6 @@ Keep the focus on US accounts and US dollars, but let the app's wording appear i
 ## Next up (picked up next session)
 - Android: turn on R8 code shrinking and resource shrinking for release builds (Play Console "DEX code optimization: Low"). Add keep rules for our plugins (Biometric, Ocr, widgets) and the page bridge (LarenestWidgetNative). Save mapping.txt next to the .aab on each release (Play's "no deobfuscation file" warning) and set ndk debugSymbolLevel 'SYMBOL_TABLE' (Play's "no debug symbols" warning; ML Kit's own native code may still warn). Do it on its own branch (not main): have the Android build check also make a shrunk release-style APK as a download, install that on a phone and test the widget, fingerprint unlock and receipt scanning, then merge into main only once it works.
 - iPhone: test Face ID unlock, receipt scanning and the Budget & bills widget on a real phone, including the new receipt inbox.
-- Mac: the user requested a build for the receipt-inbox release; check Actions and the public releases page for its status.
+- Mac: the receipt-inbox release includes Apple Silicon and Intel builds.
 
 ## Smaller items
