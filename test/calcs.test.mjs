@@ -96,6 +96,15 @@ test('balance totals add up accounts of one kind', () => {
   assert.equal(inv.total, 70000);
 });
 
+test('an account not updated this month still counts, carried forward from its last recorded balance', () => {
+  const get = engine({ imports: [
+    imp('x', 'Empower 401k', 'investment', [], { balance: 50000, balanceMonth: '2026-11', asOf: '2026-11-30', rowCount: 0 }),
+    imp('y', 'Hills Bank 401k', 'investment', [], { balance: 15000, balanceMonth: '2026-10', asOf: '2026-10-31', rowCount: 0 }),
+    imp('z', 'Checking', 'deposit', [tx('2026-09-02', 'X', 1), tx('2026-11-02', 'X', 1)]) ] });
+  const inv = get('balance_totals').find((r) => r.kind === 'investment' && r.month === '2026-11' && r.latest);
+  assert.equal(inv.total, 65000, 'Hills Bank 401k’s October balance should still be counted in November');
+});
+
 test('a vendor marked "Not recurring" drops out of subscriptions and recurring bills', () => {
   const t = ['2026-07-03', '2026-08-03', '2026-09-03', '2026-10-03'].map((d) => tx(d, 'VENMO PAYMENT', 40));
   const base = { imports: [imp('a', 'Checking', 'deposit', t)] };

@@ -669,16 +669,20 @@ dash.calc('balances', {
 
 dash.calc('balance_totals', {
   title: 'Balance totals',
-  description: 'Per book, kind of account and month in the range: the sum of the account balances, and the change from the month before, counting only accounts reported in both months.',
+  description: 'Per book, kind of account and month in the range: the sum of the account balances (an account without a newer balance keeps its last known one), and the change from the month before.',
   inputs: ['balances', 'period'],
   fn: (bal, period) => {
     const rows = [];
     for (const book of ['Personal', 'Shared']) for (const kind of ['deposit', 'investment', 'mortgage', 'loan', 'credit']) {
+      const rowsK = (bal || []).filter((r) => r.book === book && r.kind === kind);
+      // carry each account's last known balance forward until a newer one replaces it, same as the Accounts page and Net worth do
+      const byAcct = {};
       const series = [];
       for (const mo of period || []) {
-        const b = (bal || []).filter((r) => r.book === book && r.kind === kind && r.month === mo.month);
-        if (b.length) series.push({ month: mo.month, label: mo.label, total: Math.round(b.reduce((s, r) => s + r.balance, 0) * 100) / 100, accounts: b.length,
-          by: Object.fromEntries(b.map((r) => [r.label, r.balance])) });
+        for (const r of rowsK.filter((r) => r.month === mo.month)) byAcct[r.label] = { value: r.balance, month: r.month };
+        const labels = Object.keys(byAcct);
+        if (labels.length) series.push({ month: mo.month, label: mo.label, total: Math.round(labels.reduce((s, l) => s + byAcct[l].value, 0) * 100) / 100, accounts: labels.length,
+          by: Object.fromEntries(labels.map((l) => [l, byAcct[l].value])) });
       }
       series.forEach((s, j) => {
         let change = null;
