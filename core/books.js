@@ -73,7 +73,8 @@
         lots: lots(d.lots), sales: lots(d.sales), divs: Array.isArray(d.divs) ? d.divs.slice(0, 400).map((x) => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(x && x.date || '') ? x.date : '', amount: Math.max(0, num(x && x.amount) || 0) })).filter((x) => x.amount > 0) : [], manualPrice: num(d.manualPrice), manualAsOf: str(d.manualAsOf, 10), createdAt: now };
     }
     if (coll === 'receipts') {
-      return { book: label, txKey: str(d.txKey, 80), fileId: str(d.fileId, 40), name: str(d.name, 80), mime: IMAGE_TYPES.includes(d.mime) ? d.mime : 'image/jpeg', size: Math.max(0, num(d.size) || 0), createdAt: now };
+      return { book: label, txKey: str(d.txKey, 80), fileId: str(d.fileId, 40), name: str(d.name, 80), mime: IMAGE_TYPES.includes(d.mime) ? d.mime : 'image/jpeg', size: Math.max(0, num(d.size) || 0),
+        vendor: str(d.vendor, 80), total: num(d.total), tip: num(d.tip), tipIncluded: typeof d.tipIncluded === 'boolean' ? d.tipIncluded : null, date: DAY.test(d.date || '') ? d.date : '', createdAt: now };
     }
     if (coll === 'goals') {
       return { book: label, name: str(d.name, 60), target: num(d.target), by: str(d.by, 10), account: str(d.account, 60), saved: num(d.saved), createdAt: now };
@@ -183,6 +184,23 @@
       await store.insertDoc({ id, bookId: book.id, coll, json, created: new Date().toISOString(), createdBy: user });
       return reply(201, { id });
     }
+    async function updateReceipt(book, id, body) {
+      if (!body || !body.expected || typeof body.expected !== 'object' || (!body.discard && (!body.changes || typeof body.changes !== 'object'))) return reply(400, { error: 'Receipt and changes are required.' });
+      const current = (await store.listDocs(book.id, 'receipts')).find((r) => r.id === id);
+      if (!current) return reply(404, { error: 'This receipt no longer exists.' });
+      const old = JSON.parse(current.json), { id: expectedId, ...expected } = body.expected;
+      if (expectedId !== id || JSON.stringify(old) !== JSON.stringify(expected)) return reply(409, { error: 'This receipt changed. Refresh and try again.' });
+      if (body.discard) {
+        if (old.txKey) return reply(409, { error: 'This receipt is already attached.' });
+        if (!await store.discardReceipt(book.id, id, current.json, old.fileId)) return reply(409, { error: 'This receipt changed. Refresh and try again.' });
+        return reply(200, { ok: true });
+      }
+      const changes = body.changes;
+      const next = cleanDoc('receipts', { ...old, ...Object.fromEntries(['txKey', 'vendor', 'total', 'tip', 'tipIncluded', 'date'].filter((k) => Object.prototype.hasOwnProperty.call(changes, k)).map((k) => [k, changes[k]])) }, book.label);
+      next.createdAt = old.createdAt;
+      if (!await store.compareAndSetDoc(book.id, 'receipts', id, current.json, JSON.stringify(next))) return reply(409, { error: 'This receipt changed. Refresh and try again.' });
+      return reply(200, { ok: true });
+    }
     // Route a request below /api/books/<id>/ : rest = ['data'] | ['export'] | ['restore'] | ['shares-list'] | [coll] | [coll, docId]
     // getBody() reads the JSON body only when needed (so a large restore can use its own size limit).
     async function handle(method, rest, book, getBody, user) {
@@ -193,6 +211,7 @@
       if (a === 'restore' && method === 'POST') return restore(book, await getBody(60 * 1024 * 1024), user);
       if (a === 'verify-backup' && method === 'POST') return verify(book, await getBody(60 * 1024 * 1024), user);
       if (a === 'undo-import' && method === 'POST' && store.removeMany) return undoImport(book, await getBody());
+      if (a === 'receipts' && b && method === 'POST' && store.compareAndSetDoc) return updateReceipt(book, b, await getBody());
       if (a === 'files' && store.putFile) {
         if (method === 'POST' && !b) { const f = await getBody(5 * 1024 * 1024); const mime = String(f && f.mime || ''), data = String(f && f.data || '').replace(/^data:[^,]*,/, '');
           if (!IMAGE_TYPES.includes(mime)) return reply(400, { error: 'Receipts must be a photo (JPEG, PNG or WebP) or a PDF.' });

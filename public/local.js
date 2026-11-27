@@ -34,6 +34,12 @@
     listDocs: async (bookId, coll) => (await all('docs', 'bookColl', [bookId, coll])).sort((a, b) => String(a.created).localeCompare(String(b.created))).map((r) => ({ id: r.id, json: r.json, created: r.created, created_by: r.createdBy })),
     insertDoc: (r) => tx(['docs'], 'readwrite', (t) => { t.objectStore('docs').put(r); }),
     deleteDoc: (bookId, coll, id) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const d = await req2p(s.get(id)); if (d && d.bookId === bookId && d.coll === coll) s.delete(id); }),
+    compareAndSetDoc: (bookId, coll, id, expected, json) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'), d = await req2p(s.get(id));
+      if (!d || d.bookId !== bookId || d.coll !== coll || d.json !== expected) return false; s.put({ ...d, json }); return true; }),
+    discardReceipt: (bookId, id, expected, fileId) => tx(['docs', 'files'], 'readwrite', async (t) => { const s = t.objectStore('docs'), d = await req2p(s.get(id));
+      if (!d || d.bookId !== bookId || d.coll !== 'receipts' || d.json !== expected) return false;
+      const others = (await req2p(s.index('bookColl').getAll([bookId, 'receipts']))).some((r) => r.id !== id && JSON.parse(r.json).fileId === fileId);
+      s.delete(id); if (fileId && !others) { const files = t.objectStore('files'), f = await req2p(files.get(fileId)); if (f && f.bookId === bookId) files.delete(fileId); } return true; }),
     replaceBookDocs: (bookId, rows) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const keys = (await req2p(s.getAll())).filter((d) => d.bookId === bookId).map((d) => d.id); keys.forEach((k) => s.delete(k)); rows.forEach((r) => s.put({ ...r, bookId })); }),
     newId,
     backup: () => snapshot('before-restore', true), // the safety copy before a restore keeps photos too

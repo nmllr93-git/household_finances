@@ -418,6 +418,7 @@ On a **personal** dashboard, edit an account or asset and tick the shared dashbo
   - **ignore** it (restore it later under *Ignored transactions*).
 - **Transfer matching:** a payment out of checking or savings that arrives on a card or loan for the same amount within 5 days counts as one transfer, not spending.
 - **Receipt photos:** in a transaction's **Edit** window, **+ Add a receipt photo** opens the camera on a phone (or a file picker on a computer). Photos are shrunk to a sensible size, shown as thumbnails (tap to open full size), and marked 📎 in the transaction list. They're included in backup files.
+- **Receipt inbox:** under Transactions, **Snap a receipt** saves a photo or PDF before the transaction arrives. Check the vendor, date, total and tip, and say whether the total already includes the tip. A single matching expense within three days is attached automatically when the dashboard refreshes (including after a sync while it is open); otherwise use **Waiting for a transaction** to edit, attach or discard it.
 - **Manual entries:** the round **+** button (bottom right) adds income or an expense that never appears on a statement.
 
 ### Markets and economy (need API keys)

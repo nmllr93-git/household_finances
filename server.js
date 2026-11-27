@@ -272,6 +272,23 @@ const BOOKS_STORE = {
   listDocs: (bookId, coll) => db.prepare('SELECT id, json, created, created_by FROM docs WHERE book_id = ? AND coll = ? ORDER BY created').all(bookId, coll),
   insertDoc: (r) => db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, E(r.json), r.created, r.createdBy),
   deleteDoc: (bookId, coll, id) => db.prepare('DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = ?').run(id, bookId, coll),
+  compareAndSetDoc: (bookId, coll, id, expected, json) => {
+    const r = db.prepare('SELECT json FROM docs WHERE id = ? AND book_id = ? AND coll = ?').get(id, bookId, coll);
+    if (!r || r.json !== expected) return false;
+    db.prepare('UPDATE docs SET json = ? WHERE id = ? AND book_id = ? AND coll = ?').run(E(json), id, bookId, coll);
+    return true;
+  },
+  discardReceipt: (bookId, id, expected, fileId) => {
+    db.exec('BEGIN');
+    try {
+      const current = db.prepare("SELECT json FROM docs WHERE id = ? AND book_id = ? AND coll = 'receipts'").get(id, bookId);
+      if (!current || current.json !== expected) { db.exec('ROLLBACK'); return false; }
+      const others = BOOKS_STORE.listDocs(bookId, 'receipts').filter((r) => r.id !== id).some((r) => JSON.parse(r.json).fileId === fileId);
+      db.prepare("DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = 'receipts'").run(id, bookId);
+      if (fileId && !others) db.prepare('DELETE FROM files WHERE id = ? AND book_id = ?').run(fileId, bookId);
+      db.exec('COMMIT'); return true;
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  },
   replaceBookDocs: (bookId, rows) => {
     db.exec('BEGIN');
     try { db.prepare('DELETE FROM docs WHERE book_id = ?').run(bookId); const ins = db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)');

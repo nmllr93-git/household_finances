@@ -1479,7 +1479,7 @@
   const moveReceipts = async (d, fromKey, toKey) => {
     if (!toKey || toKey === fromKey) return;
     for (const r of rows('receipts').filter((x) => x.txKey === fromKey)) {
-      await d.collection('data/household/receipts').add({ book: book(), txKey: toKey, fileId: r.fileId, name: r.name, mime: r.mime, size: r.size });
+      await d.collection('data/household/receipts').add({ ...r, book: book(), txKey: toKey });
       await d.doc('data/household/receipts/' + r.id).delete();
     }
   };
@@ -5088,4 +5088,152 @@
     });
     const row = document.createElement('div'); row.className = 'fd-rb-row'; row.append(go, no); box.append(row, msg); cell.append(box); return tr;
   }
+
+  // ---- standalone receipt inbox ----
+  const inboxForm = document.getElementById('fd-inbox-form'), inboxFile = document.getElementById('fd-inbox-file'), inboxMsg = document.getElementById('fd-inbox-capture-msg');
+  let capture = null, captureSeq = 0, matchBusy = false, matchError = '', failedMatch = '', inboxRenderedBook = null;
+  const receiptPath = (id, receiptId) => `/api/books/${encodeURIComponent(id)}/receipts${receiptId ? '/' + encodeURIComponent(receiptId) : ''}`;
+  const receiptValues = (form) => {
+    const e = form.elements, vendor = e.vendor.value.trim(), date = e.date.value, total = Number(e.total.value), tip = e.tip.value === '' ? null : Number(e.tip.value);
+    if (!vendor || !date || !e.total.value || !(total > 0) || !Number.isFinite(total) || (tip !== null && (!Number.isFinite(tip) || tip < 0))) throw new Error(TR('Enter a vendor, date and valid total and tip.'));
+    if (tip > 0 && !e.tipIncluded.value) throw new Error(TR('Choose whether the total already includes the tip.'));
+    return { vendor, date, total, tip, tipIncluded: e.tipIncluded.value === '' ? null : e.tipIncluded.value === 'yes' };
+  };
+  const updateReceipt = async (id, r, changes) => {
+    await FDStore.json('POST', receiptPath(id, r.id), { expected: r, changes });
+    if (window.HF.state.bookId === id) await window.HF.load(id);
+  };
+  inboxFile.addEventListener('change', async () => {
+    const file = inboxFile.files[0], seq = ++captureSeq, id = window.HF.state.bookId;
+    inboxFile.value = ''; capture = null; inboxForm.hidden = true; inboxForm.reset();
+    if (!file) return;
+    inboxMsg.className = 'fd-note'; inboxMsg.textContent = TR('Reading the receipt…');
+    try {
+      const pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''), mime = pdf ? 'application/pdf' : 'image/jpeg';
+      const url = pdf ? await readDataUrl(file) : await shrink(file);
+      if (seq !== captureSeq || window.HF.state.bookId !== id) return;
+      capture = { id, url, mime, name: file.name || 'Receipt' };
+      let parsed = null;
+      try {
+        if (pdf) parsed = await window.FDReceipt.readPdf(await file.arrayBuffer());
+        else if (window.FDReceipt.available()) parsed = await window.FDReceipt.read(url.split(',')[1]);
+      } catch (e) { if (seq === captureSeq) inboxMsg.textContent = TR('Could not read the receipt. Enter the details by hand.') + ' ' + e.message; }
+      if (seq !== captureSeq) return;
+      if (window.HF.state.bookId !== id) { capture = null; return; }
+      if (parsed) {
+        inboxForm.elements.vendor.value = parsed.vendor || '';
+        inboxForm.elements.date.value = parsed.date || '';
+        inboxForm.elements.total.value = parsed.total == null ? '' : parsed.total.toFixed(2);
+        inboxForm.elements.tip.value = parsed.tip == null ? '' : parsed.tip.toFixed(2);
+        inboxMsg.textContent = TR('Check and correct the receipt details before saving.');
+      } else if (!inboxMsg.textContent || inboxMsg.textContent === TR('Reading the receipt…')) inboxMsg.textContent = TR('Enter the receipt details by hand.');
+      inboxForm.hidden = false;
+    } catch (e) { if (seq === captureSeq) { inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Could not open the receipt:') + ' ' + e.message; } }
+  });
+  inboxForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault(); const btn = inboxForm.querySelector('button[type=submit]');
+    try {
+      if (!capture || capture.id !== window.HF.state.bookId) throw new Error(TR('Choose the receipt again for this dashboard.'));
+      const values = receiptValues(inboxForm), c = capture, id = c.id; btn.disabled = true;
+      inboxMsg.className = 'fd-note'; inboxMsg.textContent = TR('Saving…');
+      const f = await FDStore.json('POST', `/api/books/${encodeURIComponent(id)}/files`, { mime: c.mime, data: c.url.split(',')[1] });
+      if (!f.id) throw new Error(TR('The receipt file was not saved.'));
+      await FDStore.json('POST', receiptPath(id), { ...values, txKey: '', fileId: f.id, name: c.name, mime: c.mime, size: Math.round(c.url.split(',')[1].length * 0.75) });
+      capture = null; inboxForm.reset(); inboxForm.hidden = true; inboxMsg.className = 'fd-note fd-good'; inboxMsg.textContent = TR('Receipt saved.');
+      if (window.HF.state.bookId === id) await window.HF.load(id);
+    } catch (e) { inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Not saved:') + ' ' + e.message; }
+    finally { btn.disabled = false; }
+  });
+
+  const inboxTransactions = () => {
+    const grouped = new Map();
+    for (const t of rows('txns').filter((x) => x.book === book() && x.type === 'expense' && Number(x.amount) > 0)) {
+      const key = t.splitOf || t.key, old = grouped.get(key);
+      if (old) old.amount += Number(t.amount); else grouped.set(key, { ...t, key, amount: Number(t.amount) });
+    }
+    return [...grouped.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  };
+  dash.draw('receiptInbox', (el) => {
+    const activeBook = window.HF.state.bookId;
+    if (inboxRenderedBook === activeBook && (el.querySelector('form[data-dirty]') || (el.contains(document.activeElement) && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)))) return;
+    if (inboxRenderedBook !== activeBook) { matchError = ''; failedMatch = ''; }
+    inboxRenderedBook = activeBook;
+    el.replaceChildren();
+    if (st('receipts', 'txns') !== 'ok') return;
+    const list = rows('receipts').filter((r) => r.book === book() && !r.txKey).sort((a, b) => String(a.createdAt || a.date).localeCompare(String(b.createdAt || b.date)));
+    if (!list.length && !matchError) return;
+    const ro = document.body.classList.contains('fd-readonly'), box = document.createElement('details'); box.className = 'fd-rb'; box.open = true;
+    const title = document.createElement('summary'); title.className = 'fd-rb-h'; title.textContent = TR('Waiting for a transaction') + ' (' + list.length + ')'; box.append(title);
+    box.append(phMsg('Receipts are attached automatically only when one transaction is a confident match. You can also choose one yourself.'));
+    if (matchError) { const m = phMsg(TR('Automatic matching failed:') + ' ' + matchError, 'fd-bad'); box.append(m);
+      if (!ro) box.append(rbtn('Retry matching', () => { matchError = ''; failedMatch = ''; dash.draw('receiptInbox'); scheduleReceiptMatch(); })); }
+    for (const r of list) {
+      const card = document.createElement('div'); card.className = 'fd-rb'; card.style.width = '100%'; card.style.boxSizing = 'border-box';
+      const photos = document.createElement('div'); photos.className = 'fd-rcpts'; const figure = document.createElement('figure'); let image;
+      if (r.mime === 'application/pdf') { image = document.createElement('button'); image.type = 'button'; image.className = 'fd-rcpt-pdf'; image.textContent = TR('Open the PDF'); }
+      else { image = document.createElement('img'); image.alt = TR('Receipt'); image.loading = 'lazy'; fileUrl(r.fileId).then((u) => { image.src = u; }).catch((e) => { image.alt = TR('Photo not found'); console.error('Receipt photo could not be loaded', e); }); }
+      image.addEventListener('click', () => fileUrl(r.fileId).then((u) => window.open(u, '_blank')).catch((e) => alert(TR('Could not open the receipt:') + ' ' + e.message)));
+      figure.append(image); photos.append(figure); card.append(photos);
+      if (window.FDReceipt.isAged(r)) card.append(phMsg('Still waiting after 2 weeks.'));
+      if (ro) { const info = document.createElement('p'); info.translate = false; info.textContent = `${r.date || '—'} · ${r.vendor || '—'} · ${r.total == null ? '—' : money2(r.total)} · ${TR('Tip')}: ${r.tip == null ? '—' : money2(r.tip)}`; card.append(info); box.append(card); continue; }
+      const form = document.createElement('form');
+      form.innerHTML = '<div class="fd-row"><label class="fd-field">Vendor<input name="vendor" type="text" maxlength="80" required></label><label class="fd-field">Receipt date<input name="date" type="date" required></label><label class="fd-field">Total on receipt<input name="total" type="number" min="0.01" step="0.01" required></label><label class="fd-field">Tip (optional)<input name="tip" type="number" min="0" step="0.01"></label><label class="fd-field">Does the total include the tip?<select name="tipIncluded" class="dash-select"><option value="">Choose if there is a tip</option><option value="yes">Yes, already included</option><option value="no">No, add the tip</option></select></label></div>';
+      form.elements.vendor.value = r.vendor || ''; form.elements.date.value = r.date || ''; form.elements.total.value = r.total == null ? '' : r.total; form.elements.tip.value = r.tip == null ? '' : r.tip;
+      form.elements.tipIncluded.value = r.tipIncluded == null ? '' : r.tipIncluded ? 'yes' : 'no';
+      form.addEventListener('input', () => { form.dataset.dirty = '1'; });
+      form.addEventListener('change', () => { form.dataset.dirty = '1'; });
+      const msg = phMsg(''); msg.setAttribute('aria-live', 'polite'); const save = document.createElement('button'); save.type = 'submit'; save.className = 'fd-btn fd-sm'; save.textContent = TR('Save receipt details');
+      form.append(save, msg);
+      form.addEventListener('submit', async (ev) => { ev.preventDefault(); save.disabled = true;
+        try { const values = receiptValues(form); await updateReceipt(window.HF.state.bookId, r, values); delete form.dataset.dirty; dash.draw('receiptInbox'); scheduleReceiptMatch(); }
+        catch (e) { form.dataset.dirty = '1'; msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not saved:') + ' ' + e.message; save.disabled = false; } });
+      card.append(form);
+      const picker = document.createElement('div'); picker.className = 'fd-row';
+      const searchLabel = document.createElement('label'); searchLabel.className = 'fd-field'; searchLabel.append(TR('Search transactions'));
+      const search = document.createElement('input'); search.type = 'search'; search.placeholder = TR('Date, vendor or amount'); searchLabel.append(search);
+      const selectLabel = document.createElement('label'); selectLabel.className = 'fd-field'; selectLabel.append(TR('Attach to a transaction'));
+      const select = document.createElement('select'); select.className = 'dash-select'; selectLabel.append(select);
+      const transactions = inboxTransactions();
+      const fill = () => { const needle = search.value.toLowerCase().trim(); select.replaceChildren(); const first = document.createElement('option'); first.value = ''; first.textContent = TR('Choose a transaction'); select.append(first);
+        for (const t of transactions.filter((x) => `${x.date} ${x.vendor} ${x.description} ${x.source} ${Number(x.amount).toFixed(2)}`.toLowerCase().includes(needle)).slice(0, 100)) {
+          const o = document.createElement('option'); o.value = t.key; o.textContent = `${t.date} · ${t.vendor || t.description} · ${money2(t.amount)} · ${t.source}`; o.translate = false; select.append(o);
+        } };
+      search.addEventListener('input', fill); fill();
+      const attach = rbtn('Attach', async () => { if (!select.value) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Choose a transaction.'); return; }
+        attach.disabled = true; try { const values = receiptValues(form); await updateReceipt(window.HF.state.bookId, r, { ...values, txKey: select.value }); delete form.dataset.dirty; dash.draw('receiptInbox'); scheduleReceiptMatch(); }
+        catch (e) { form.dataset.dirty = '1'; msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not saved:') + ' ' + e.message; attach.disabled = false; } }, false);
+      const discard = rbtn('Discard receipt', async () => { if (!confirm(TR('Discard this receipt and its file?'))) return; discard.disabled = true; const id = window.HF.state.bookId;
+        try { await FDStore.json('POST', receiptPath(id, r.id), { expected: r, discard: true }); delete form.dataset.dirty; if (window.HF.state.bookId === id) await window.HF.load(id); }
+        catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not removed:') + ' ' + e.message; discard.disabled = false; } });
+      picker.append(searchLabel, selectLabel, attach, discard); card.append(picker); box.append(card);
+    }
+    el.append(box);
+  });
+  function scheduleReceiptMatch() {
+    const inbox = document.getElementById('fd-receipt-inbox');
+    if (matchBusy || document.body.classList.contains('fd-readonly') || inbox.querySelector('form[data-dirty]') || inbox.contains(document.activeElement) || st('receipts', 'txns') !== 'ok' || !window.FDReceipt) return;
+    const id = window.HF.state.bookId, matches = window.FDReceipt.matches(rows('receipts').filter((r) => r.book === book()), rows('txns').filter((t) => t.book === book()));
+    if (!matches.length) return;
+    const { receipt, transaction } = matches[0], signature = JSON.stringify([id, receipt, transaction.key]);
+    if (signature === failedMatch) return;
+    matchBusy = true;
+    setTimeout(async () => {
+      try { if (window.HF.state.bookId !== id) return; await updateReceipt(id, receipt, { txKey: transaction.key }); matchError = ''; failedMatch = ''; }
+      catch (e) { failedMatch = signature; matchError = e.message; console.error('Receipt matching failed', e); dash.draw('receiptInbox'); }
+      finally { matchBusy = false; if (!matchError) scheduleReceiptMatch(); }
+    }, 0);
+  }
+  dash.onData(scheduleReceiptMatch);
+  document.getElementById('fd-receipt-inbox').addEventListener('focusout', () => setTimeout(scheduleReceiptMatch, 0));
+  setInterval(async () => {
+    if (document.body.classList.contains('fd-readonly') || st('receipts', 'txns') !== 'ok' || !rows('receipts').some((r) => r.book === book() && !r.txKey) ||
+        document.querySelector('#fd-receipt-inbox form[data-dirty]') || !inboxForm.hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName || '')) return;
+    const id = window.HF.state.bookId;
+    try {
+      const data = await FDStore.json('GET', `/api/books/${encodeURIComponent(id)}/data`);
+      if (window.HF.state.bookId !== id || document.querySelector('#fd-receipt-inbox form[data-dirty]') || !inboxForm.hidden ||
+          /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName || '')) return;
+      if (['imports', 'manual', 'edits', 'rules', 'receipts'].some((key) => JSON.stringify(data[key] || []) !== JSON.stringify(rows(key)))) await window.HF.load(id);
+    } catch (e) { console.error('Could not refresh waiting receipts', e); }
+  }, 60000);
 })();

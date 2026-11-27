@@ -1,7 +1,7 @@
 // Receipt scanning: read the store, date and total from a receipt photo, on the phone itself.
 // The text recognition is the phone's own (Android: ML Kit, iPhone: Apple's Vision). Nothing is uploaded anywhere.
 //   FDReceipt.available()        → true where this device can read text from photos
-//   FDReceipt.read(base64Jpeg)   → { text, vendor, date: 'YYYY-MM-DD' | '', total: number | null }
+//   FDReceipt.read(base64Jpeg)   → { text, vendor, date: 'YYYY-MM-DD' | '', total: number | null, tip: number | null }
 //   FDReceipt.parse(text)        → the same from text already read (used by the tests too)
 (function (root) {
   'use strict';
@@ -40,6 +40,16 @@
     return all.length ? Math.max(...all) : null;
   }
 
+  function findTip(lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const m = /^\s*(?:tip|gratuity)\s*[:$]?\s*(.*)$/i.exec(lines[i]);
+      if (!m || /%/.test(m[1])) continue;
+      const here = money(m[1]); if (here !== null) return here;
+      if (!m[1].trim() && i + 1 < lines.length && /^\s*\$?\s*\d+[.,]\d{2}\s*$/.test(lines[i + 1])) return money(lines[i + 1]);
+    }
+    return null;
+  }
+
   function findVendor(lines) {
     const skip = /^(welcome|thank|receipt|store\s*#|st#|tel|phone|www\.|http|\d|#|order|server|table|guest|cashier|date|time|invoice|ticket|terminal|merchant|sale|copy|customer)/i;
     for (const raw of lines.slice(0, 8)) {
@@ -54,7 +64,7 @@
 
   function parse(text) {
     const lines = String(text || '').split(/\r?\n/);
-    return { text: String(text || ''), vendor: findVendor(lines), date: findDate(text), total: findTotal(lines) };
+    return { text: String(text || ''), vendor: findVendor(lines), date: findDate(text), total: findTotal(lines), tip: findTip(lines) };
   }
 
   // the phone's own text recognition: the app plugin (phone-only mode), or the Android app's bridge (pages from your computer)
@@ -75,6 +85,39 @@
     const lines = await root.FDPdf.readLines(buffer);
     return parse(lines.map((l) => l.text).join('\n'));
   }
-  const FDReceipt = { available: () => !!(plugin() || bridge()), read, readPdf, parse };
+  function matches(receipts, transactions) {
+    const normalize = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+    const day = (s) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return NaN; const n = Date.parse(s + 'T00:00:00Z'); return Number.isFinite(n) && new Date(n).toISOString().slice(0, 10) === s ? n : NaN; };
+    const grouped = new Map();
+    for (const t of transactions || []) {
+      if (!t || !t.key || t.ignored || t.type !== 'expense' || !(Number(t.amount) > 0)) continue;
+      const key = t.splitOf || t.key, prev = grouped.get(key);
+      if (prev) prev.amount += Number(t.amount); else grouped.set(key, { ...t, key, amount: Number(t.amount) });
+    }
+    const occupied = new Set((receipts || []).filter((r) => r.txKey).map((r) => r.book + '|' + r.txKey));
+    const pending = (receipts || []).filter((r) => r && !r.txKey);
+    const candidates = new Map();
+    for (const r of pending) {
+      const name = normalize(r.vendor), at = day(r.date), total = Number(r.total), tip = r.tip == null || r.tip === '' ? 0 : Number(r.tip);
+      if (name.replace(/ /g, '').length < 4 || !Number.isFinite(at) || r.total == null || r.total === '' || !(total > 0) || !Number.isFinite(tip) || tip < 0 || (tip > 0 && typeof r.tipIncluded !== 'boolean')) continue;
+      const cents = Math.round(total * 100) + (r.tipIncluded ? 0 : Math.round(tip * 100));
+      const list = [...grouped.values()].filter((t) => {
+        const gap = day(t.date) - at, vendor = normalize(t.vendor), description = normalize(t.description);
+        const similar = (s) => s === name || (name.length >= 5 && s.startsWith(name + ' '));
+        return t.book === r.book && !occupied.has(t.book + '|' + t.key) && gap >= 0 && gap <= 3 * 864e5 &&
+          Math.round(t.amount * 100) === cents && (similar(vendor) || similar(description));
+      });
+      candidates.set(r, list);
+    }
+    const counts = new Map();
+    for (const list of candidates.values()) for (const t of list) counts.set(t.book + '|' + t.key, (counts.get(t.book + '|' + t.key) || 0) + 1);
+    return [...candidates].filter(([, list]) => list.length === 1 && counts.get(list[0].book + '|' + list[0].key) === 1)
+      .map(([receipt, list]) => ({ receipt, transaction: list[0] }));
+  }
+  const isAged = (receipt, now = Date.now()) => {
+    const at = Date.parse(receipt.createdAt || receipt.date || '');
+    return Number.isFinite(at) && now - at >= 14 * 864e5;
+  };
+  const FDReceipt = { available: () => !!(plugin() || bridge()), read, readPdf, parse, matches, isAged };
   if (typeof module !== 'undefined' && module.exports) module.exports = FDReceipt; else root.FDReceipt = FDReceipt;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -65,6 +65,17 @@ test('locked: data refused with 423 until the right password or recovery key', a
   assert.equal((await req('GET', `/api/books/${B}/data`)).status, 200);
 });
 
+test('waiting receipt updates and discard work while the database is encrypted', async () => {
+  const file = (await req('POST', `/api/books/${B}/files`, { mime: 'image/png', data: PNG })).json.id;
+  const id = (await req('POST', `/api/books/${B}/receipts`, { fileId: file, vendor: 'Cafe', date: '2026-11-01', total: 10 })).json.id;
+  let r = (await req('GET', `/api/books/${B}/data`)).json.receipts.find((x) => x.id === id);
+  assert.equal((await req('POST', `/api/books/${B}/receipts/${id}`, { expected: r, changes: { vendor: 'Bakery' } })).status, 200);
+  assert.ok(raw('SELECT json FROM docs').every((x) => x.json.startsWith('enc1:')));
+  r = (await req('GET', `/api/books/${B}/data`)).json.receipts.find((x) => x.id === id);
+  assert.equal((await req('POST', `/api/books/${B}/receipts/${id}`, { expected: r, discard: true })).status, 200);
+  assert.equal((await req('GET', `/api/books/${B}/files/${file}`)).status, 404);
+});
+
 test('change password keeps the data; automatic unlock survives a restart', async () => {
   assert.equal((await req('POST', '/api/encryption/password', { password: 'wrong', newPassword: 'battery staple' })).status, 403);
   assert.equal((await req('POST', '/api/encryption/password', { password: 'correct horse', newPassword: 'battery staple' })).status, 200);

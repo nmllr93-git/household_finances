@@ -145,6 +145,19 @@ test('invites: owner makes a one-time link; the new person picks a login and get
 
 // ---- restore integrity (review R1 + R2): references survive, photos too, and a failure changes nothing ----
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+test('waiting receipt edits reject stale data and discard preserves shared files', async () => {
+  const b = books()[0], file = (await req('POST', `/api/books/${b}/files`, { mime: 'image/png', data: PNG })).json.id;
+  const a = (await req('POST', `/api/books/${b}/receipts`, { fileId: file, vendor: 'Cafe', date: '2026-11-01', total: 10, tip: 2, tipIncluded: false })).json.id;
+  const other = (await req('POST', `/api/books/${b}/receipts`, { fileId: file, txKey: 'm:other' })).json.id;
+  const old = (await req('GET', `/api/books/${b}/data`)).json.receipts.find((r) => r.id === a);
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${a}`, { expected: old, changes: { vendor: 'Cafe Updated' } })).status, 200);
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${a}`, { expected: old, discard: true })).status, 409);
+  const current = (await req('GET', `/api/books/${b}/data`)).json.receipts.find((r) => r.id === a);
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${a}`, { expected: current, discard: true })).status, 200);
+  assert.equal((await req('GET', `/api/books/${b}/files/${file}`)).status, 200);
+  await req('DELETE', `/api/books/${b}/receipts/${other}`);
+  await req('DELETE', `/api/books/${b}/files/${file}`);
+});
 async function fixture(b) {
   const imp = await req('POST', `/api/books/${b}/imports`, { accountName: 'Checking', accountKind: 'deposit', txns: [{ date: '2026-03-01', description: 'COFFEE', amount: 4.5 }, { date: '2026-03-02', description: 'GROCER', amount: 60 }] });
   const man = await req('POST', `/api/books/${b}/manual`, { type: 'expense', date: '2026-03-03', amount: 20, vendor: 'Cash lunch', category: 'Dining' });

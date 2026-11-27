@@ -474,3 +474,20 @@ window.FDI18n.add({ 'Select': 'Seleccionar', '{0} selected': '{0} seleccionadas'
   'Leaving Mint, Monarch, YNAB or Empower? Drop in their export as is.': '¿Dejas Mint, Monarch, YNAB o Empower? Sube su exportación tal cual.',
   'Donations': 'Donaciones',
   'Hide {0} transactions? They stop counting anywhere; you can bring them back from Ignored transactions.': '¿Ocultar {0} transacciones? Dejan de contar en todas partes; puedes recuperarlas en Transacciones ignoradas.', '✓ Hid {0} transactions.': '✓ Se ocultaron {0} transacciones.', 'Select all shown': 'Seleccionar todas las mostradas' });
+window.FDI18n.add({
+  'Snap a receipt': 'Fotografiar un recibo',
+  'Save a receipt now and attach it to a transaction later. Photos are read on your phone; PDFs can be read on any device.': 'Guarda un recibo ahora y adjúntalo a una transacción después. Las fotos se leen en tu teléfono; los PDF se pueden leer en cualquier dispositivo.',
+  'Choose a photo or PDF': 'Elegir una foto o PDF', 'Receipt date': 'Fecha del recibo', 'Total on receipt': 'Total del recibo', 'Tip (optional)': 'Propina (opcional)',
+  'Does the total include the tip?': '¿El total incluye la propina?', 'Choose if there is a tip': 'Elige si hay propina', 'Yes, already included': 'Sí, ya está incluida', 'No, add the tip': 'No, sumar la propina',
+  'Check the amounts before saving. Choose whether the tip is already included to avoid counting it twice.': 'Revisa los montos antes de guardar. Indica si la propina ya está incluida para no contarla dos veces.',
+  'Save receipt': 'Guardar recibo', 'Waiting for a transaction': 'Esperando una transacción',
+  'Receipts are attached automatically only when one transaction is a confident match. You can also choose one yourself.': 'Los recibos se adjuntan automáticamente solo cuando hay una coincidencia segura. También puedes elegir una transacción.',
+  'Still waiting after 2 weeks.': 'Sigue esperando después de 2 semanas.', 'Receipt': 'Recibo', 'Tip': 'Propina', 'Save receipt details': 'Guardar datos del recibo',
+  'Search transactions': 'Buscar transacciones', 'Date, vendor or amount': 'Fecha, comercio o monto', 'Attach to a transaction': 'Adjuntar a una transacción',
+  'Choose a transaction': 'Elige una transacción', 'Choose a transaction.': 'Elige una transacción.', 'Attach': 'Adjuntar', 'Discard receipt': 'Descartar recibo',
+  'Discard this receipt and its file?': '¿Descartar este recibo y su archivo?', 'Automatic matching failed:': 'Falló la búsqueda automática:', 'Retry matching': 'Reintentar búsqueda',
+  'Enter a vendor, date and valid total and tip.': 'Ingresa un comercio, una fecha y un total y propina válidos.', 'Choose whether the total already includes the tip.': 'Indica si el total ya incluye la propina.',
+  'Could not read the receipt. Enter the details by hand.': 'No se pudo leer el recibo. Ingresa los datos a mano.', 'Check and correct the receipt details before saving.': 'Revisa y corrige los datos del recibo antes de guardar.',
+  'Enter the receipt details by hand.': 'Ingresa los datos del recibo a mano.', 'Could not open the receipt:': 'No se pudo abrir el recibo:', 'Choose the receipt again for this dashboard.': 'Vuelve a elegir el recibo para este tablero.',
+  'The receipt file was not saved.': 'No se guardó el archivo del recibo.', 'Receipt saved.': 'Recibo guardado.', 'Not saved:': 'No se guardó:', 'Not removed:': 'No se eliminó:', 'Photo not found': 'No se encontró la foto'
+});

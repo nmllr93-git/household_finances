@@ -80,6 +80,8 @@ SQLite (`finance.db` in the data folder):
 
 Collections (`core/books.js`): `imports` (statement batches, with `source`, `fileRows`, `skipped` and an optional `reconcile` record), `manual`, `edits`, `rules`, `budgets`, `accounts`, `goals`, `holdings`, `prefs` (per-book settings as JSON, including assets/vehicles, the watchlist, `settlements` and forecast `schedules`), `shares` (values shared from a personal book into a shared one), `receipts`.
 
+Receipt inbox entries have an empty `txKey` until matched. `public/receipt.js` matches an unambiguous expense using vendor, amount (respecting whether the tip is included), and a three-day date window; the dashboard runs this after data loads. Receipt edits and attachments use a compare-and-set endpoint, and discarding an unattached receipt removes its file only if no other receipt references it.
+
 Business features (docs/BUSINESS.md) add `biz`, `bizPct` and `schedC` to edits and rules, and keep their settings in prefs (`business`, `mileage-YYYY`, `bizyear-YYYY`); the totals come from `businessSummary` in `calcs.js`.
 
 Everything the dashboard shows is calculated in the browser by `public/calcs.js` from these raw collections. The digest and widget summaries run the same `calcs.js` on the server (via `vm`), so numbers match everywhere.
