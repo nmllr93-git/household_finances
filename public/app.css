@@ -340,7 +340,7 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 .fd-navpop button:hover, .fd-navpop button.is-on { background: color-mix(in srgb, var(--color-fg, #000) 8%, transparent); font-weight: 600; }
 @media (max-width: 1060px) { /* phones, foldables and portrait tablets: the tabs fold into a few menus */
   .fd-nav { overflow-x: visible; }
-  .fd-nav .fd-navm { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .fd-nav .fd-navm { display: block; flex: 1 1 auto; text-align: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .fd-nav .fd-navset, .fd-nav .fd-navarr { flex: none; }
   .fd-nav .fd-navb:not(.fd-navset):not(.fd-navarr) { display: none; }
   .fd-nav .fd-navset { font-size: 0; padding: 11px 10px 9px; margin-left: 0; } .fd-nav .fd-navset::before { content: '⚙'; font-size: 18px; }
@@ -631,9 +631,8 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-hl.fd-hl-done > span:first-child { color: var(--color-fg-muted); }
 /* small phones (≈360px): the section menus shrink so ✎ and ⚙ always fit */
 @media (max-width: 460px) {
-  .fd-nav .fd-navm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; padding-left: 4px; padding-right: 4px; }
+  .fd-nav .fd-navm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; padding-left: 4px; padding-right: 4px; }
   .fd-nav .fd-navset, .fd-nav .fd-navarr { flex: none; padding-left: 6px; padding-right: 6px; }
-  .fd-nav .fd-navarr { margin-left: auto; }
 }
 @media (max-width: 400px) { .fd-nav .fd-caret { font-size: 9px; vertical-align: 1px; } .fd-nav .fd-navm { padding-left: 3px; padding-right: 3px; } }
 @media (max-width: 400px) { .fd-nav { gap: 0; } .fd-nav .fd-navm { text-overflow: clip; } }
