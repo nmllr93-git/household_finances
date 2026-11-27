@@ -340,7 +340,8 @@ body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area
 .fd-navpop button:hover, .fd-navpop button.is-on { background: color-mix(in srgb, var(--color-fg, #000) 8%, transparent); font-weight: 600; }
 @media (max-width: 1060px) { /* phones, foldables and portrait tablets: the tabs fold into a few menus */
   .fd-nav { overflow-x: visible; }
-  .fd-nav .fd-navm { display: block; }
+  .fd-nav .fd-navm { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .fd-nav .fd-navset, .fd-nav .fd-navarr { flex: none; }
   .fd-nav .fd-navb:not(.fd-navset):not(.fd-navarr) { display: none; }
   .fd-nav .fd-navset { font-size: 0; padding: 11px 10px 9px; margin-left: 0; } .fd-nav .fd-navset::before { content: '⚙'; font-size: 18px; }
 }
@@ -629,7 +630,7 @@ body.fd-arranging .fd-reptile.is-arr > section .fd-creditor { pointer-events: au
 .fd-hl-acts { display: inline-flex; gap: 6px; flex: none; }
 .fd-hl.fd-hl-done > span:first-child { color: var(--color-fg-muted); }
 /* small phones (≈360px): the section menus shrink so ✎ and ⚙ always fit */
-@media (max-width: 420px) {
+@media (max-width: 460px) {
   .fd-nav .fd-navm { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; padding-left: 4px; padding-right: 4px; }
   .fd-nav .fd-navset, .fd-nav .fd-navarr { flex: none; padding-left: 6px; padding-right: 6px; }
   .fd-nav .fd-navarr { margin-left: auto; }
@@ -755,3 +756,5 @@ details.fd-setgrp:not([open]) { margin-bottom: 6px; }
 .fd-invret tr.fd-total td { font-weight: 600; border-top: 2px solid var(--color-border-line); }
 #investments h3 { margin: 18px 0 4px; font-size: 16px; }
 .fd-invret .fd-inpS { width: 84px; padding: 3px 6px; font: inherit; text-align: right; } .fd-invret td span.fd-muted { margin-left: 3px; font-style: normal; }
+
+.fd-tablewrap { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
