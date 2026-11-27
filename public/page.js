@@ -440,9 +440,9 @@
   const prevMonths = (n) => { const out = []; const d = new Date(); d.setUTCDate(15); for (let i = 1; i <= n; i++) { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 15)); out.push(x.toISOString().slice(0, 7)); } return out; };
   let FCSUM = null; // filled in by the cash forecast each time it draws
   const T = (title, go, fn) => ({ title, go, fn });
-  // balance tiles: this dashboard's accounts plus accounts shared into it (each share's ⇄ checkboxes decide what counts here)
+  // balance tiles: this dashboard's accounts plus accounts shared into it (each share's checkboxes decide what counts here)
   const withShared = (r, sh, kinds, debt) => { if (!r && !sh) return null; const own = r ? r.total : 0, tot = debt ? Math.abs(own) + Math.abs(sh) : own + sh;
-    const sub = sh ? `incl. ${money0(Math.abs(sh))} shared ⇄` : r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`;
+    const sub = sh ? `incl. ${money0(Math.abs(sh))} shared ←` : r.change == null ? `as of ${r.label}` : `${r.change >= 0 ? '+' : '−'}${money0(Math.abs(r.change))} vs ${r.prevLabel}`;
     const sr = balSeries(kinds, debt ? -1 : 1); return [money0(tot), sub, !debt && r && r.change < 0 && !sh ? 'bad' : debt ? '' : 'good', sr && { spark: sr.v, l: sr.l, down: !!debt }]; };
   // net worth the same way the Accounts list adds it up: your open accounts' latest balances, accounts and assets shared
   // into this dashboard (when counted in net worth here), and home, vehicles & other assets
@@ -465,9 +465,9 @@
     invest: T('Investments', 'investments', () => withShared(bal1('investment'), sharedSum(['investment'], 'inv'), ['investment'])),
     cards: T('Credit cards owed', 'accounts', () => withShared(bal1('credit'), sharedSum(['credit'], 'nw'), ['credit'], true)),
     loans: T('Loans & mortgage', 'mortgage', () => { const r = ['loan', 'mortgage'].map(bal1).filter(Boolean), sh = sharedSum(['loan', 'mortgage'], 'nw'); if (!r.length && !sh) return null; const tot = r.reduce((t, x) => t + Math.abs(x.total), 0) + Math.abs(sh);
-      return [money0(tot), sh ? `incl. ${money0(Math.abs(sh))} shared ⇄` : r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()]; }),
-    homeAssets: T('Home, vehicles & other', 'assets', () => { const own = assetsAll().map((a) => [a.name, assetNow(a)]), sh = sharedIn().filter((d) => d.kind === 'asset' && shIncl(d).nw).map((d) => [`${d.name} ⇄`, Number(d.balance) || 0]); const all = [...own, ...sh]; if (!all.length) return null;
-      const tot = all.reduce((t, x) => t + x[1], 0); return [money0(tot), sh.length ? `${own.length} yours · ${sh.length} shared ⇄` : `${all.length} item${all.length === 1 ? '' : 's'}`, '', { list: all.sort((a, b) => b[1] - a[1]).slice(0, 4) }]; }),
+      return [money0(tot), sh ? `incl. ${money0(Math.abs(sh))} shared ←` : r.length > 1 ? 'loans and mortgage' : r[0].kind === 'mortgage' ? 'mortgage' : 'loans', '', (() => { const sr = balSeries(['loan', 'mortgage'], -1); return sr && { spark: sr.v, l: sr.l, down: true }; })()]; }),
+    homeAssets: T('Home, vehicles & other', 'assets', () => { const own = assetsAll().map((a) => [a.name, assetNow(a)]), sh = sharedIn().filter((d) => d.kind === 'asset' && shIncl(d).nw).map((d) => [`${d.name} ←`, Number(d.balance) || 0]); const all = [...own, ...sh]; if (!all.length) return null;
+      const tot = all.reduce((t, x) => t + x[1], 0); return [money0(tot), sh.length ? `${own.length} yours · ${sh.length} shared ←` : `${all.length} item${all.length === 1 ? '' : 's'}`, '', { list: all.sort((a, b) => b[1] - a[1]).slice(0, 4) }]; }),
     spentMonth: T('Spent this month', 'categories', () => { if (st('txns') !== 'ok') return null; const s = sumA(expM(nowM())), pm = prevMonths(3).map((m) => sumA(expM(m))).filter((x) => x > 0), avg = pm.length ? pm.reduce((a, b) => a + b, 0) / pm.length : 0;
       const ms = monthsBack(6); return [money0(s), avg ? `usual month ≈ ${money0(avg)}` : 'so far this month', '', { bars: ms.map((m) => sumA(expM(m))), l: ms.map(MS), ref: avg || null }]; }),
     avgSpend: T('Average spending', 'cashflow', () => { const r = sumRow(); const m = monRows(); return r && [money0(r.avgSpend), `a month · ${rangeLabel()}`, '', m.length > 1 && { bars: m.map((x) => x.spend), l: m.map((x) => MS(x.month)), ref: r.avgSpend }]; }),
@@ -2037,11 +2037,12 @@
     i.dataset.catPrev = i.value; i.dataset.catPh = i.placeholder || ''; i.placeholder = i.value; i.value = ''; });
   document.addEventListener('focusout', (e) => { const i = e.target; if (!(i instanceof HTMLInputElement) || i.dataset.catPrev == null) return;
     if (!i.value.trim()) i.value = i.dataset.catPrev; i.placeholder = i.dataset.catPh; delete i.dataset.catPrev; delete i.dataset.catPh; });
-  // small "shared" badge next to an account or asset name, listing the dashboards it's shared with
+  // small "shared" badge next to an account or asset name, listing the dashboards it's shared with.
+  // → marks this (native) item being shared out; ← (elsewhere) marks one received from another dashboard, so the two don't look alike.
   const shareIcon = (host, to, first) => {
     if (!to || !to.length) return;
     const names = to.map((id) => (meBooks().find((b) => b.id === id) || {}).name || id);
-    const i = document.createElement('span'); i.className = 'fd-shared'; i.textContent = '⇄'; i.title = `Shared with ${names.join(', ')}`; i.setAttribute('aria-label', i.title);
+    const i = document.createElement('span'); i.className = 'fd-shared fd-shared-out'; i.textContent = '→'; i.title = `Shared out to ${names.join(', ')}`; i.setAttribute('aria-label', i.title);
     if (first && host.firstChild && host.firstChild.nodeType === 3) host.firstChild.after(i); else host.append(i);
   };
   dash.draw('acctRows', (el) => {
@@ -2082,12 +2083,12 @@
           dash.draw('acctEditor'); document.querySelector('#accounts')?.scrollIntoView({ behavior: 'smooth' }); }));
         tr.append(c); el.append(tr);
       }
-      // accounts shared into this dashboard from another one: same list, marked ⇄ (counted here when "net worth" is ticked for them)
+      // accounts shared into this dashboard from another one: same list, marked ← (counted here when "net worth" is ticked for them)
       for (const d of shG) {
         const debt = kind !== 'deposit' && kind !== 'investment', bal = Number(d.balance) || 0, inc = shIncl(d).nw; if (inc) tot += bal;
         const from = (meBooks().find((b) => b.id === d.src) || {}).name || 'another dashboard';
         const tr = document.createElement('tr'); tr.className = 'fd-sharedrow'; const nm = td(d.name + (d.owner && !String(d.name).startsWith(d.owner) ? ` (${d.owner})` : ''), 'fd-l');
-        const i = document.createElement('span'); i.className = 'fd-shared'; i.textContent = '⇄'; i.title = `Shared from ${from}${inc ? '' : ' (not counted in net worth here)'}`; i.setAttribute('aria-label', i.title); nm.append(i);
+        const i = document.createElement('span'); i.className = 'fd-shared fd-shared-in'; i.textContent = '←'; i.title = `Shared in from ${from}${inc ? '' : ' (not counted in net worth here)'}`; i.setAttribute('aria-label', i.title); nm.append(i);
         const sub = document.createElement('div'); sub.className = 'fd-zero'; sub.textContent = `From ${from}. Edit it there.`; nm.append(sub);
         tr.append(nm, td(ATYPES[`${d.kind}:${d.type}`] || KIND_DEFAULT[d.kind] || d.kind, 'fd-l'), td('–'), td((debt ? '−' : '') + money2(bal), (debt && bal ? 'fd-bad' : '') + (inc ? '' : ' fd-zero')), td(d.asOf || ''), td('–'), td('')); el.append(tr);
       }
@@ -4719,11 +4720,11 @@
       tr.addEventListener('click', () => { asEd = { i, ...a, _autoDepr: false }; dash.draw('assetView'); });
       tb.append(tr);
     });
-    // assets shared into this dashboard from another one: shown with ⇄, edited on their own dashboard
+    // assets shared into this dashboard from another one: shown with ←, edited on their own dashboard
     for (const d of shA) {
       const from = (meBooks().find((b) => b.id === d.src) || {}).name || 'another dashboard', inc = shIncl(d).nw, val = Number(d.balance) || 0;
       const tr = document.createElement('tr'); tr.className = 'fd-sharedrow'; const nm = td('', 'fd-l'); const b = document.createElement('strong'); b.textContent = d.name; nm.append(b);
-      const ic = document.createElement('span'); ic.className = 'fd-shared'; ic.textContent = '⇄'; ic.title = `Shared from ${from}${inc ? '' : ' (not counted in net worth here)'}`; ic.setAttribute('aria-label', ic.title); nm.append(' ', ic);
+      const ic = document.createElement('span'); ic.className = 'fd-shared fd-shared-in'; ic.textContent = '←'; ic.title = `Shared in from ${from}${inc ? '' : ' (not counted in net worth here)'}`; ic.setAttribute('aria-label', ic.title); nm.append(' ', ic);
       const sub = document.createElement('div'); sub.className = 'fd-zero fd-rsub'; sub.textContent = `${(ASSET_T[d.type] || ASSET_T.other)[0]} · from ${from}. Edit it there.`; nm.append(sub);
       tr.append(nm, td(money0(val), inc ? '' : 'fd-zero'), td('–'), td(money0(val), (inc ? 'fd-good' : 'fd-zero')), td(d.asOf ? new Date(d.asOf + '-15T00:00:00').toLocaleDateString(LOC, { month: 'short', year: 'numeric' }) : '–', 'fd-zero')); tb.append(tr);
     }

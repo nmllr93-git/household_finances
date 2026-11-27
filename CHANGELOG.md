@@ -5,6 +5,7 @@ Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
 - Fixed: an investment account that hasn't had a new statement yet this month now stays in the Investments tile and chart totals (using its last known balance), instead of dropping out until its next update
+- The "shared" badge now shows → for an account or asset you're sharing out to another dashboard and ← for one shared in from another, in blue and orange, instead of the same ⇄ for both
 
 ## Android 1.6.23
 - Phones: the section menus at the top spread across the full width instead of bunching up on the left
