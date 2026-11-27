@@ -3,7 +3,7 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Android 1.6.22
 - iPhone app: the Scan QR code button now shows on the Connect screen (the app's own add-ons, like QR reading, receipt scanning and Face ID lock, could load too late for the page to see them)
 - Phone apps: while your server's page loads, the app shows where it's going and a Back to connect screen button. If the connection drops mid-load (say the phone switches networks), you get the connect screen with what went wrong instead of a blank screen that stayed blank after reopening
 - iPhone app: the connect screen no longer sits under the clock and battery, and Switch server now goes back to the connect screen
