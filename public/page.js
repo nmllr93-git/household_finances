@@ -5090,8 +5090,23 @@
   }
 
   // ---- standalone receipt inbox ----
-  const inboxForm = document.getElementById('fd-inbox-form'), inboxFile = document.getElementById('fd-inbox-file'), inboxMsg = document.getElementById('fd-inbox-capture-msg');
-  let capture = null, captureSeq = 0, matchBusy = false, matchError = '', failedMatch = '', inboxRenderedBook = null;
+  const inboxForm = document.getElementById('fd-inbox-form'), inboxFile = document.getElementById('fd-inbox-file'), inboxMsg = document.getElementById('fd-inbox-capture-msg'), inboxPreview = document.getElementById('fd-inbox-preview');
+  let capture = null, captureSeq = 0, previewUrl = '', previewBook = null, matchBusy = false, matchError = '', failedMatch = '', inboxRenderedBook = null;
+  const clearCapturePreview = () => {
+    inboxPreview.replaceChildren(); if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = ''; previewBook = null;
+  };
+  const showCapturePreview = (file, id, pdf) => {
+    previewUrl = URL.createObjectURL(file); previewBook = id;
+    const figure = document.createElement('figure'), image = document.createElement(pdf ? 'button' : 'img');
+    let opener = image;
+    if (pdf) { image.type = 'button'; image.className = 'fd-rcpt-pdf'; image.textContent = TR('Open the PDF'); image.addEventListener('click', () => window.open(previewUrl, '_blank')); }
+    else { image.src = previewUrl; image.alt = TR('Receipt'); opener = document.createElement('a'); opener.href = previewUrl; opener.target = '_blank'; opener.rel = 'noopener'; opener.append(image); }
+    const caption = document.createElement('figcaption'); caption.className = 'fd-note';
+    const name = document.createElement('span'); name.translate = false; name.textContent = file.name || TR('Receipt');
+    caption.append(TR('Selected, not saved yet.'), document.createElement('br'), name);
+    figure.append(opener, caption); inboxPreview.append(figure);
+  };
   const receiptPath = (id, receiptId) => `/api/books/${encodeURIComponent(id)}/receipts${receiptId ? '/' + encodeURIComponent(receiptId) : ''}`;
   const receiptValues = (form) => {
     const e = form.elements, vendor = e.vendor.value.trim(), date = e.date.value, total = Number(e.total.value), tip = e.tip.value === '' ? null : Number(e.tip.value);
@@ -5105,11 +5120,12 @@
   };
   inboxFile.addEventListener('change', async () => {
     const file = inboxFile.files[0], seq = ++captureSeq, id = window.HF.state.bookId;
-    inboxFile.value = ''; capture = null; inboxForm.hidden = true; inboxForm.reset();
+    inboxFile.value = ''; capture = null; clearCapturePreview(); inboxForm.hidden = true; inboxForm.reset(); inboxMsg.className = 'fd-note'; inboxMsg.textContent = '';
     if (!file) return;
-    inboxMsg.className = 'fd-note'; inboxMsg.textContent = TR('Reading the receipt…');
+    inboxMsg.textContent = TR('Reading the receipt…');
     try {
       const pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''), mime = pdf ? 'application/pdf' : 'image/jpeg';
+      showCapturePreview(file, id, pdf);
       const url = pdf ? await readDataUrl(file) : await shrink(file);
       if (seq !== captureSeq || window.HF.state.bookId !== id) return;
       capture = { id, url, mime, name: file.name || 'Receipt' };
@@ -5128,21 +5144,21 @@
         inboxMsg.textContent = TR('Check and correct the receipt details before saving.');
       } else if (!inboxMsg.textContent || inboxMsg.textContent === TR('Reading the receipt…')) inboxMsg.textContent = TR('Enter the receipt details by hand.');
       inboxForm.hidden = false;
-    } catch (e) { if (seq === captureSeq) { inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Could not open the receipt:') + ' ' + e.message; } }
+    } catch (e) { if (seq === captureSeq) { clearCapturePreview(); inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Could not open the receipt:') + ' ' + e.message; } }
   });
   inboxForm.addEventListener('submit', async (ev) => {
     ev.preventDefault(); const btn = inboxForm.querySelector('button[type=submit]');
     try {
       if (!capture || capture.id !== window.HF.state.bookId) throw new Error(TR('Choose the receipt again for this dashboard.'));
-      const values = receiptValues(inboxForm), c = capture, id = c.id; btn.disabled = true;
+      const values = receiptValues(inboxForm), c = capture, id = c.id; btn.disabled = true; inboxFile.disabled = true;
       inboxMsg.className = 'fd-note'; inboxMsg.textContent = TR('Saving…');
       const f = await FDStore.json('POST', `/api/books/${encodeURIComponent(id)}/files`, { mime: c.mime, data: c.url.split(',')[1] });
       if (!f.id) throw new Error(TR('The receipt file was not saved.'));
       await FDStore.json('POST', receiptPath(id), { ...values, txKey: '', fileId: f.id, name: c.name, mime: c.mime, size: Math.round(c.url.split(',')[1].length * 0.75) });
-      capture = null; inboxForm.reset(); inboxForm.hidden = true; inboxMsg.className = 'fd-note fd-good'; inboxMsg.textContent = TR('Receipt saved.');
+      capture = null; clearCapturePreview(); inboxForm.reset(); inboxForm.hidden = true; inboxMsg.className = 'fd-note fd-good'; inboxMsg.textContent = TR('Receipt saved.');
       if (window.HF.state.bookId === id) await window.HF.load(id);
     } catch (e) { inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Not saved:') + ' ' + e.message; }
-    finally { btn.disabled = false; }
+    finally { btn.disabled = false; inboxFile.disabled = false; }
   });
 
   const inboxTransactions = () => {
@@ -5155,6 +5171,7 @@
   };
   dash.draw('receiptInbox', (el) => {
     const activeBook = window.HF.state.bookId;
+    if (previewBook !== null && previewBook !== activeBook) { captureSeq++; capture = null; clearCapturePreview(); inboxForm.reset(); inboxForm.hidden = true; inboxMsg.textContent = ''; }
     if (inboxRenderedBook === activeBook && (el.querySelector('form[data-dirty]') || (el.contains(document.activeElement) && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)))) return;
     if (inboxRenderedBook !== activeBook) { matchError = ''; failedMatch = ''; }
     inboxRenderedBook = activeBook;

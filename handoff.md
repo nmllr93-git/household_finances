@@ -79,6 +79,8 @@ Data conventions worth remembering:
 
 ## 6. Done recently (all on main; released unless noted)
 
+**Unreleased:** the receipt capture form immediately shows a selected photo or PDF and its filename, marked as not saved yet. The receipt-saved confirmation also has clearer spacing below the file button. Preview, replacement, error and phone-width behavior were checked in an isolated browser demo; still needs physical-phone validation.
+
 Released as Desktop 1.0.40 / Android 1.6.21 / 1.6.22: bulk edit in Transactions, import from Mint/Monarch/YNAB/Empower, investment returns net of contributions (with a monthly-amount box for paycheck 401(k)), Donations category, iPhone plugin lookup fix (Scan QR code button, receipt reading, Face ID), "Opening…" screen with a Back button plus an error page instead of a blank screen when the server load fails, safe-area padding and a working Switch server on iPhone, large-phone menu and table overflow fixes. Earlier this session: pending transactions with tip check, spending pace alerts, merge categories, CSV import improvements, accessibility pass, QR scanning on Android (confirmed working), privacy policy and Play Data safety updated.
 
 **Receipt inbox, committed as `c8bd380` and released from `4b67b83`:** standalone photo/PDF capture with OCR and editable details; explicit tip-in-total choice; conservative auto-matching; and a waiting panel with editing, search/manual attachment and discard. Includes Spanish strings, responsive styling and tests. The earlier duplicate-resolution fix moves receipt photos and metadata to the retained transaction.
