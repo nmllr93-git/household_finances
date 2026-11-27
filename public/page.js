@@ -1474,7 +1474,17 @@
     const same = (src) => canon.get(keyA(src)) || keyA(src);
     return window.FDLikelyDupes(rows('txns').filter((t) => t.book === book()).map((t) => ({ ...t, source: same(t.source) })), dupOrigin(), { ok: new Set(Array.isArray(okL) ? okL : []) })
       .map((p) => ({ ...p, sync: rows('txns').find((x) => x.key === p.sync.key) || p.sync, other: rows('txns').find((x) => x.key === p.other.key) || p.other })); };
-  const dupIgnore = async (t) => { const d = await db(); if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
+  // Moving on from a duplicate shouldn't lose a receipt photo that was on the side being dropped: re-point it to
+  // the transaction staying on the dashboards first (receipts have no update endpoint, so this is add-then-delete).
+  const moveReceipts = async (d, fromKey, toKey) => {
+    if (!toKey || toKey === fromKey) return;
+    for (const r of rows('receipts').filter((x) => x.txKey === fromKey)) {
+      await d.collection('data/household/receipts').add({ book: book(), txKey: toKey, fileId: r.fileId, name: r.name, mime: r.mime, size: r.size });
+      await d.doc('data/household/receipts/' + r.id).delete();
+    }
+  };
+  const dupIgnore = async (t, keep) => { const d = await db(); await moveReceipts(d, t.key, keep && keep.key);
+    if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
     else await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); };
   let dupOpen = false;
   // ---- pending transactions from bank sync: shown, never counted (the list is replaced on every sync) ----
@@ -1508,14 +1518,14 @@
     box.append(phMsg('The same purchase seems to be here twice: once from bank sync and once from a statement (or typed in), with the same amount a few days apart. Usually a pending charge in the file posted later in sync. Keep one copy; the other is ignored and can be restored from Ignored transactions.'));
     const msg = phMsg(''); const busy = (b) => { box.querySelectorAll('button').forEach((x) => { x.disabled = b; }); };
     if (!ro) { const all = rbtn(`Keep the bank sync copy of all ${P0.length}`, async () => { if (!confirm(`Ignore the statement or hand-typed copy of ${P0.length} transaction${P0.length === 1 ? '' : 's'}? You can restore them from Ignored transactions.`)) return; busy(true); msg.className = 'fd-note'; msg.textContent = 'Working…';
-        try { for (const p of P0) await dupIgnore(p.other); msg.className = 'fd-note fd-good'; msg.textContent = '✓ Done.'; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; busy(false); } }, false);
+        try { for (const p of P0) await dupIgnore(p.other, p.sync); msg.className = 'fd-note fd-good'; msg.textContent = '✓ Done.'; } catch { msg.className = 'fd-note fd-bad'; msg.textContent = 'Couldn’t save. Try again.'; busy(false); } }, false);
       const tog = rbtn(dupOpen ? 'Hide the list' : 'Review them one by one', () => { dupOpen = !dupOpen; dash.draw('dupReview'); }); const bar = document.createElement('div'); bar.className = 'fd-row'; bar.style.gap = '8px'; bar.append(all, tog); box.append(bar, msg); }
     if (dupOpen || ro) {
       const tbl = document.createElement('table'); tbl.className = 'fd-table fd-duptable'; const hd = document.createElement('tr'); ['Amount', 'Bank sync', 'Statement / typed', ''].forEach((x) => { const th = document.createElement('th'); th.textContent = x; hd.append(th); }); tbl.append(hd);
       const cellOf = (t, from) => { const c = document.createElement('td'); const a = document.createElement('div'); a.textContent = `${t.date} · ${t.vendor || t.description}`; a.translate = false; const b = document.createElement('div'); b.className = 'fd-zero'; b.textContent = `${t.description || ''}${from ? ' · ' + from : ''}`; b.translate = false; c.append(a, b); return c; };
       for (const p of P0.slice(0, 50)) { const tr = document.createElement('tr'); const am = document.createElement('td'); am.className = 'fd-r'; am.textContent = money2(Math.abs(p.sync.amount)); tr.append(am, cellOf(p.sync, p.sync.source), cellOf(p.other, p.otherFrom === 'manual' ? 'typed in' : 'statement'));
         const act = document.createElement('td'); act.className = 'fd-nowrap';
-        if (!ro) act.append(rbtn('Keep sync', async () => { busy(true); try { await dupIgnore(p.other); } catch { busy(false); } }, false), ' ', rbtn('Keep statement', async () => { busy(true); try { await dupIgnore(p.sync); } catch { busy(false); } }), ' ',
+        if (!ro) act.append(rbtn('Keep sync', async () => { busy(true); try { await dupIgnore(p.other, p.sync); } catch { busy(false); } }, false), ' ', rbtn('Keep statement', async () => { busy(true); try { await dupIgnore(p.sync, p.other); } catch { busy(false); } }), ' ',
           rbtn('Not duplicates', async () => { busy(true); const l = prefGet('dupOk', []) || []; await prefSet('dupOk', [...l, p.id].slice(-500)); }));
         tr.append(act); tbl.append(tr); }
       const w = document.createElement('div'); w.className = 'fd-tablewrap'; w.append(tbl); box.append(w); if (P0.length > 50) box.append(phMsg(`Showing 50 of ${P0.length}. Keep or dismiss some to see the rest.`));

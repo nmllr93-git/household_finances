@@ -3,6 +3,9 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
+## Unreleased
+- Fixed: when resolving a possible duplicate transaction (bank sync vs. a statement or hand-typed entry), a receipt photo on the copy being dropped now moves to the copy that stays, instead of being orphaned
+
 ## Android 1.6.24
 - Fixed: an investment account that hasn't had a new statement yet this month now stays in the Investments tile and chart totals (using its last known balance), instead of dropping out until its next update
 - The "shared" badge now shows → for an account or asset you're sharing out to another dashboard and ← for one shared in from another, in blue and orange, instead of the same ⇄ for both
