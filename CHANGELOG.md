@@ -3,7 +3,7 @@
 Each release on the releases page uses its section below as its description. Add a new section (newest first) before releasing.
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
-## Unreleased
+## Android 1.6.23
 - Phones: the section menus at the top spread across the full width instead of bunching up on the left
 
 ## Android 1.6.22
