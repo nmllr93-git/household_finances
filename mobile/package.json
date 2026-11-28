@@ -1,6 +1,6 @@
 {
   "name": "household-finances-mobile",
-  "version": "1.6.25",
+  "version": "1.6.26",
   "private": true,
   "description": "Larenest for Android (connects to your Larenest server).",
   "scripts": {

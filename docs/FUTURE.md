@@ -2,13 +2,13 @@
 
 Ideas we've talked about, roughly in the order we'd likely do them. Nothing here is promised or scheduled.
 
-## Dashboard layout and display preferences (implemented, unreleased)
+## Dashboard layout and display preferences (implemented, release in progress)
 
 - Everything's default section order follows the tab order. Shared sections appear once in Everything but remain available on their existing tabs; saved custom layouts keep their order.
 - Scrolling Everything highlights the current category, including in phone menus, without changing the selected tab.
 - Waiting receipts start collapsed; Rules start open. Both remember their open/closed state per device.
 - Transactions **Rows** sets the initial row count per device (5, 10, 25, 50, 100 or 200; default 50). Show more still adds 100.
-- The user chose a sample preview instead of resetting existing collapse preferences for the next release. Physical-device checks and a complete passing test-suite run remain before release; see `handoff.md`.
+- The user chose a sample preview instead of resetting existing collapse preferences. The full test suite passed; physical-device checks remain. Desktop 1.0.43 and Android 1.6.26 are in progress; see `handoff.md` for platform status.
 
 ## Receipt inbox: save a receipt without waiting for the transaction (released)
 
