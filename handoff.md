@@ -1,6 +1,6 @@
 # Larenest handoff
 
-Updated 2026-11-27 for the receipt-inbox release. Read this first in a new session, then read `docs/ARCHITECTURE.md` when you need to touch code. Nothing here is a secret. Never add credentials, keys, tokens, passwords or personal ID numbers to this file, the repo, memory or a message.
+Updated 2026-11-28 for the dashboard layout and display-preference changes. Read this first in a new session, then read `docs/ARCHITECTURE.md` when you need to touch code. Nothing here is a secret. Never add credentials, keys, tokens, passwords or personal ID numbers to this file, the repo, memory or a message.
 
 ## 1. What Larenest is
 
@@ -10,7 +10,7 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 - Source repo: `nmllr93-git/household_finances` (default branch `main`, working copy `/home/claude/household-finance` in cloud sessions).
 - Public repo and website: `nmllr93-git/household_finances-releases` (installers, README, `docs/` served as larenest.app, including /privacy, /testers, /linux, /download).
 - Latest release: Desktop **1.0.42**, Android **1.6.25**, iPhone TestFlight **1.6.14** build 36 (see Apple rules below). Windows, Linux, Mac, Android APK and Docker builds completed; iOS uploaded successfully, but Apple processing and tester availability were not checked. Previous releases were Desktop 1.0.41 and Android 1.6.24.
-- Unreleased: receipt capture offers separate camera and photo/PDF selection and previews the chosen file before saving. Receipt capture and waiting receipts also support optional category and business choices; differing classifications are flagged for review, and existing transaction splits are preserved.
+- Unreleased: receipt capture offers separate camera and photo/PDF selection and previews the chosen file before saving. Receipt capture and waiting receipts also support optional category and business choices; differing classifications are flagged for review, and existing transaction splits are preserved. Dashboard layout and display-preference changes are summarized in section 6.
 - Changelog: `CHANGELOG.md` uses `## Unreleased` for pending work, then `## Android x` / `## Desktop y` headings.
 
 ## 2. Standing rules (the user's own words, keep verbatim in spirit)
@@ -25,13 +25,14 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 8. **Verify a feature isn't already in the app before suggesting it** (grep `public/`, README, CHANGELOG). Suggesting existing features twice cost trust.
 9. Never paste or store secrets. Pace API calls.
 10. The user wants a reminder, whenever a chat gets long, that starting a fresh chat is cheaper. A long thread re-reads its whole history on every message. Prefer one chat per task or release, and use this file to start it.
+11. Keep this handoff and `docs/FUTURE.md` current when work changes what is done, planned or still unverified, so the next agent has an accurate starting point.
 
 ## 3. Release runbook
 
 Do this only when the user says to release. Read the Unreleased changelog first and ask the Apple question.
 
 1. Bump versions: `package.json` and `desktop/package.json` (Desktop), `mobile/package.json` (Android). Rename `## Unreleased` to `## Android x.y.z` and/or `## Desktop x.y.z` with the same bullets under each.
-2. Bump `CACHE` in `public/sw.js` whenever `public/` assets changed. Receipt inbox bumped it to `hf-v153`.
+2. Bump `CACHE` in `public/sw.js` whenever `public/` assets changed. The current unreleased cache is `hf-v162`.
 3. Run `npm test` (must show `# fail 0`).
 4. Commit, `git push origin main`, then **`git push origin main:release`**. That starts the Android, Desktop (Windows/Linux), Docker and release-notes workflows and publishes to the public releases repo.
 5. Mac: `gh workflow run "Desktop release" --ref main -f mac_publish=true`. Run it after the release exists to avoid a collision.
@@ -74,11 +75,16 @@ Data conventions worth remembering:
 - The `all_txns` calc takes a `prefs` input and applies `catMerges(prefRows)`.
 - Receipt inbox: `receipts` documents with an empty `txKey` are waiting. They store editable vendor, date, total, tip and whether the tip is already included. Auto-attachment requires one unambiguous expense match with exact cents, a conservative vendor match, and a transaction dated from the receipt date through three days later. The date window is not an import deadline: receipts remain available indefinitely, including for manual attachment after a later statement import. A two-week reminder does not delete them.
 - Matching runs when the dashboard loads, after imports or manual sync, and on a 60-second refresh while the dashboard is open with waiting receipts; it is not a headless background job. Receipt edits and attachment use compare-and-set; discard removes a file only if no other receipt references it. Host SQLite and phone-only IndexedDB both implement these operations.
+- Dashboard sections and their default Everything order are in `GROUPS` and `DEFAULT_ALL` in `public/page.js`. The default Everything view uses the report grid; saved per-dashboard layouts retain their own order, and sections shared between tabs remain on both tabs. Main section collapse state (`fd-nav.closed`), Rules (`fd-rules-open`), waiting receipts (`fd-receipt-waiting-open`) and transaction display preferences (`fd-tx-prefs`) are device-local. Do not reset collapse preferences for the next release: the user chose a sample preview instead.
 - Needs-attention items are `{id, sig, lvl, text, go}`; `goTo` handles `'tx'`, `'feedback'`, `'budgetcat:'`.
 - App-export imports (Mint, Monarch, YNAB, Empower) are detected in `import.js` (`detectApp`), saved per account with `source: 'app:<id>'`, and keep each row's category, tags and note (whitelisted in `core/books.js`).
 - Types for transactions are only Expense, Income and Transfer. Donations is a category, auto-guessed in `calcs.js`.
 
 ## 6. Done recently (all on main; released unless noted)
+
+**Unreleased, committed as `f56089a`:** Everything's default section order now follows Overview, Accounts, Expenses, Budget, Transactions, Planning, Markets, Year in review, Business, Import and Settings. Shared sections appear once in Everything and remain on their existing tabs; custom layouts are preserved. Scrolling Everything highlights the current category without changing the selected tab; phone menus show that category. Waiting receipts start collapsed and Rules start open; both remember their state on the device. The compact Transactions **Rows** selector remembers an initial count of 5, 10, 25, 50, 100 or 200 (default 50); Show more still adds 100.
+
+The user reviewed the proposed order in an isolated sample-data mockup. Browser checks covered the default and saved layouts, shared sections, view-only and Simple views, business and dashboard-type changes, mobile highlighting and mobile Arrange widths, plus the receipt, Rules and Rows preferences. The targeted runtime and receipt tests passed (12 tests); an attempted full suite did not produce a completion summary, so a full passing run is still required before release. No physical-device check was performed for these changes. The dashboard commit is on local `main` and has not been pushed.
 
 **Unreleased:** the receipt capture form immediately shows a selected photo or PDF and its filename, marked as not saved yet. The receipt-saved confirmation also has clearer spacing below the file button. Preview, replacement, error and phone-width behavior were checked in an isolated browser demo; still needs physical-phone validation.
 
@@ -93,6 +99,7 @@ Desktop 1.0.41 / Android 1.6.24 included last-known investment balances and dire
 ## 7. Open items and things not verified
 
 - **Real-device checks still owed:** test the new receipt capture, OCR and matching on Android and iPhone. The iPhone Scan QR code button, Opening screen, Switch server and large-iPhone layout also need confirmation; a tester reported layout overflow and a screenshot was pending.
+- **Unreleased dashboard changes:** run the complete test suite with a final passing summary before release, and check the new layout, scrolling highlight and remembered display preferences on physical devices.
 - **Phone-switching-networks hang** (user's iPhone froze on a blank screen after the phone likely switched between two ISPs): fixed by the Opening screen and error page, but not reproduced on a device.
 - **Windows flagged the Play Store bundle zip** as malware. Most likely a false positive. Waiting for the user's Defender threat name and `Get-FileHash` result; GitHub's recorded SHA-256 for that artifact was `ECB2003C7D05F77FD82886257788DA61EC268FFC501B5709A1D91CE5A3DA0425` (Android 1.6.21 bundle).
 - **Site comparison table:** add an "Import from other apps" row only after checking which of Monarch, YNAB, Copilot, Rocket Money and Actual import other apps' exports (a dash would read as "No"). Left out on purpose for now.

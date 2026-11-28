@@ -2,6 +2,14 @@
 
 Ideas we've talked about, roughly in the order we'd likely do them. Nothing here is promised or scheduled.
 
+## Dashboard layout and display preferences (implemented, unreleased)
+
+- Everything's default section order follows the tab order. Shared sections appear once in Everything but remain available on their existing tabs; saved custom layouts keep their order.
+- Scrolling Everything highlights the current category, including in phone menus, without changing the selected tab.
+- Waiting receipts start collapsed; Rules start open. Both remember their open/closed state per device.
+- Transactions **Rows** sets the initial row count per device (5, 10, 25, 50, 100 or 200; default 50). Show more still adds 100.
+- The user chose a sample preview instead of resetting existing collapse preferences for the next release. Physical-device checks and a complete passing test-suite run remain before release; see `handoff.md`.
+
 ## Receipt inbox: save a receipt without waiting for the transaction (released)
 
 **The problem.** Previously, saving a receipt photo right away meant attaching it to a manually-typed transaction. When the real bank-sync transaction posts later, the dashboard flags the pair as a possible duplicate (see `Section 5` of `handoff.md` and the 2026-11-27 fix, commit `da9c399`, that moves the receipt onto whichever side survives). That works, but it means every receipt-while-shopping still creates a throwaway transaction and a manual review step. Nobody wants to carry a paper receipt around for three days waiting for it to post — the goal is: snap it, toss it, walk away, and have it find its own transaction later with no extra typing.
