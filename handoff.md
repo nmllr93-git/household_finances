@@ -9,7 +9,7 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 - Owner: Nathan Miller, solo developer, Iowa City area. Self-employed, so business (Schedule C) features are planned.
 - Source repo: `nmllr93-git/household_finances` (default branch `main`, working copy `/home/claude/household-finance` in cloud sessions).
 - Public repo and website: `nmllr93-git/household_finances-releases` (installers, README, `docs/` served as larenest.app, including /privacy, /testers, /linux, /download).
-- Latest release: Desktop **1.0.43**, Android **1.6.26**. Windows, Linux, Android APK and Docker workflows succeeded; their public assets were verified. The signed Play bundle is an Actions artifact and still needs manual Play Console upload. The user confirmed Mac and iPhone, but Apple workflow dispatch was unavailable in this session; the user will start the workflows. Use iPhone TestFlight version **1.6.14** (see Apple rules below); Mac and iPhone outcomes remain unverified.
+- Latest release: Desktop **1.0.43**, Android **1.6.26**, iPhone TestFlight **1.6.14** build 37. Windows, Linux, Mac, Android APK and Docker workflows succeeded; their public assets were verified. The iPhone build uploaded successfully, but Apple processing and tester availability were not checked. The signed Play bundle is an Actions artifact and still needs manual Play Console upload.
 - Previous release: Desktop **1.0.42**, Android **1.6.25**, iPhone TestFlight **1.6.14** build 36. Windows, Linux, Mac, Android APK and Docker builds completed; iOS uploaded successfully, but Apple processing and tester availability were not checked.
 - Changelog: `CHANGELOG.md` uses `## Unreleased` for pending work, then `## Android x` / `## Desktop y` headings.
 
@@ -100,7 +100,7 @@ Desktop 1.0.41 / Android 1.6.24 included last-known investment balances and dire
 
 - **Real-device checks still owed:** test the new receipt capture, OCR and matching on Android and iPhone. The iPhone Scan QR code button, Opening screen, Switch server and large-iPhone layout also need confirmation; a tester reported layout overflow and a screenshot was pending.
 - **Dashboard changes:** check the new layout, scrolling highlight and remembered display preferences on physical devices.
-- **Apple builds pending:** the user will start Desktop release on `main` with `mac_publish=true` and iOS release on `main` with `version=1.6.14` and native plugins enabled. Verify Mac assets and iPhone upload, processing and tester availability.
+- **iPhone build 37:** the upload succeeded; verify Apple processing and tester availability.
 - **Phone-switching-networks hang** (user's iPhone froze on a blank screen after the phone likely switched between two ISPs): fixed by the Opening screen and error page, but not reproduced on a device.
 - **Windows flagged the Play Store bundle zip** as malware. Most likely a false positive. Waiting for the user's Defender threat name and `Get-FileHash` result; GitHub's recorded SHA-256 for that artifact was `ECB2003C7D05F77FD82886257788DA61EC268FFC501B5709A1D91CE5A3DA0425` (Android 1.6.21 bundle).
 - **Site comparison table:** add an "Import from other apps" row only after checking which of Monarch, YNAB, Copilot, Rocket Money and Actual import other apps' exports (a dash would read as "No"). Left out on purpose for now.
@@ -108,7 +108,7 @@ Desktop 1.0.41 / Android 1.6.24 included last-known investment balances and dire
 - **One-week timeline report:** a scheduled reminder fires Nov 28, 10am (America/Chicago). Check the user's scheduled tasks for its exact text.
 - **Windows code signing:** user was setting up Azure Artifact Signing under a "Larenest" Azure subscription (as of Nov 25). Status unknown; ask.
 - **Google Play:** closed testing was active as of Nov 27. Testers need the dedicated opt-in link; the public listing alone does not enroll them. The signed `play-store-bundle-1.6.26` is on Android release run `46165199046`; upload it to Play Console manually.
-- **Apple:** Apple builds are expensive; always ask at each release. The user confirmed Mac and iPhone for 1.0.43 / 1.6.26; both workflows still need to be started manually. The previous iOS 1.6.14 build 36 uploaded successfully, but processing and tester availability were not checked.
+- **Apple:** Apple builds are expensive; always ask at each release. Mac release run `46166613478` succeeded and both Mac DMGs were verified. iOS release run `46166611997` uploaded 1.6.14 build 37; processing and tester availability are not yet verified.
 - Longer backlog: `docs/FUTURE.md` (languages, other countries, Pro tier, smaller items), `docs/PRO-TIERS.md` (draft free vs Pro; one-time license key movable between devices, no company account, free Pro key for early users), `docs/REVIEW-HANDOFF.md` (review findings R1–R6 done; performance items E1–E4 open).
 
 ## 8. How to work with this user
