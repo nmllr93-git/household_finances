@@ -320,6 +320,7 @@ In **Transactions → Rules**, click **+ New rule**.
 - A live preview shows what a rule will match before you save. Rules run top to bottom; use ↑/↓ to reorder. If two rules set the same field, the lower one wins.
 
 ### Transactions table
+- **Rows** sets how many transactions appear first (50 by default); **Show more** reveals additional rows. The choice is remembered on this device in both Everything and Transactions.
 - **Notes:** Edit → Notes, for anything to remember later. Notes are searchable and show under the vendor.
 - **Possible duplicates:** when bank sync and a statement (or a typed entry) both have the same purchase a few days apart, a box at the top of Transactions lets you keep one copy.
 - **⚙ Columns** shows, hides and reorders columns. Drag a header edge to resize it.
@@ -342,6 +343,7 @@ Click **✎ Arrange** (next to ⚙ Settings) to change the tab you're on.
 - **Sections:** drag ⠿ or use ↑/↓ to move them, and set the width with S, M, L or F (a third, half, two-thirds, full). Remove one, or add any section, including ones from other tabs.
 - **Reset tab to default** (click twice) puts the tab back the way it came.
 - Arranging starts from what the tab looks like now. A tab you never arrange keeps the built-in layout.
+- Everything's built-in section order follows the tabs; saved layouts keep their own order.
 - On phones you move things with the arrows, and sections are always full width.
 - Layouts are saved per dashboard and sync across devices. View-only logins don't see Arrange.
 

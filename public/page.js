@@ -295,6 +295,7 @@
   const simpleNav = () => document.querySelectorAll('.fd-navb').forEach((b) => { if (SIMPLE_GROUPS.has(b.dataset.group)) b.hidden = SIMPLE; });
   const NP = (() => { try { return JSON.parse(localStorage.getItem('fd-nav') || '{}') || {}; } catch { return {}; } })();
   const npSave = () => { try { localStorage.setItem('fd-nav', JSON.stringify(NP)); } catch {} };
+  let scrollGroup = null, markPhoneNav = () => {};
   let showGroup = (g) => {
     NP.group = g; npSave();
     const on = new Set(g === 'all' ? ALL : GROUPS[g] || ALL);
@@ -336,7 +337,8 @@
     });
     nav.prepend(...groupBtns);
     document.addEventListener('click', close); window.addEventListener('scroll', close, { passive: true });
-    const mark = () => { const g = NP.group || 'all'; groupBtns.forEach((b, i) => { const hit = MENUS[i][1].includes(g); b.classList.toggle('is-on', hit); navLbl(b, hit ? label(g).replace(/^⚙\s*/, '') : MENUS[i][0]); }); };
+    const mark = () => { const g = scrollGroup || NP.group || 'all'; groupBtns.forEach((b, i) => { const hit = MENUS[i][1].includes(g); b.classList.toggle('is-on', hit); if (scrollGroup && hit) b.setAttribute('aria-current', 'location'); else b.removeAttribute('aria-current'); navLbl(b, hit ? label(g).replace(/^⚙\s*/, '') : MENUS[i][0]); }); };
+    markPhoneNav = mark;
     const orig = showGroup; showGroup = (g) => { orig(g); mark(); }; mark();
   }
   // jump to a section (phone widgets and alerts use this)
@@ -364,7 +366,7 @@
   const repGrid = document.createElement('div'); repGrid.className = 'fd-repgrid';
   repBox.append(repBar, repGrid); (document.getElementById('kpis') || document.getElementById('fd-nav')).after(repBox); // below the tiles, so a tab's tiles stay on top
   let repEdit = false, repOn = null;
-  const goHome = () => { home.forEach((mark, s) => { if (s.parentElement?.classList.contains('fd-reptile')) { mark.after(s); } }); repGrid.replaceChildren(); };
+  const goHome = () => { home.forEach((mark, s) => { if (s.parentElement?.classList.contains('fd-reptile')) { mark.after(s); } }); repGrid.replaceChildren(); repGrid.classList.remove('fd-default-all'); };
   const sbtn = (txt, title, fn, on) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'fd-repbtn' + (on ? ' is-on' : ''); b.textContent = txt; b.title = title; b.setAttribute('aria-label', title); b.addEventListener('click', fn); return b; };
   let drawReport = () => {
     goHome(); const r = REPS[repOn]; repBar.replaceChildren(); if (!r) return;
@@ -587,22 +589,31 @@
 
   // ---- sections: a customized tab is laid out on the same 12-column grid as reports ----
   const FULLSPAN = new Set(['accounts', 'networth', 'sharedin', 'transactions', 'import', 'settings', 'budget', 'categories', 'vendors', 'review', 'health', 'bills', 'forecast', 'markets', 'economy', 'subscriptions', 'holdings']);
+  const DEFAULT_ALL = [
+    ['health', 'F'], ['top-vendors', 'M'], ['cashflow', 'M'], ['split', 'F'], ['unusual', 'M'], ['big', 'M'], ['bills', 'F'],
+    ['goals', 'M'], ['networth', 'M'], ['sharedin', 'F'], ['assets', 'F'], ['accounts', 'F'], ['investments', 'M'], ['deposits', 'M'], ['holdings', 'F'], ['mortgage', 'F'],
+    ['categories', 'F'], ['subscriptions', 'F'], ['vendors', 'F'], ['tags', 'F'], ['dow', 'F'], ['budget', 'F'], ['transactions', 'F'],
+    ['forecast', 'F'], ['planner', 'F'], ['projection', 'F'], ['taxes', 'F'], ['markets', 'F'], ['economy', 'F'], ['review', 'F'],
+    ['biz-summary', 'F'], ['biz-tx', 'F'], ['biz-mark', 'F'], ['biz-tax', 'F'], ['biz-miles', 'F'], ['import', 'F'], ['settings', 'F']
+  ];
   const docOrder = (ids) => ids.slice().sort((a, b) => { const x = q(a)[0], y = q(b)[0]; if (!x || !y) return 0; return x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1; });
   const visibleIds = (g) => (g === 'all' ? ALL : GROUPS[g] || []).filter((id) => !HIDESEC.has(id) && !(SIMPLE && SIMPLE_HIDE.has(id)) && !(id === 'split' && SET().type !== 'shared') && q(id)[0]);
   // Start from what the tab looks like now: measured widths on a wide screen, otherwise half width for paired sections.
   const seedItems = (g) => { const wide = window.innerWidth >= 1100, main = document.getElementById('dash-root') || document.body, W = main.clientWidth || 1;
     // the order you see (CSS can reorder sections on wide screens), then the page order for anything not on screen
     const pos = (id) => { const r = q(id)[0].getBoundingClientRect(); return r.width ? [Math.round(r.top / 8), r.left] : null; };
-    const ids = docOrder(visibleIds(g)).filter((id) => !q(id)[0].classList.contains('fd-none'));
+    const ids = docOrder(visibleIds(g)).filter((id) => !q(id)[0].classList.contains('fd-none') && (g !== 'all' || !q(id)[0].hidden));
     const seen = ids.map((id, i) => ({ id, i, p: pos(id) })).sort((a, b) => (a.p && b.p ? a.p[0] - b.p[0] || a.p[1] - b.p[1] : a.i - b.i));
     return seen.map(({ id }) => { const s = q(id)[0]; let size = 'F';
       if (wide && s.offsetWidth) { const r = s.offsetWidth / W; size = r > 0.8 ? 'F' : r > 0.58 ? 'L' : r > 0.4 ? 'M' : 'S'; }
+      else if (s.parentElement?.classList.contains('fd-reptile')) size = SIZES.find(([, span]) => String(span) === s.parentElement.style.getPropertyValue('--span'))?.[0] || 'F';
       else size = s.parentElement && s.parentElement.classList.contains('fd-grid2') && !FULLSPAN.has(id) ? 'M' : 'F';
       return { id, size }; }); };
   const customized = (g) => !isRepTab(g) && Array.isArray((LAYOUT.tabs[g] || {}).items);
   let dragSec = null;
-  function drawTabGrid(g) {
-    goHome(); repBar.replaceChildren(); const L = tabLay(g), items = L.items || [];
+  function drawTabGrid(g, defaultItems) {
+    goHome(); repBar.replaceChildren(); const L = tabLay(g), items = defaultItems || L.items || [];
+    repGrid.classList.toggle('fd-default-all', !!defaultItems);
     repBar.hidden = !ARR;
     if (ARR) { const name = document.createElement('strong'); name.textContent = 'Arranging: ' + (document.querySelector(`.fd-navb[data-group="${g}"]`)?.textContent || 'this tab').replace(/^⚙\s*/, '');
       const add = document.createElement('select'); add.className = 'dash-select'; add.setAttribute('aria-label', 'Add a section'); add.append(new Option('+ Add a section…', ''));
@@ -626,7 +637,7 @@
         cell.addEventListener('dragend', () => { cell.draggable = false; dragSec = null; });
         cell.addEventListener('dragover', (e) => { if (dragSec != null) { e.preventDefault(); cell.classList.add('is-drop'); } }); cell.addEventListener('dragleave', () => cell.classList.remove('is-drop'));
         cell.addEventListener('drop', (e) => { e.preventDefault(); cell.classList.remove('is-drop'); if (dragSec == null || dragSec === i) return; items.splice(i, 0, items.splice(dragSec, 1)[0]); dragSec = null; saveTab(g); drawTabGrid(g); }); }
-      s.hidden = false; cell.append(s); repGrid.append(cell); });
+      if (!defaultItems) s.hidden = false; cell.append(s); repGrid.append(cell); });
     if (!items.length) { const p = document.createElement('p'); p.className = 'fd-note'; p.textContent = 'No sections on this tab. Add one from “Add a section”, or reset the tab.'; repGrid.append(p); }
     redrawIn(repGrid);
   }
@@ -646,6 +657,9 @@
     else if (customized(g)) {
       leaveGrid(); prevShow(g); // nav state, tiles, hides the static sections' tab logic
       NP.group = g; ALL.forEach((id) => q(id).forEach((s) => { s.hidden = true; })); repBox.hidden = false; drawTabGrid(g);
+    } else if (g === 'all') {
+      leaveGrid(); prevShow(g); repBox.hidden = false;
+      drawTabGrid(g, DEFAULT_ALL.map(([id, size]) => ({ id, size })));
     } else { leaveGrid(); repBar.hidden = false; prevShow(g); repBox.hidden = true; }
     const ab = arrBtn(); if (ab) { ab.classList.toggle('is-on', ARR); ab.textContent = ARR ? '✓ Done arranging' : '✎ Arrange'; ab.hidden = g === 'settings' || g === 'import' || document.body.classList.contains('fd-readonly'); }
     document.body.classList.toggle('fd-arranging', ARR);
@@ -655,6 +669,46 @@
   const layoutSync = () => { if (ARR) return; const l = prefGet('layout', null); const next = l && l.tabs ? l : { v: 1, tabs: {} }; if (JSON.stringify(next) === JSON.stringify(LAYOUT)) return; LAYOUT = next; try { showGroup(curTab()); } catch {} };
   window.__fdLayoutSync = layoutSync;
   showGroup(curTab());
+  {
+    const nav = document.getElementById('fd-nav');
+    let pending = false;
+    const update = () => {
+      pending = false;
+      let group = null, nearest = -Infinity;
+      if (curTab() === 'all' && !ARR) {
+        const line = nav.getBoundingClientRect().bottom + 8;
+        for (const [g, ids] of Object.entries(GROUPS)) {
+          const button = nav.querySelector(`.fd-navb[data-group="${g}"]`);
+          if (!button || button.hidden || (g === 'import' && document.body.classList.contains('fd-readonly'))) continue;
+          for (const id of ids) for (const section of q(id)) {
+            const rect = section.getBoundingClientRect();
+            if (rect.height && rect.top <= line && rect.top > nearest) { nearest = rect.top; group = g; }
+          }
+        }
+      }
+      if (group === scrollGroup) return;
+      scrollGroup = group;
+      nav.classList.toggle('fd-scroll-tracking', !!group);
+      nav.querySelectorAll('.fd-navb[data-group]').forEach((b) => {
+        const current = b.dataset.group === group;
+        b.classList.toggle('is-scroll-current', current);
+        if (current) b.setAttribute('aria-current', 'location'); else b.removeAttribute('aria-current');
+      });
+      markPhoneNav();
+      const current = nav.querySelector('.fd-navb.is-scroll-current');
+      if (current && current.getClientRects().length && nav.scrollWidth > nav.clientWidth) {
+        const n = nav.getBoundingClientRect(), b = current.getBoundingClientRect();
+        if (b.left < n.left) nav.scrollLeft += b.left - n.left;
+        else if (b.right > n.right) nav.scrollLeft += b.right - n.right;
+      }
+    };
+    const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(update); } };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule, { passive: true });
+    const show = showGroup;
+    showGroup = (g) => { show(g); schedule(); };
+    schedule();
+  }
   // ==== Custom reports: build your own section from the data already here (saved per dashboard as "customs") ====
   const CR_MEAS = { spend: 'Spending', income: 'Income', net: 'Income minus spending', count: 'Number of purchases', avg: 'Average purchase', balance: 'Account balances' };
   const CR_BY = { category: 'Category', vendor: 'Vendor', account: 'Account', tag: 'Tag', month: 'Month', weekday: 'Day of the week', none: 'Nothing (one total)' };
@@ -1133,16 +1187,28 @@
   });
 
   // ---- transactions ----
-  let tq = '', tLimit = 50;
-  const setTxSearch = (v) => { tq = v.toLowerCase(); tLimit = 50; q('fd-tq').forEach((i) => { i.value = v; }); dash.draw('txRows'); dash.draw('txCount'); };
-  q('fd-tq').forEach((i) => i.addEventListener('input', () => { tq = i.value.trim().toLowerCase(); tLimit = 50; dash.draw('txRows'); dash.draw('txCount'); }));
-  q('fd-ttype').forEach((s) => s.addEventListener('change', () => { tLimit = 50; dash.draw('txRows'); dash.draw('txCount'); }));
-  q('fd-tneeds').forEach((c) => c.addEventListener('change', () => { tLimit = 50; dash.draw('txRows'); dash.draw('txCount'); }));
-  q('fd-tmore').forEach((b) => b.addEventListener('click', () => { tLimit += 100; dash.draw('txRows'); dash.draw('txCount'); }));
-  q('fd-tedit').forEach((c) => c.addEventListener('change', () => dash.draw('txRows')));
   // Remember table settings, columns and column widths in this browser.
-  const TP = (() => { try { return JSON.parse(localStorage.getItem('fd-tx-prefs') || '{}') || {}; } catch { return {}; } })();
-  const tpSave = () => { try { localStorage.setItem('fd-tx-prefs', JSON.stringify(TP)); } catch {} };
+  const TP = (() => { try { return JSON.parse(localStorage.getItem('fd-tx-prefs') || '{}') || {}; } catch (e) { console.error('Could not read transaction display preferences', e); return {}; } })();
+  const tpSave = () => { try { localStorage.setItem('fd-tx-prefs', JSON.stringify(TP)); } catch (e) { console.error('Could not save transaction display preferences', e); } };
+  const limits = [5, 10, 25, 50, 100, 200];
+  if (TP.initialLimit != null && !limits.includes(TP.initialLimit)) console.error('Invalid initial transaction limit', TP.initialLimit);
+  let initialLimit = limits.includes(TP.initialLimit) ? TP.initialLimit : 50;
+  let tq = '', tLimit = initialLimit;
+  const redrawTransactions = () => { dash.draw('txHead'); dash.draw('txRows'); dash.draw('txCount'); };
+  const setTxSearch = (v) => { tq = v.toLowerCase(); tLimit = initialLimit; q('fd-tq').forEach((i) => { i.value = v; }); redrawTransactions(); };
+  q('fd-tq').forEach((i) => i.addEventListener('input', () => { tq = i.value.trim().toLowerCase(); tLimit = initialLimit; redrawTransactions(); }));
+  q('fd-ttype').forEach((s) => s.addEventListener('change', () => { tLimit = initialLimit; redrawTransactions(); }));
+  q('fd-tneeds').forEach((c) => c.addEventListener('change', () => { tLimit = initialLimit; redrawTransactions(); }));
+  q('fd-tmore').forEach((b) => b.addEventListener('click', () => { tLimit += 100; redrawTransactions(); }));
+  q('fd-tedit').forEach((c) => c.addEventListener('change', () => dash.draw('txRows')));
+  q('fd-tlimit').forEach((s) => {
+    s.value = String(initialLimit);
+    s.addEventListener('change', () => {
+      const value = Number(s.value);
+      if (!limits.includes(value)) { console.error('Invalid initial transaction limit', s.value); s.value = String(initialLimit); return; }
+      initialLimit = value; TP.initialLimit = value; tpSave(); tLimit = initialLimit; redrawTransactions();
+    });
+  });
   for (const id of ['fd-tedit', 'fd-tneeds']) q(id).forEach((c) => { if (id in TP) c.checked = !!TP[id]; c.addEventListener('change', () => { TP[id] = c.checked; tpSave(); }); });
   q('fd-ttype').forEach((c) => { if (TP['fd-ttype'] != null) c.value = TP['fd-ttype']; c.addEventListener('change', () => { TP['fd-ttype'] = c.value; tpSave(); }); });
   const COLS = { date: { label: 'Date', w: 96 }, vendor: { label: 'Vendor', l: 1 }, description: { label: 'Description', l: 1 }, category: { label: 'Category', l: 1 },
@@ -1212,7 +1278,12 @@
       document.addEventListener('pointerdown', (e) => { if (!pan.hidden && !pan.contains(e.target) && e.target !== btn) close(); });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pan.hidden) close(); });
     }
-    document.getElementById('fd-rulesbtn')?.addEventListener('click', () => { const r = document.getElementById('rules'); if (!r) return; const nav = document.getElementById('fd-nav'); window.scrollTo({ top: r.getBoundingClientRect().top + scrollY - (nav ? nav.offsetHeight : 0) - 8, behavior: 'smooth' }); });
+    const rules = document.getElementById('rules');
+    if (rules) {
+      try { rules.open = localStorage.getItem('fd-rules-open') !== '0'; } catch (e) { console.error('Could not read rules display preference', e); }
+      rules.addEventListener('toggle', () => { try { localStorage.setItem('fd-rules-open', rules.open ? '1' : '0'); } catch (e) { console.error('Could not save rules display preference', e); } });
+      document.getElementById('fd-rulesbtn')?.addEventListener('click', () => { rules.open = true; const nav = document.getElementById('fd-nav'); window.scrollTo({ top: rules.getBoundingClientRect().top + scrollY - (nav ? nav.offsetHeight : 0) - 8, behavior: 'smooth' }); });
+    }
   })();
   dash.draw('colPicker', (el) => {
     el.replaceChildren();
@@ -4337,7 +4408,9 @@
   const bizVisible = () => { if (st('prefs') !== 'ok') return; const on = hasBiz(); const nb = document.querySelector('.fd-navb[data-group="business"]'); if (nb) nb.hidden = !on;
     document.querySelectorAll('.fd-bizrow').forEach((r) => { r.hidden = !on; });
     if (!on) { BIZ_IDS.forEach((id) => q(id).forEach((s) => { s.hidden = true; })); if (NP.group === 'business') showGroup('all'); } };
-  dash.onData(() => { document.querySelectorAll('.fd-bizbox').forEach((b) => b.__draw && b.__draw()); bizVisible(); });
+  let allLayoutContext = '';
+  dash.onData(() => { document.querySelectorAll('.fd-bizbox').forEach((b) => b.__draw && b.__draw()); bizVisible();
+    if (st('prefs') === 'ok') { const context = `${window.HF.state.bookId}:${SET().type}:${hasBiz()}`; if (context !== allLayoutContext) { allLayoutContext = context; if (curTab() === 'all' && !customized('all')) showGroup('all'); } } });
 
   dash.draw('settingsView', (el) => {
     if (st('prefs') !== 'ok') return;
@@ -5098,6 +5171,9 @@
   // ---- standalone receipt inbox ----
   const inboxForm = document.getElementById('fd-inbox-form'), inboxFiles = [document.getElementById('fd-inbox-camera'), document.getElementById('fd-inbox-file')], inboxMsg = document.getElementById('fd-inbox-capture-msg'), inboxPreview = document.getElementById('fd-inbox-preview');
   let capture = null, captureSeq = 0, previewUrl = '', previewBook = null, matchBusy = false, matchError = '', failedMatch = '', inboxRenderedBook = null;
+  const waitingOpenKey = 'fd-receipt-waiting-open';
+  let waitingOpen = false;
+  try { waitingOpen = localStorage.getItem(waitingOpenKey) === '1'; } catch (e) { console.error('Could not read waiting receipts display preference', e); }
   const clearCapturePreview = () => {
     inboxPreview.replaceChildren(); if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = ''; previewBook = null;
@@ -5232,11 +5308,15 @@
       el.append(reviewBox);
     }
     if (!list.length && !matchError) return;
-    const box = document.createElement('details'); box.className = 'fd-rb'; box.open = true;
+    if (matchError) { const m = phMsg(TR('Automatic matching failed:') + ' ' + matchError, 'fd-bad'); el.append(m);
+      if (!ro) el.append(rbtn('Retry matching', () => { matchError = ''; failedMatch = ''; dash.draw('receiptInbox'); scheduleReceiptMatch(); })); }
+    const box = document.createElement('details'); box.className = 'fd-rb'; box.open = waitingOpen;
     const title = document.createElement('summary'); title.className = 'fd-rb-h'; title.textContent = TR('Waiting for a transaction') + ' (' + list.length + ')'; box.append(title);
+    title.addEventListener('click', (e) => {
+      e.preventDefault(); waitingOpen = !box.open; box.open = waitingOpen;
+      try { localStorage.setItem(waitingOpenKey, waitingOpen ? '1' : '0'); } catch (err) { console.error('Could not save waiting receipts display preference', err); }
+    });
     box.append(phMsg('Receipts are attached automatically only when one transaction is a confident match. You can also choose one yourself.'));
-    if (matchError) { const m = phMsg(TR('Automatic matching failed:') + ' ' + matchError, 'fd-bad'); box.append(m);
-      if (!ro) box.append(rbtn('Retry matching', () => { matchError = ''; failedMatch = ''; dash.draw('receiptInbox'); scheduleReceiptMatch(); })); }
     for (const r of list) {
       const card = document.createElement('div'); card.className = 'fd-rb'; card.style.width = '100%'; card.style.boxSizing = 'border-box';
       const photos = document.createElement('div'); photos.className = 'fd-rcpts'; const figure = document.createElement('figure'); let image;

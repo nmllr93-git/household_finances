@@ -4,6 +4,11 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Everything's default section order now follows the tabs; customized layouts are kept
+- Choose how many transactions to show initially on each device; Show more still reveals additional rows
+- Rules can be collapsed, and their open or closed state is remembered on this device
+- On Everything, the navigation highlights the category currently being viewed while you scroll
+- Waiting receipts are collapsed by default, and their open or closed state is remembered on this device
 - Take a receipt photo with the camera or choose an existing photo or PDF
 - Choose an optional category and business for a receipt; matching transactions use those choices and flag differences for review
 - Show the selected receipt photo or PDF immediately, before it is saved

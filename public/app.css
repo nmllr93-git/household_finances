@@ -124,8 +124,8 @@ a { color: var(--series-1); }
 .fd-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .fd-field input[type=date], .fd-field input[type=file] { background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 8px; }
 
-.fd-ignored summary { cursor: pointer; }
-.fd-ignored summary h3 { display: inline; }
+.fd-ignored summary, .fd-rules summary { cursor: pointer; }
+.fd-ignored summary h3, .fd-rules summary h3 { display: inline; }
 .fd-btn.fd-danger { color: var(--color-bad); }
 
 .fd-inl { width: 100%; min-width: 7em; font: inherit; padding: 2px 4px; }
@@ -146,6 +146,8 @@ table[data-source="txns"] select.fd-inl { margin-top: 4px; }
 .fd-navb { flex: 0 0 auto; font: inherit; font-size: 14px; padding: 11px 12px 9px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--color-fg-muted, inherit); cursor: pointer; white-space: nowrap; }
 .fd-navb:hover { color: var(--color-fg, inherit); background: color-mix(in srgb, var(--color-fg, #000) 5%, transparent); }
 .fd-navb.is-on { color: var(--color-fg, inherit); font-weight: 600; border-bottom-color: var(--color-accent, var(--color-fg, #222)); background: transparent; }
+.fd-nav.fd-scroll-tracking .fd-navb.is-on[data-group=all] { color: var(--color-fg-muted, inherit); font-weight: normal; border-bottom-color: transparent; }
+.fd-nav .fd-navb.is-scroll-current { color: var(--color-fg, inherit); font-weight: 600; border-bottom-color: var(--color-accent, var(--color-fg, #222)); }
 section > h2.fd-fold { cursor: pointer; user-select: none; } section > h2.fd-fold::before { content: '▾ '; color: var(--color-fg-muted); }
 section.fd-collapsed > h2.fd-fold::before { content: '▸ '; } section.fd-collapsed > :not(h2) { display: none !important; }
 .fd-rb { border: 1px solid var(--color-border-line); border-radius: 8px; padding: 10px 12px; margin: 8px 0; display: grid; gap: 6px; justify-items: start; }
@@ -253,6 +255,9 @@ body > .fd-tip { position: absolute; z-index: 50; font-family: var(--font-anthro
 #kpis .fd-card[hidden] { display: none; }
 .fd-slider input[type=range] { flex: 1 1 200px; max-width: 360px; } .fd-sub-row td { font-size: 13px; padding-top: 2px; padding-bottom: 2px; } .fd-amort { max-height: 420px; overflow: auto; }
 #transactions > .fd-row { position: relative; align-items: flex-end; } .fd-tsearch { flex: 1 1 320px; min-width: 160px; max-width: 680px; } .fd-tsearch input { width: 100%; }
+.fd-field.fd-tlimit { flex: 0 0 6em; min-width: 0; }
+.fd-repgrid.fd-default-all > .fd-reptile:has(> section[hidden]), .fd-repgrid.fd-default-all > .fd-reptile:has(> section.fd-none),
+.fd-readonly .fd-repgrid.fd-default-all > .fd-reptile:has(> #import) { display: none; }
 .fd-colpanel { position: absolute; z-index: 40; background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 12px; min-width: 240px; max-width: min(360px, 92vw); max-height: 70vh; overflow: auto; }
 .fd-rb-group { border: 1px dashed var(--color-border-line); border-radius: 8px; padding: 6px 8px; margin: 4px 0; } .fd-rb-or { font-weight: 700; font-size: 12px; color: var(--color-fg-muted); margin: 2px 0 2px 6px; }
 @media (max-width: 600px) { .fd-rb-group .fd-rb-row { flex-wrap: wrap; } .fd-rb-group .fd-rb-row input[type=text], .fd-rb-group .fd-rb-row input[type=number] { flex: 1 1 100%; } }
@@ -465,6 +470,8 @@ body.fd-brand header#overview { position: relative; padding-bottom: 14px; }
 body.fd-brand header#overview::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--brand), var(--brand-gold)); opacity: .55; }
 /* accents: selected tab and menu, toggles, main buttons, links, checkboxes */
 body.fd-brand .fd-navb.is-on, body.fd-brand .fd-navm.is-on { color: var(--brand); border-bottom-color: var(--brand); }
+body.fd-brand .fd-nav.fd-scroll-tracking .fd-navb.is-on[data-group=all] { color: var(--color-fg-muted, inherit); border-bottom-color: transparent; }
+body.fd-brand .fd-nav .fd-navb.is-scroll-current { color: var(--brand); border-bottom-color: var(--brand); }
 body.fd-brand .fd-tab.is-on { box-shadow: 0 0 0 1px var(--brand-line); color: var(--brand); }
 body.fd-brand .fd-vtog button.is-on { background: var(--brand-soft); color: var(--brand); }
 body.fd-brand .fd-btn:not(.fd-quiet):not(.fd-sm):not(.fd-danger) { background: var(--brand); border-color: var(--brand); color: #fff; }
