@@ -5096,7 +5096,7 @@
   }
 
   // ---- standalone receipt inbox ----
-  const inboxForm = document.getElementById('fd-inbox-form'), inboxFile = document.getElementById('fd-inbox-file'), inboxMsg = document.getElementById('fd-inbox-capture-msg'), inboxPreview = document.getElementById('fd-inbox-preview');
+  const inboxForm = document.getElementById('fd-inbox-form'), inboxFiles = [document.getElementById('fd-inbox-camera'), document.getElementById('fd-inbox-file')], inboxMsg = document.getElementById('fd-inbox-capture-msg'), inboxPreview = document.getElementById('fd-inbox-preview');
   let capture = null, captureSeq = 0, previewUrl = '', previewBook = null, matchBusy = false, matchError = '', failedMatch = '', inboxRenderedBook = null;
   const clearCapturePreview = () => {
     inboxPreview.replaceChildren(); if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -5148,10 +5148,11 @@
     await FDStore.json('POST', receiptPath(id, r.id), { expected: r, changes, ...(attachment ? { attachment } : {}) });
     if (window.HF.state.bookId === id) await window.HF.load(id);
   };
-  inboxFile.addEventListener('change', async () => {
-    const file = inboxFile.files[0], seq = ++captureSeq, id = window.HF.state.bookId;
-    inboxFile.value = ''; capture = null; clearCapturePreview(); inboxForm.hidden = true; inboxForm.reset(); inboxMsg.className = 'fd-note'; inboxMsg.textContent = '';
+  inboxFiles.forEach((input) => input.addEventListener('change', async () => {
+    const file = input.files[0]; input.value = '';
     if (!file) return;
+    const seq = ++captureSeq, id = window.HF.state.bookId;
+    capture = null; clearCapturePreview(); inboxForm.hidden = true; inboxForm.reset(); inboxMsg.className = 'fd-note'; inboxMsg.textContent = '';
     inboxMsg.textContent = TR('Reading the receipt…');
     try {
       const pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''), mime = pdf ? 'application/pdf' : 'image/jpeg';
@@ -5176,12 +5177,12 @@
       } else if (!inboxMsg.textContent || inboxMsg.textContent === TR('Reading the receipt…')) inboxMsg.textContent = TR('Enter the receipt details by hand.');
       inboxForm.hidden = false;
     } catch (e) { if (seq === captureSeq) { clearCapturePreview(); inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Could not open the receipt:') + ' ' + e.message; } }
-  });
+  }));
   inboxForm.addEventListener('submit', async (ev) => {
     ev.preventDefault(); const btn = inboxForm.querySelector('button[type=submit]');
     try {
       if (!capture || capture.id !== window.HF.state.bookId) throw new Error(TR('Choose the receipt again for this dashboard.'));
-      const values = receiptValues(inboxForm), c = capture, id = c.id; btn.disabled = true; inboxFile.disabled = true;
+      const values = receiptValues(inboxForm), c = capture, id = c.id; btn.disabled = true; inboxFiles.forEach((input) => { input.disabled = true; });
       inboxMsg.className = 'fd-note'; inboxMsg.textContent = TR('Saving…');
       const f = await FDStore.json('POST', `/api/books/${encodeURIComponent(id)}/files`, { mime: c.mime, data: c.url.split(',')[1] });
       if (!f.id) throw new Error(TR('The receipt file was not saved.'));
@@ -5189,7 +5190,7 @@
       capture = null; clearCapturePreview(); inboxForm.reset(); inboxForm.hidden = true; inboxMsg.className = 'fd-note fd-good'; inboxMsg.textContent = TR('Receipt saved.');
       if (window.HF.state.bookId === id) await window.HF.load(id);
     } catch (e) { inboxMsg.className = 'fd-note fd-bad'; inboxMsg.textContent = TR('Not saved:') + ' ' + e.message; }
-    finally { btn.disabled = false; inboxFile.disabled = false; }
+    finally { btn.disabled = false; inboxFiles.forEach((input) => { input.disabled = false; }); }
   });
 
   const inboxTransactions = () => {

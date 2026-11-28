@@ -477,7 +477,7 @@ window.FDI18n.add({ 'Select': 'Seleccionar', '{0} selected': '{0} seleccionadas'
 window.FDI18n.add({
   'Snap a receipt': 'Fotografiar un recibo',
   'Save a receipt now and attach it to a transaction later. Photos are read on your phone; PDFs can be read on any device.': 'Guarda un recibo ahora y adjúntalo a una transacción después. Las fotos se leen en tu teléfono; los PDF se pueden leer en cualquier dispositivo.',
-  'Choose a photo or PDF': 'Elegir una foto o PDF', 'Selected, not saved yet.': 'Seleccionado, todavía no guardado.', 'Receipt date': 'Fecha del recibo', 'Total on receipt': 'Total del recibo', 'Tip (optional)': 'Propina (opcional)',
+  'Take a photo': 'Tomar una foto', 'Choose a photo or PDF': 'Elegir una foto o PDF', 'Selected, not saved yet.': 'Seleccionado, todavía no guardado.', 'Receipt date': 'Fecha del recibo', 'Total on receipt': 'Total del recibo', 'Tip (optional)': 'Propina (opcional)',
   'Does the total include the tip?': '¿El total incluye la propina?', 'Choose if there is a tip': 'Elige si hay propina', 'Yes, already included': 'Sí, ya está incluida', 'No, add the tip': 'No, sumar la propina',
   'Check the amounts before saving. Choose whether the tip is already included to avoid counting it twice.': 'Revisa los montos antes de guardar. Indica si la propina ya está incluida para no contarla dos veces.',
   'Save receipt': 'Guardar recibo', 'Waiting for a transaction': 'Esperando una transacción',

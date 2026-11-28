@@ -408,7 +408,10 @@
     <details class="fd-rb" id="fd-receipt-capture">
       <summary class="fd-rb-h">Snap a receipt</summary>
       <p class="fd-note">Save a receipt now and attach it to a transaction later. Photos are read on your phone; PDFs can be read on any device.</p>
-      <label class="fd-btn fd-sm fd-quiet">Choose a photo or PDF<input type="file" id="fd-inbox-file" accept="image/*,application/pdf" hidden></label>
+      <div class="fd-rb-row">
+        <label class="fd-btn fd-sm fd-quiet">Take a photo<input type="file" id="fd-inbox-camera" accept="image/*" capture="environment" hidden></label>
+        <label class="fd-btn fd-sm fd-quiet">Choose a photo or PDF<input type="file" id="fd-inbox-file" accept="image/*,application/pdf" hidden></label>
+      </div>
       <div id="fd-inbox-preview" class="fd-rcpts" aria-live="polite"></div>
       <p class="fd-note" id="fd-inbox-capture-msg" aria-live="polite"></p>
       <form id="fd-inbox-form" hidden>

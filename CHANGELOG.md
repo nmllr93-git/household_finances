@@ -4,6 +4,7 @@ Each release on the releases page uses its section below as its description. Add
 Headings must be exactly `## Desktop <version>` or `## Android <version>`.
 
 ## Unreleased
+- Take a receipt photo with the camera or choose an existing photo or PDF
 - Choose an optional category and business for a receipt; matching transactions use those choices and flag differences for review
 - Show the selected receipt photo or PDF immediately, before it is saved
 - Improved spacing around the receipt-saved confirmation
