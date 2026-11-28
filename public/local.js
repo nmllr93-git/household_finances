@@ -22,7 +22,7 @@
       if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', { keyPath: 'id' }); };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   }));
-  const tx = async (stores, mode, fn) => { const d = await open(); return new Promise((res, rej) => { const t = d.transaction(stores, mode); let out; Promise.resolve(fn(t)).then((v) => { out = v; }); t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); }); };
+  const tx = async (stores, mode, fn) => { const d = await open(); return new Promise((res, rej) => { const t = d.transaction(stores, mode); let out; Promise.resolve().then(() => fn(t)).then((v) => { out = v; }, (e) => { try { t.abort(); } catch (abortError) { if (abortError.name !== 'InvalidStateError') return rej(abortError); } rej(e); }); t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); }); };
   const req2p = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const all = (store, idx, key) => tx([store], 'readonly', (t) => { const s = t.objectStore(store); return req2p(idx ? s.index(idx).getAll(key) : s.getAll()); });
   const kvGet = (k) => tx(['kv'], 'readonly', (t) => req2p(t.objectStore('kv').get(k)));
@@ -32,10 +32,22 @@
   const store = {
     seedRows: async (bookId) => (await all('seed')).filter((r) => r.bookId === bookId).map((r) => ({ dataset: r.dataset, json: r.json })),
     listDocs: async (bookId, coll) => (await all('docs', 'bookColl', [bookId, coll])).sort((a, b) => String(a.created).localeCompare(String(b.created))).map((r) => ({ id: r.id, json: r.json, created: r.created, created_by: r.createdBy })),
-    insertDoc: (r) => tx(['docs'], 'readwrite', (t) => { t.objectStore('docs').put(r); }),
+    insertDoc: (r) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs');
+      if (r.coll === 'edits') { const doc = JSON.parse(r.json); if (!doc.receiptPatch) {
+        const edits = await req2p(s.index('bookColl').getAll([r.bookId, 'edits']));
+        r = { ...r, json: JSON.stringify(window.FDCore.orderTransactionEdit(edits, doc)) };
+      } }
+      s.put(r);
+    }),
     deleteDoc: (bookId, coll, id) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'); const d = await req2p(s.get(id)); if (d && d.bookId === bookId && d.coll === coll) s.delete(id); }),
     compareAndSetDoc: (bookId, coll, id, expected, json) => tx(['docs'], 'readwrite', async (t) => { const s = t.objectStore('docs'), d = await req2p(s.get(id));
       if (!d || d.bookId !== bookId || d.coll !== coll || d.json !== expected) return false; s.put({ ...d, json }); return true; }),
+    attachReceipt: (bookId, id, expected, json, txKey, expectedEdits, expectedInputs, edit, source) => tx(['docs'], 'readwrite', async (t) => {
+      const s = t.objectStore('docs'), d = await req2p(s.get(id)), edits = await req2p(s.index('bookColl').getAll([bookId, 'edits']));
+      const inputs = {}; for (const c of window.FDCore.RECEIPT_INPUTS) inputs[c] = await req2p(s.index('bookColl').getAll([bookId, c]));
+      if (!d || d.bookId !== bookId || d.coll !== 'receipts' || d.json !== expected || !window.FDCore.sameReceiptEdits(edits, txKey, expectedEdits) || (source && !window.FDCore.sameReceiptEdits(edits, source.key, source.edits)) || !window.FDCore.sameReceiptInputs(inputs, expectedInputs)) return false;
+      s.put({ ...d, json }); if (edit) s.put(edit); return true;
+    }),
     discardReceipt: (bookId, id, expected, fileId) => tx(['docs', 'files'], 'readwrite', async (t) => { const s = t.objectStore('docs'), d = await req2p(s.get(id));
       if (!d || d.bookId !== bookId || d.coll !== 'receipts' || d.json !== expected) return false;
       const others = (await req2p(s.index('bookColl').getAll([bookId, 'receipts']))).some((r) => r.id !== id && JSON.parse(r.json).fileId === fileId);

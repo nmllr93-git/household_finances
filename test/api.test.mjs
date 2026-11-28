@@ -158,6 +158,46 @@ test('waiting receipt edits reject stale data and discard preserves shared files
   await req('DELETE', `/api/books/${b}/receipts/${other}`);
   await req('DELETE', `/api/books/${b}/files/${file}`);
 });
+
+test('receipt attachment applies selected choices atomically and rejects stale transaction edits', async () => {
+  const b = books()[0], key = 'm:receipt-choice';
+  const id = (await req('POST', `/api/books/${b}/receipts`, { vendor: 'Demo', date: '2026-11-01', total: 10, category: 'Supplies', biz: 'Studio', bizPct: 60 })).json.id;
+  const receipt = (await req('GET', `/api/books/${b}/data`)).json.receipts.find((r) => r.id === id);
+  await req('POST', `/api/books/${b}/edits`, { txKey: key, category: 'Other' });
+  const changes = { txKey: key, review: { category: true, business: true, previousCategory: 'Other' } };
+  let data = (await req('GET', `/api/books/${b}/data`)).json;
+  const inputIds = (d) => Object.fromEntries(['imports', 'manual', 'rules', 'prefs'].map((c) => [c, d[c].map((r) => r.id)]));
+  const expectedInputs = inputIds(data);
+  const stale = await req('POST', `/api/books/${b}/receipts/${id}`, { expected: receipt, changes, attachment: { expectedEdits: [], expectedInputs, preserveSplit: false } });
+  assert.equal(stale.status, 409);
+  data = (await req('GET', `/api/books/${b}/data`)).json;
+  assert.equal(data.receipts.find((r) => r.id === id).txKey, '');
+  const expectedEdits = data.edits.filter((e) => e.txKey === key);
+  const rule = (await req('POST', `/api/books/${b}/rules`, { match: 'demo', category: 'Travel' })).json.id;
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${id}`, { expected: receipt, changes, attachment: { expectedEdits, expectedInputs, preserveSplit: false } })).status, 409);
+  data = (await req('GET', `/api/books/${b}/data`)).json;
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${id}`, { expected: receipt, changes, attachment: { expectedEdits, expectedInputs: inputIds(data), preserveSplit: false } })).status, 200);
+  data = (await req('GET', `/api/books/${b}/data`)).json;
+  assert.equal(data.receipts.find((r) => r.id === id).review.category, true);
+  assert.deepEqual(data.edits.find((e) => e.receiptPatch)?.receiptPatch, { category: 'Supplies', biz: 'Studio', bizPct: 60 });
+  const attached = data.receipts.find((r) => r.id === id), target = 'm:receipt-survivor';
+  const sourceEdits = data.edits.filter((e) => e.txKey === key);
+  const move = { fromKey: key, sourceEdits: [], expectedEdits: [], expectedInputs: inputIds(data), preserveSplit: true, applyCategory: true, applyBusiness: true };
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${id}`, { expected: attached, changes: { txKey: target }, attachment: move })).status, 409);
+  move.sourceEdits = sourceEdits;
+  assert.equal((await req('POST', `/api/books/${b}/receipts/${id}`, { expected: attached, changes: { txKey: target }, attachment: move })).status, 200);
+  data = (await req('GET', `/api/books/${b}/data`)).json;
+  assert.equal(data.receipts.find((r) => r.id === id).txKey, target);
+  assert.deepEqual(data.edits.find((e) => e.txKey === target).receiptPatch, { biz: 'Studio', bizPct: 60 });
+  await req('POST', `/api/books/${b}/edits`, { txKey: target, category: 'Later', biz: '' });
+  data = (await req('GET', `/api/books/${b}/data`)).json;
+  const targetEdits = data.edits.filter((e) => e.txKey === target);
+  assert.ok(targetEdits.find((e) => !e.receiptPatch).createdAt > targetEdits.find((e) => e.receiptPatch).createdAt);
+  for (const edit of data.edits.filter((e) => e.txKey === key)) await req('DELETE', `/api/books/${b}/edits/${edit.id}`);
+  for (const edit of targetEdits) await req('DELETE', `/api/books/${b}/edits/${edit.id}`);
+  await req('DELETE', `/api/books/${b}/rules/${rule}`);
+  await req('DELETE', `/api/books/${b}/receipts/${id}`);
+});
 async function fixture(b) {
   const imp = await req('POST', `/api/books/${b}/imports`, { accountName: 'Checking', accountKind: 'deposit', txns: [{ date: '2026-03-01', description: 'COFFEE', amount: 4.5 }, { date: '2026-03-02', description: 'GROCER', amount: 60 }] });
   const man = await req('POST', `/api/books/${b}/manual`, { type: 'expense', date: '2026-03-03', amount: 20, vendor: 'Cash lunch', category: 'Dining' });

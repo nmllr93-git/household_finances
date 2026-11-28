@@ -76,6 +76,19 @@ test('waiting receipt updates and discard work while the database is encrypted',
   assert.equal((await req('GET', `/api/books/${B}/files/${file}`)).status, 404);
 });
 
+test('classified receipt attaches atomically while the database is encrypted', async () => {
+  const manual = (await req('POST', `/api/books/${B}/manual`, { date: '2026-11-02', vendor: 'Demo', amount: 10, type: 'expense', category: 'Travel' })).json.id;
+  const id = (await req('POST', `/api/books/${B}/receipts`, { vendor: 'Demo', date: '2026-11-02', total: 10, category: 'Supplies', biz: 'Studio' })).json.id;
+  const d = (await req('GET', `/api/books/${B}/data`)).json, receipt = d.receipts.find((x) => x.id === id), key = 'm:' + manual;
+  const expectedInputs = Object.fromEntries(['imports', 'manual', 'rules', 'prefs'].map((c) => [c, d[c].map((r) => r.id)]));
+  const attach = await req('POST', `/api/books/${B}/receipts/${id}`, { expected: receipt, changes: { txKey: key }, attachment: { expectedEdits: [], expectedInputs, preserveSplit: false } });
+  assert.equal(attach.status, 200);
+  const updated = (await req('GET', `/api/books/${B}/data`)).json;
+  assert.equal(updated.receipts.find((r) => r.id === id).txKey, key);
+  assert.equal(updated.edits.find((e) => e.txKey === key).receiptPatch.category, 'Supplies');
+  assert.ok(raw('SELECT json FROM docs').every((x) => x.json.startsWith('enc1:')));
+});
+
 test('change password keeps the data; automatic unlock survives a restart', async () => {
   assert.equal((await req('POST', '/api/encryption/password', { password: 'wrong', newPassword: 'battery staple' })).status, 403);
   assert.equal((await req('POST', '/api/encryption/password', { password: 'correct horse', newPassword: 'battery staple' })).status, 200);

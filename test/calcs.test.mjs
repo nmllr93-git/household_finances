@@ -60,6 +60,29 @@ test('single-transaction edits beat rules', () => {
   assert.equal(get('txns')[0].category, 'Gifts');
 });
 
+test('receipt choices override only selected fields and later transaction edits win', () => {
+  const imports = [imp('a', 'Card', 'credit', [tx('2026-10-03', 'TARGET', 40)])];
+  const rules = [{ book: 'Personal', match: 'target', category: 'Shopping', createdAt: '2026-01-01' }];
+  const patch = { txKey: 'i:a:0', receiptPatch: { biz: 'Studio', bizPct: 60 }, createdAt: '2026-11-02' };
+  let t = engine({ imports, rules, edits: [patch] })('txns')[0];
+  assert.equal(t.category, 'Shopping'); assert.equal(t.biz, 'Studio'); assert.equal(t.bizPct, 60);
+  t = engine({ imports, rules: [{ ...rules[0], category: 'Home' }], edits: [patch] })('txns')[0];
+  assert.equal(t.category, 'Home');
+  t = engine({ imports, rules, edits: [patch, { txKey: 'i:a:0', category: 'Gifts', biz: '', createdAt: '2026-11-03' }] })('txns')[0];
+  assert.equal(t.category, 'Gifts'); assert.equal(t.biz, '');
+});
+
+test('receipt business choices preserve existing splits and unrelated transaction details', () => {
+  const imports = [imp('a', 'Card', 'credit', [tx('2026-10-03', 'TARGET', 40)])];
+  const edits = [
+    { txKey: 'i:a:0', vendor: 'Edited vendor', note: 'Keep me', splits: [{ category: 'Home', amount: 25 }, { category: 'Food', amount: 15 }], createdAt: '2026-11-01' },
+    { txKey: 'i:a:0', receiptPatch: { biz: 'Studio', bizPct: 50 }, createdAt: '2026-11-02' }
+  ];
+  const t = engine({ imports, edits })('txns');
+  assert.equal(t.length, 2); assert.equal(t[0].category, 'Home'); assert.equal(t[1].category, 'Food');
+  assert.ok(t.every((x) => x.vendor === 'Edited vendor' && x.note === 'Keep me' && x.biz === 'Studio' && x.bizPct === 50));
+});
+
 test('card payment and checking withdrawal are matched as one transfer', () => {
   const get = engine({ imports: [
     imp('c', 'Checking', 'deposit', [tx('2026-10-10', 'ONLINE PMT CAPITAL ONE', 512.34), tx('2026-10-11', 'COFFEE', 4.5)]),

@@ -247,23 +247,34 @@ dash.calc('all_txns', {
       }
     }
     // Your edits to single transactions: the newest edit for each one wins.
-    const edits = {};
-    for (const e of editRows || []) if (e.txKey && (!edits[e.txKey] || String(e.createdAt) > String(edits[e.txKey].createdAt))) edits[e.txKey] = e;
+    const edits = {}, receiptPatches = {};
+    for (const e of editRows || []) {
+      if (!e.txKey) continue;
+      if (e.receiptPatch) (receiptPatches[e.txKey] = receiptPatches[e.txKey] || []).push(e);
+      else if (!edits[e.txKey] || String(e.createdAt) > String(edits[e.txKey].createdAt)) edits[e.txKey] = e;
+    }
     const final = [];
     for (const t of out) {
       const e = edits[t.key];
-      if (!e) { final.push(t); continue; }
+      const patches = (receiptPatches[t.key] || []).filter((p) => !e || String(p.createdAt) > String(e.createdAt)).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      if (!e && !patches.length) { final.push(t); continue; }
       const base = { ...t, edited: true };
-      if (e.ignored) { final.push({ ...t, edited: true, ignored: true }); continue; }
-      base.ignored = false;
-      if (e.vendor) base.vendor = e.vendor;
-      if (e.category) base.category = e.category;
-      if (e.type) base.type = e.type;
-      if (Array.isArray(e.tags)) base.tags = e.tags.filter(Boolean);
-      if (e.note != null) base.note = String(e.note);
-      if (e.biz !== undefined && e.biz !== null) { base.biz = e.biz; base.bizPct = e.bizPct || 100; base.schedC = e.schedC || ''; }
-      if (e.oneTime !== undefined && e.oneTime !== null) base.oneTime = !!e.oneTime;
-      let splits = e.splits;
+      if (e) {
+        if (e.ignored) { final.push({ ...t, edited: true, ignored: true }); continue; }
+        base.ignored = false;
+        if (e.vendor) base.vendor = e.vendor;
+        if (e.category) base.category = e.category;
+        if (e.type) base.type = e.type;
+        if (Array.isArray(e.tags)) base.tags = e.tags.filter(Boolean);
+        if (e.note != null) base.note = String(e.note);
+        if (e.biz !== undefined && e.biz !== null) { base.biz = e.biz; base.bizPct = e.bizPct || 100; base.schedC = e.schedC || ''; }
+        if (e.oneTime !== undefined && e.oneTime !== null) base.oneTime = !!e.oneTime;
+      }
+      for (const { receiptPatch: p } of patches) {
+        if (p.category) base.category = p.category;
+        if (p.biz) { base.biz = p.biz; base.bizPct = p.bizPct || 100; }
+      }
+      let splits = e && e.splits;
       if (typeof splits === 'string') { try { splits = JSON.parse(splits); } catch { splits = null; } }
       splits = (splits || []).filter((s) => s && s.category && isFinite(Number(s.amount)) && Number(s.amount) !== 0);
       if (splits.length >= 2) {

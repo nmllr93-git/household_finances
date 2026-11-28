@@ -18,6 +18,13 @@ function memStore() {
 }
 const book = { id: 'p', name: 'Personal', label: 'Personal' };
 
+test('a later transaction edit is ordered after a receipt choice with the same or future timestamp', () => {
+  const at = '2026-11-02T00:00:00.000Z';
+  const rows = [{ json: JSON.stringify({ txKey: 'm:one', createdAt: at, receiptPatch: { category: 'Food' } }) }];
+  const edit = core.orderTransactionEdit(rows, { txKey: 'm:one', createdAt: at });
+  assert.equal(edit.createdAt, '2026-11-02T00:00:00.001Z');
+});
+
 test('add, load, delete through the router', async () => {
   const api = core.createBookApi(memStore());
   const a = await api.handle('POST', ['goals'], book, async () => ({ name: 'Trip', target: '1500' }), 'me');

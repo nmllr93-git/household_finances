@@ -28,6 +28,20 @@
   const num = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
   const TYPES_OK = ['expense', 'income', 'transfer'];
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const sameReceiptEdits = (rows, key, expected) => {
+    const sort = (items) => items.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const actual = rows.map((r) => ({ id: r.id, ...JSON.parse(r.json) })).filter((e) => e.txKey === key);
+    return JSON.stringify(sort(actual)) === JSON.stringify(sort(expected));
+  };
+  const RECEIPT_INPUTS = ['imports', 'manual', 'rules', 'prefs'];
+  const sameReceiptInputs = (rows, expected) => RECEIPT_INPUTS.every((coll) =>
+    Array.isArray(expected[coll]) && JSON.stringify(rows[coll].map((r) => r.id).sort()) === JSON.stringify(expected[coll].slice().sort()));
+  const orderTransactionEdit = (rows, doc) => {
+    const latest = rows.map((r) => JSON.parse(r.json)).filter((e) => e.txKey === doc.txKey)
+      .reduce((n, e) => Math.max(n, Date.parse(e.createdAt) || 0), 0);
+    if (Date.parse(doc.createdAt) <= latest) doc.createdAt = new Date(latest + 1).toISOString();
+    return doc;
+  };
   function cleanRecon(r) { // the statement check saved with an import (see reconcileStatement in calcs.js); a record, never applied to the ledger
     if (!r || typeof r !== 'object' || num(r.opening) === null || num(r.closing) === null) return null;
     return { opening: num(r.opening), closing: num(r.closing), expected: num(r.expected), diff: num(r.diff), from: DAY.test(r.from || '') ? r.from : null, to: DAY.test(r.to || '') ? r.to : null, checkedAt: str(r.checkedAt, 30) };
@@ -42,6 +56,12 @@
   function cleanDoc(coll, d, label) {
     const now = new Date().toISOString();
     if (coll === 'edits') {
+      if (d.receiptPatch && typeof d.receiptPatch === 'object') {
+        const p = d.receiptPatch, patch = {};
+        if (p.category) patch.category = str(p.category, 40);
+        if (p.biz) { patch.biz = str(p.biz, 40); patch.bizPct = Math.min(100, Math.max(1, Math.round(num(p.bizPct) || 100))); }
+        return { book: label, txKey: str(d.txKey, 80), receiptPatch: patch, createdAt: now };
+      }
       const splits = Array.isArray(d.splits) ? d.splits.slice(0, 6).map((s) => ({ category: str(s.category, 40), amount: num(s.amount) })).filter((s) => s.category && s.amount !== null) : null;
       return { book: label, txKey: str(d.txKey, 80), vendor: str(d.vendor, 40), category: str(d.category, 40), type: TYPES_OK.includes(d.type) ? d.type : '',
         oneTime: !!d.oneTime, splits: splits && splits.length >= 2 ? splits : null, ignored: !!d.ignored, tags: Array.isArray(d.tags) ? d.tags.slice(0, 5).map((x) => str(x, 30)).filter(Boolean) : null, ...bizOf(d), ...(d.note != null ? { note: str(d.note, 500) } : {}), createdAt: now };
@@ -73,8 +93,14 @@
         lots: lots(d.lots), sales: lots(d.sales), divs: Array.isArray(d.divs) ? d.divs.slice(0, 400).map((x) => ({ date: /^\d{4}-\d{2}-\d{2}$/.test(x && x.date || '') ? x.date : '', amount: Math.max(0, num(x && x.amount) || 0) })).filter((x) => x.amount > 0) : [], manualPrice: num(d.manualPrice), manualAsOf: str(d.manualAsOf, 10), createdAt: now };
     }
     if (coll === 'receipts') {
+      const review = d.review && typeof d.review === 'object' ? {
+        category: !!d.review.category, business: !!d.review.business, split: !!d.review.split,
+        previousCategory: str(d.review.previousCategory, 80), previousBusiness: str(d.review.previousBusiness, 40),
+        previousBusinessPct: num(d.review.previousBusinessPct)
+      } : null;
       return { book: label, txKey: str(d.txKey, 80), fileId: str(d.fileId, 40), name: str(d.name, 80), mime: IMAGE_TYPES.includes(d.mime) ? d.mime : 'image/jpeg', size: Math.max(0, num(d.size) || 0),
-        vendor: str(d.vendor, 80), total: num(d.total), tip: num(d.tip), tipIncluded: typeof d.tipIncluded === 'boolean' ? d.tipIncluded : null, date: DAY.test(d.date || '') ? d.date : '', createdAt: now };
+        vendor: str(d.vendor, 80), total: num(d.total), tip: num(d.tip), tipIncluded: typeof d.tipIncluded === 'boolean' ? d.tipIncluded : null, date: DAY.test(d.date || '') ? d.date : '',
+        category: str(d.category, 40), biz: str(d.biz, 40), bizPct: Math.min(100, Math.max(1, Math.round(num(d.bizPct) || 100))), review, createdAt: now };
     }
     if (coll === 'goals') {
       return { book: label, name: str(d.name, 60), target: num(d.target), by: str(d.by, 10), account: str(d.account, 60), saved: num(d.saved), createdAt: now };
@@ -184,7 +210,7 @@
       await store.insertDoc({ id, bookId: book.id, coll, json, created: new Date().toISOString(), createdBy: user });
       return reply(201, { id });
     }
-    async function updateReceipt(book, id, body) {
+    async function updateReceipt(book, id, body, user) {
       if (!body || !body.expected || typeof body.expected !== 'object' || (!body.discard && (!body.changes || typeof body.changes !== 'object'))) return reply(400, { error: 'Receipt and changes are required.' });
       const current = (await store.listDocs(book.id, 'receipts')).find((r) => r.id === id);
       if (!current) return reply(404, { error: 'This receipt no longer exists.' });
@@ -196,8 +222,24 @@
         return reply(200, { ok: true });
       }
       const changes = body.changes;
-      const next = cleanDoc('receipts', { ...old, ...Object.fromEntries(['txKey', 'vendor', 'total', 'tip', 'tipIncluded', 'date'].filter((k) => Object.prototype.hasOwnProperty.call(changes, k)).map((k) => [k, changes[k]])) }, book.label);
+      const next = cleanDoc('receipts', { ...old, ...Object.fromEntries(['txKey', 'vendor', 'total', 'tip', 'tipIncluded', 'date', 'category', 'biz', 'bizPct', 'review'].filter((k) => Object.prototype.hasOwnProperty.call(changes, k)).map((k) => [k, changes[k]])) }, book.label);
       next.createdAt = old.createdAt;
+      if (body.attachment) {
+        const a = body.attachment;
+        const moving = !!old.txKey;
+        if (!next.txKey || next.txKey === old.txKey || (moving && (a.fromKey !== old.txKey || !Array.isArray(a.sourceEdits))) || !Array.isArray(a.expectedEdits) || !a.expectedInputs || typeof a.expectedInputs !== 'object' || !store.attachReceipt) return reply(400, { error: 'Invalid receipt attachment.' });
+        const patch = {};
+        if (next.category && !a.preserveSplit && (!moving || a.applyCategory)) patch.category = next.category;
+        if (next.biz && (!moving || a.applyBusiness)) { patch.biz = next.biz; patch.bizPct = next.bizPct; }
+        let edit = null;
+        if (Object.keys(patch).length) {
+          const doc = cleanDoc('edits', { txKey: next.txKey, receiptPatch: patch }, book.label);
+          orderTransactionEdit(a.expectedEdits.map((e) => ({ json: JSON.stringify(e) })), doc);
+          edit = { id: store.newId(), bookId: book.id, coll: 'edits', json: JSON.stringify(doc), created: doc.createdAt, createdBy: user };
+        }
+        if (!await store.attachReceipt(book.id, id, current.json, JSON.stringify(next), next.txKey, a.expectedEdits, a.expectedInputs, edit, moving ? { key: old.txKey, edits: a.sourceEdits } : null)) return reply(409, { error: 'The receipt or transaction changed. Refresh and try again.' });
+        return reply(200, { ok: true });
+      }
       if (!await store.compareAndSetDoc(book.id, 'receipts', id, current.json, JSON.stringify(next))) return reply(409, { error: 'This receipt changed. Refresh and try again.' });
       return reply(200, { ok: true });
     }
@@ -211,7 +253,7 @@
       if (a === 'restore' && method === 'POST') return restore(book, await getBody(60 * 1024 * 1024), user);
       if (a === 'verify-backup' && method === 'POST') return verify(book, await getBody(60 * 1024 * 1024), user);
       if (a === 'undo-import' && method === 'POST' && store.removeMany) return undoImport(book, await getBody());
-      if (a === 'receipts' && b && method === 'POST' && store.compareAndSetDoc) return updateReceipt(book, b, await getBody());
+      if (a === 'receipts' && b && method === 'POST' && store.compareAndSetDoc) return updateReceipt(book, b, await getBody(), user);
       if (a === 'files' && store.putFile) {
         if (method === 'POST' && !b) { const f = await getBody(5 * 1024 * 1024); const mime = String(f && f.mime || ''), data = String(f && f.data || '').replace(/^data:[^,]*,/, '');
           if (!IMAGE_TYPES.includes(mime)) return reply(400, { error: 'Receipts must be a photo (JPEG, PNG or WebP) or a PDF.' });
@@ -227,5 +269,5 @@
     return { data, exportBook, restore, verify, undoImport, addDoc, handle };
   }
 
-  return { COLLECTIONS, SEED_SETS, MAX_IMPORT_ROWS, cleanDoc, createBookApi };
+  return { COLLECTIONS, SEED_SETS, RECEIPT_INPUTS, MAX_IMPORT_ROWS, cleanDoc, sameReceiptEdits, sameReceiptInputs, orderTransactionEdit, createBookApi };
 });

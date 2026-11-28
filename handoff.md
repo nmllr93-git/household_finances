@@ -10,6 +10,7 @@ A budgeting, bills and net-worth app that people run themselves. There is no com
 - Source repo: `nmllr93-git/household_finances` (default branch `main`, working copy `/home/claude/household-finance` in cloud sessions).
 - Public repo and website: `nmllr93-git/household_finances-releases` (installers, README, `docs/` served as larenest.app, including /privacy, /testers, /linux, /download).
 - Latest release: Desktop **1.0.42**, Android **1.6.25**, iPhone TestFlight **1.6.14** build 36 (see Apple rules below). Windows, Linux, Mac, Android APK and Docker builds completed; iOS uploaded successfully, but Apple processing and tester availability were not checked. Previous releases were Desktop 1.0.41 and Android 1.6.24.
+- Unreleased: the receipt picker previews a selected file before saving. Receipt capture and waiting receipts also support optional category and business choices; differing classifications are flagged for review, and existing transaction splits are preserved.
 - Changelog: `CHANGELOG.md` uses `## Unreleased` for pending work, then `## Android x` / `## Desktop y` headings.
 
 ## 2. Standing rules (the user's own words, keep verbatim in spirit)

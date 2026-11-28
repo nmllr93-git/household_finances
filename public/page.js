@@ -1474,16 +1474,22 @@
     const same = (src) => canon.get(keyA(src)) || keyA(src);
     return window.FDLikelyDupes(rows('txns').filter((t) => t.book === book()).map((t) => ({ ...t, source: same(t.source) })), dupOrigin(), { ok: new Set(Array.isArray(okL) ? okL : []) })
       .map((p) => ({ ...p, sync: rows('txns').find((x) => x.key === p.sync.key) || p.sync, other: rows('txns').find((x) => x.key === p.other.key) || p.other })); };
-  // Moving on from a duplicate shouldn't lose a receipt photo that was on the side being dropped: re-point it to
-  // the transaction staying on the dashboards first (receipts have no update endpoint, so this is add-then-delete).
-  const moveReceipts = async (d, fromKey, toKey) => {
+  const moveReceipts = async (fromKey, toKey) => {
     if (!toKey || toKey === fromKey) return;
     for (const r of rows('receipts').filter((x) => x.txKey === fromKey)) {
-      await d.collection('data/household/receipts').add({ ...r, book: book(), txKey: toKey });
-      await d.doc('data/household/receipts/' + r.id).delete();
+      const source = rows('txns').filter((t) => t.book === book() && (t.splitOf || t.key) === fromKey);
+      const target = rows('txns').find((t) => t.book === book() && (t.splitOf || t.key) === toKey);
+      if (!source.length || !target) throw new Error(TR('The transaction is no longer available. Refresh and try again.'));
+      const sourceBiz = source[0].biz == null ? (acctMap()[source[0].source] || '') : source[0].biz;
+      const applyCategory = !!r.category && (source.some((t) => t.splitOf) || source.every((t) => t.category === r.category));
+      const applyBusiness = !!r.biz && sourceBiz === r.biz && (source[0].bizPct || 100) === (r.bizPct || 100);
+      const a = receiptAttachment({ ...r, category: applyCategory ? r.category : '', biz: applyBusiness ? r.biz : '' }, { ...target, key: toKey });
+      a.changes.category = r.category; a.changes.biz = r.biz; a.changes.bizPct = r.bizPct;
+      Object.assign(a.attachment, { fromKey, sourceEdits: rows('edits').filter((e) => e.txKey === fromKey), applyCategory, applyBusiness });
+      await updateReceipt(window.HF.state.bookId, r, a.changes, a.attachment);
     }
   };
-  const dupIgnore = async (t, keep) => { const d = await db(); await moveReceipts(d, t.key, keep && keep.key);
+  const dupIgnore = async (t, keep) => { const d = await db(); await moveReceipts(t.key, keep && keep.key);
     if (String(t.key).startsWith('m:')) await d.doc('data/household/manual/' + String(t.key).slice(2)).delete();
     else await d.collection('data/household/edits').add({ book: book(), txKey: t.key, vendor: '', category: '', type: '', oneTime: false, splits: null, ignored: true, createdAt: new Date().toISOString() }); };
   let dupOpen = false;
@@ -1525,7 +1531,7 @@
       const cellOf = (t, from) => { const c = document.createElement('td'); const a = document.createElement('div'); a.textContent = `${t.date} · ${t.vendor || t.description}`; a.translate = false; const b = document.createElement('div'); b.className = 'fd-zero'; b.textContent = `${t.description || ''}${from ? ' · ' + from : ''}`; b.translate = false; c.append(a, b); return c; };
       for (const p of P0.slice(0, 50)) { const tr = document.createElement('tr'); const am = document.createElement('td'); am.className = 'fd-r'; am.textContent = money2(Math.abs(p.sync.amount)); tr.append(am, cellOf(p.sync, p.sync.source), cellOf(p.other, p.otherFrom === 'manual' ? 'typed in' : 'statement'));
         const act = document.createElement('td'); act.className = 'fd-nowrap';
-        if (!ro) act.append(rbtn('Keep sync', async () => { busy(true); try { await dupIgnore(p.other, p.sync); } catch { busy(false); } }, false), ' ', rbtn('Keep statement', async () => { busy(true); try { await dupIgnore(p.sync, p.other); } catch { busy(false); } }), ' ',
+        if (!ro) act.append(rbtn('Keep sync', async () => { busy(true); try { await dupIgnore(p.other, p.sync); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not saved:') + ' ' + e.message; busy(false); } }, false), ' ', rbtn('Keep statement', async () => { busy(true); try { await dupIgnore(p.sync, p.other); } catch (e) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not saved:') + ' ' + e.message; busy(false); } }), ' ',
           rbtn('Not duplicates', async () => { busy(true); const l = prefGet('dupOk', []) || []; await prefSet('dupOk', [...l, p.id].slice(-500)); }));
         tr.append(act); tbl.append(tr); }
       const w = document.createElement('div'); w.className = 'fd-tablewrap'; w.append(tbl); box.append(w); if (P0.length > 50) box.append(phMsg(`Showing 50 of ${P0.length}. Keep or dismiss some to see the rest.`));
@@ -5112,10 +5118,34 @@
     const e = form.elements, vendor = e.vendor.value.trim(), date = e.date.value, total = Number(e.total.value), tip = e.tip.value === '' ? null : Number(e.tip.value);
     if (!vendor || !date || !e.total.value || !(total > 0) || !Number.isFinite(total) || (tip !== null && (!Number.isFinite(tip) || tip < 0))) throw new Error(TR('Enter a vendor, date and valid total and tip.'));
     if (tip > 0 && !e.tipIncluded.value) throw new Error(TR('Choose whether the total already includes the tip.'));
-    return { vendor, date, total, tip, tipIncluded: e.tipIncluded.value === '' ? null : e.tipIncluded.value === 'yes' };
+    const bizPct = Number(e.bizPct.value);
+    if (e.biz.value && (!Number.isInteger(bizPct) || bizPct < 1 || bizPct > 100)) throw new Error(TR('Enter a business share from 1 to 100.'));
+    return { vendor, date, total, tip, tipIncluded: e.tipIncluded.value === '' ? null : e.tipIncluded.value === 'yes',
+      category: e.category.value.trim(), biz: e.biz.value, bizPct: e.biz.value ? bizPct : 100 };
   };
-  const updateReceipt = async (id, r, changes) => {
-    await FDStore.json('POST', receiptPath(id, r.id), { expected: r, changes });
+  const setupReceiptBusiness = (form, r = {}) => {
+    const select = form.elements.biz, list = BIZ().list;
+    select.replaceChildren(new Option(TR('Use transaction default'), ''), ...list.map((b) => new Option(b.name, b.name)));
+    if (r.biz && !list.some((b) => b.name === r.biz)) select.append(new Option(r.biz, r.biz));
+    select.value = r.biz || ''; form.elements.bizPct.value = r.bizPct || 100;
+    const refresh = () => { form.querySelector('[data-receipt-biz-share]').hidden = !select.value; };
+    select.onchange = refresh; refresh();
+    form.querySelector('[data-receipt-no-business]').hidden = list.length > 0 || !!r.biz;
+  };
+  const receiptAttachment = (values, transaction) => {
+    const parts = rows('txns').filter((t) => t.book === book() && (t.splitOf || t.key) === transaction.key);
+    if (!parts.length) throw new Error(TR('The transaction is no longer available. Refresh and try again.'));
+    const split = parts.some((t) => !!t.splitOf);
+    const categoryDiff = !!values.category && parts.some((t) => t.category !== values.category);
+    const current = parts[0], currentBiz = current.biz == null ? (acctMap()[current.source] || '') : current.biz;
+    const businessDiff = !!values.biz && (values.biz !== currentBiz || (current.bizPct || 100) !== values.bizPct);
+    const review = categoryDiff || businessDiff ? { category: categoryDiff, business: businessDiff, split: split && categoryDiff,
+      previousCategory: [...new Set(parts.map((t) => t.category || 'Uncategorized'))].join(', '), previousBusiness: currentBiz, previousBusinessPct: currentBiz ? current.bizPct || 100 : null } : null;
+    const expectedInputs = Object.fromEntries(['imports', 'manual', 'rules', 'prefs'].map((c) => [c, rows(c).map((r) => r.id)]));
+    return { changes: { ...values, txKey: transaction.key, review }, attachment: { preserveSplit: split, expectedEdits: rows('edits').filter((e) => e.txKey === transaction.key), expectedInputs } };
+  };
+  const updateReceipt = async (id, r, changes, attachment) => {
+    await FDStore.json('POST', receiptPath(id, r.id), { expected: r, changes, ...(attachment ? { attachment } : {}) });
     if (window.HF.state.bookId === id) await window.HF.load(id);
   };
   inboxFile.addEventListener('change', async () => {
@@ -5126,6 +5156,7 @@
     try {
       const pdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''), mime = pdf ? 'application/pdf' : 'image/jpeg';
       showCapturePreview(file, id, pdf);
+      setupReceiptBusiness(inboxForm);
       const url = pdf ? await readDataUrl(file) : await shrink(file);
       if (seq !== captureSeq || window.HF.state.bookId !== id) return;
       capture = { id, url, mime, name: file.name || 'Receipt' };
@@ -5178,8 +5209,29 @@
     el.replaceChildren();
     if (st('receipts', 'txns') !== 'ok') return;
     const list = rows('receipts').filter((r) => r.book === book() && !r.txKey).sort((a, b) => String(a.createdAt || a.date).localeCompare(String(b.createdAt || b.date)));
+    const reviews = rows('receipts').filter((r) => r.book === book() && r.txKey && r.review), ro = document.body.classList.contains('fd-readonly');
+    if (!list.length && !reviews.length && !matchError) return;
+    if (reviews.length) {
+      const reviewBox = document.createElement('details'); reviewBox.className = 'fd-rb'; reviewBox.open = true;
+      const title = document.createElement('summary'); title.className = 'fd-rb-h'; title.textContent = TR('Receipt choices to review') + ' (' + reviews.length + ')'; reviewBox.append(title);
+      for (const r of reviews) {
+        const card = document.createElement('div'); card.className = 'fd-rb'; card.style.width = '100%'; card.style.boxSizing = 'border-box';
+        const h = document.createElement('strong'); h.textContent = `${r.date || '—'} · ${r.vendor || TR('Receipt')}`; h.translate = false; card.append(h);
+        if (r.review.category) card.append(phMsg((r.review.split ? TR('Split categories kept; review the receipt category:') : TR('Category changed from the transaction default:')) + ` ${r.review.previousCategory || '—'} → ${r.category}`));
+        if (r.review.business) card.append(phMsg(TR('Business changed from the transaction default:') + ` ${r.review.previousBusiness || '—'}${r.review.previousBusinessPct ? ` (${r.review.previousBusinessPct}%)` : ''} → ${r.biz} (${r.bizPct}%)`));
+        const transaction = rows('txns').find((t) => t.book === book() && (t.splitOf || t.key) === r.txKey);
+        if (!ro) {
+          if (transaction) card.append(rbtn('Edit transaction', () => openEditor(transaction)));
+          const done = rbtn('Mark reviewed', async () => { done.disabled = true; try { await updateReceipt(window.HF.state.bookId, r, { review: null }); }
+            catch (e) { done.disabled = false; msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not saved:') + ' ' + e.message; } });
+          const msg = phMsg(''); msg.setAttribute('aria-live', 'polite'); card.append(done, msg);
+        }
+        reviewBox.append(card);
+      }
+      el.append(reviewBox);
+    }
     if (!list.length && !matchError) return;
-    const ro = document.body.classList.contains('fd-readonly'), box = document.createElement('details'); box.className = 'fd-rb'; box.open = true;
+    const box = document.createElement('details'); box.className = 'fd-rb'; box.open = true;
     const title = document.createElement('summary'); title.className = 'fd-rb-h'; title.textContent = TR('Waiting for a transaction') + ' (' + list.length + ')'; box.append(title);
     box.append(phMsg('Receipts are attached automatically only when one transaction is a confident match. You can also choose one yourself.'));
     if (matchError) { const m = phMsg(TR('Automatic matching failed:') + ' ' + matchError, 'fd-bad'); box.append(m);
@@ -5195,8 +5247,11 @@
       if (ro) { const info = document.createElement('p'); info.translate = false; info.textContent = `${r.date || '—'} · ${r.vendor || '—'} · ${r.total == null ? '—' : money2(r.total)} · ${TR('Tip')}: ${r.tip == null ? '—' : money2(r.tip)}`; card.append(info); box.append(card); continue; }
       const form = document.createElement('form');
       form.innerHTML = '<div class="fd-row"><label class="fd-field">Vendor<input name="vendor" type="text" maxlength="80" required></label><label class="fd-field">Receipt date<input name="date" type="date" required></label><label class="fd-field">Total on receipt<input name="total" type="number" min="0.01" step="0.01" required></label><label class="fd-field">Tip (optional)<input name="tip" type="number" min="0" step="0.01"></label><label class="fd-field">Does the total include the tip?<select name="tipIncluded" class="dash-select"><option value="">Choose if there is a tip</option><option value="yes">Yes, already included</option><option value="no">No, add the tip</option></select></label></div>';
+      form.querySelector('.fd-row').insertAdjacentHTML('beforeend', '<label class="fd-field">Category (optional)<input name="category" type="text" maxlength="40" list="fd-cats"></label><label class="fd-field">Business (optional)<select name="biz" class="dash-select"></select></label><label class="fd-field" data-receipt-biz-share hidden>Business share %<input name="bizPct" type="number" min="1" max="100" step="1" value="100"></label>');
+      form.insertAdjacentHTML('beforeend', '<p class="fd-note" data-receipt-no-business hidden>Add a business under Settings to select it here.</p>');
       form.elements.vendor.value = r.vendor || ''; form.elements.date.value = r.date || ''; form.elements.total.value = r.total == null ? '' : r.total; form.elements.tip.value = r.tip == null ? '' : r.tip;
       form.elements.tipIncluded.value = r.tipIncluded == null ? '' : r.tipIncluded ? 'yes' : 'no';
+      form.elements.category.value = r.category || ''; setupReceiptBusiness(form, r);
       form.addEventListener('input', () => { form.dataset.dirty = '1'; });
       form.addEventListener('change', () => { form.dataset.dirty = '1'; });
       const msg = phMsg(''); msg.setAttribute('aria-live', 'polite'); const save = document.createElement('button'); save.type = 'submit'; save.className = 'fd-btn fd-sm'; save.textContent = TR('Save receipt details');
@@ -5217,7 +5272,9 @@
         } };
       search.addEventListener('input', fill); fill();
       const attach = rbtn('Attach', async () => { if (!select.value) { msg.className = 'fd-note fd-bad'; msg.textContent = TR('Choose a transaction.'); return; }
-        attach.disabled = true; try { const values = receiptValues(form); await updateReceipt(window.HF.state.bookId, r, { ...values, txKey: select.value }); delete form.dataset.dirty; dash.draw('receiptInbox'); scheduleReceiptMatch(); }
+        attach.disabled = true; try { const values = receiptValues(form), transaction = transactions.find((t) => t.key === select.value);
+          if (!transaction) throw new Error(TR('Choose a transaction.'));
+          const a = receiptAttachment(values, transaction); await updateReceipt(window.HF.state.bookId, r, a.changes, a.attachment); delete form.dataset.dirty; dash.draw('receiptInbox'); scheduleReceiptMatch(); }
         catch (e) { form.dataset.dirty = '1'; msg.className = 'fd-note fd-bad'; msg.textContent = TR('Not saved:') + ' ' + e.message; attach.disabled = false; } }, false);
       const discard = rbtn('Discard receipt', async () => { if (!confirm(TR('Discard this receipt and its file?'))) return; discard.disabled = true; const id = window.HF.state.bookId;
         try { await FDStore.json('POST', receiptPath(id, r.id), { expected: r, discard: true }); delete form.dataset.dirty; if (window.HF.state.bookId === id) await window.HF.load(id); }
@@ -5235,7 +5292,8 @@
     if (signature === failedMatch) return;
     matchBusy = true;
     setTimeout(async () => {
-      try { if (window.HF.state.bookId !== id) return; await updateReceipt(id, receipt, { txKey: transaction.key }); matchError = ''; failedMatch = ''; }
+      try { if (window.HF.state.bookId !== id) return; const a = receiptAttachment({ vendor: receipt.vendor, date: receipt.date, total: receipt.total, tip: receipt.tip, tipIncluded: receipt.tipIncluded, category: receipt.category || '', biz: receipt.biz || '', bizPct: receipt.bizPct || 100 }, transaction);
+        await updateReceipt(id, receipt, a.changes, a.attachment); matchError = ''; failedMatch = ''; }
       catch (e) { failedMatch = signature; matchError = e.message; console.error('Receipt matching failed', e); dash.draw('receiptInbox'); }
       finally { matchBusy = false; if (!matchError) scheduleReceiptMatch(); }
     }, 0);

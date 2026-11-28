@@ -270,13 +270,31 @@ const { cleanDoc } = CORE;
 const BOOKS_STORE = {
   seedRows: (bookId) => db.prepare('SELECT dataset, json FROM seed WHERE book_id = ?').all(bookId),
   listDocs: (bookId, coll) => db.prepare('SELECT id, json, created, created_by FROM docs WHERE book_id = ? AND coll = ? ORDER BY created').all(bookId, coll),
-  insertDoc: (r) => db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, E(r.json), r.created, r.createdBy),
+  insertDoc: (r) => {
+    if (r.coll === 'edits') {
+      const doc = JSON.parse(r.json);
+      if (!doc.receiptPatch) r = { ...r, json: JSON.stringify(CORE.orderTransactionEdit(BOOKS_STORE.listDocs(r.bookId, 'edits'), doc)) };
+    }
+    return db.prepare('INSERT INTO docs (id, book_id, coll, json, created, created_by) VALUES (?, ?, ?, ?, ?, ?)').run(r.id, r.bookId, r.coll, E(r.json), r.created, r.createdBy);
+  },
   deleteDoc: (bookId, coll, id) => db.prepare('DELETE FROM docs WHERE id = ? AND book_id = ? AND coll = ?').run(id, bookId, coll),
   compareAndSetDoc: (bookId, coll, id, expected, json) => {
     const r = db.prepare('SELECT json FROM docs WHERE id = ? AND book_id = ? AND coll = ?').get(id, bookId, coll);
     if (!r || r.json !== expected) return false;
     db.prepare('UPDATE docs SET json = ? WHERE id = ? AND book_id = ? AND coll = ?').run(E(json), id, bookId, coll);
     return true;
+  },
+  attachReceipt: (bookId, id, expected, json, txKey, expectedEdits, expectedInputs, edit, source) => {
+    db.exec('BEGIN');
+    try {
+      const current = db.prepare("SELECT json FROM docs WHERE id = ? AND book_id = ? AND coll = 'receipts'").get(id, bookId);
+      const inputs = Object.fromEntries(CORE.RECEIPT_INPUTS.map((c) => [c, BOOKS_STORE.listDocs(bookId, c)]));
+      const edits = BOOKS_STORE.listDocs(bookId, 'edits');
+      if (!current || current.json !== expected || !CORE.sameReceiptEdits(edits, txKey, expectedEdits) || (source && !CORE.sameReceiptEdits(edits, source.key, source.edits)) || !CORE.sameReceiptInputs(inputs, expectedInputs)) { db.exec('ROLLBACK'); return false; }
+      db.prepare('UPDATE docs SET json = ? WHERE id = ? AND book_id = ? AND coll = ?').run(E(json), id, bookId, 'receipts');
+      if (edit) BOOKS_STORE.insertDoc(edit);
+      db.exec('COMMIT'); return true;
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
   },
   discardReceipt: (bookId, id, expected, fileId) => {
     db.exec('BEGIN');

@@ -418,7 +418,11 @@
           <label class="fd-field">Total on receipt<input name="total" type="number" min="0.01" step="0.01" required></label>
           <label class="fd-field">Tip (optional)<input name="tip" type="number" min="0" step="0.01"></label>
           <label class="fd-field">Does the total include the tip?<select name="tipIncluded" class="dash-select"><option value="">Choose if there is a tip</option><option value="yes">Yes, already included</option><option value="no">No, add the tip</option></select></label>
+          <label class="fd-field">Category (optional)<input name="category" type="text" maxlength="40" list="fd-cats"></label>
+          <label class="fd-field">Business (optional)<select name="biz" class="dash-select"></select></label>
+          <label class="fd-field" data-receipt-biz-share hidden>Business share %<input name="bizPct" type="number" min="1" max="100" step="1" value="100"></label>
         </div>
+        <p class="fd-note" data-receipt-no-business hidden>Add a business under Settings to select it here.</p>
         <p class="fd-note">Check the amounts before saving. Choose whether the tip is already included to avoid counting it twice.</p>
         <button class="fd-btn fd-sm" type="submit">Save receipt</button>
       </form>
